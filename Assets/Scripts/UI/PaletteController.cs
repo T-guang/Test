@@ -912,8 +912,10 @@ namespace ElectricalSim.UI
             iconImage.raycastTarget = false;
 
             var label = EnsureChildText(rect, "Label");
-            label.text = definition.displayName;
+            label.text = GetPaletteDisplayName(definition);
+            label.lineSpacing = 1.02f;
             MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.PaletteCardTitle);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
             label.color = MainUiTheme.DeepText;
             label.raycastTarget = false;
 
@@ -922,7 +924,7 @@ namespace ElectricalSim.UI
             labelRect.anchorMax = new Vector2(1f, 0f);
             labelRect.pivot = new Vector2(0.5f, 0f);
             labelRect.anchoredPosition = new Vector2(0f, 9f);
-            labelRect.sizeDelta = new Vector2(-12f, 36f);
+            labelRect.sizeDelta = new Vector2(-2f, 36f);
 
             var outline = rect.GetComponent<Outline>() ?? rect.gameObject.AddComponent<Outline>();
             var normalOutline = MainUiTheme.Hex("EEF2F7");
@@ -1377,6 +1379,35 @@ namespace ElectricalSim.UI
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             return go.GetComponent<RectTransform>();
+        }
+        public static string GetPaletteDisplayName(ComponentDefinition definition)
+        {
+            if (definition == null) return string.Empty;
+
+            var id = definition.name;
+            var voltage = definition.ratedVoltage;
+
+            if (id.StartsWith("Contactor_KM"))
+            {
+                return $"交流接触器\nKM · {voltage}V";
+            }
+            if (id.StartsWith("Timer_OnDelay"))
+            {
+                return $"通电延时继电器\nKT · {voltage}V";
+            }
+            if (id.StartsWith("Timer_OffDelay"))
+            {
+                return $"断电延时继电器\nKT · {voltage}V";
+            }
+            if (id.StartsWith("Indicator_"))
+            {
+                if (id.Contains("Green")) return $"绿色指示灯\n{voltage}V";
+                if (id.Contains("Red")) return $"红色指示灯\n{voltage}V";
+                if (id.Contains("Yellow")) return $"黄色指示灯\n{voltage}V";
+                return $"指示灯\n{voltage}V";
+            }
+
+            return definition.displayName;
         }
     }
 }

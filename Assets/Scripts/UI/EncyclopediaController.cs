@@ -142,7 +142,7 @@ namespace ElectricalSim.UI
             var searchTextLabel = CreateText("Text", searchPanel, string.Empty, 15, FontStyle.Normal, MainUiTheme.Hex("111827"));
             searchTextLabel.alignment = TextAnchor.MiddleLeft;
             SetRect(searchTextLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(16f, 0f), new Vector2(-16f, 0f));
-            var placeholder = CreateText("Placeholder", searchPanel, "搜索名称、端子或用途", 15, FontStyle.Normal, new Color(0.52f, 0.58f, 0.66f));
+            var placeholder = CreateText("Placeholder", searchPanel, "搜索名称、端子或用途", 15, FontStyle.Normal, MainUiTheme.Hex("94A3B8"));
             placeholder.alignment = TextAnchor.MiddleLeft;
             SetRect(placeholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(16f, 0f), new Vector2(-16f, 0f));
             searchInput.textComponent = searchTextLabel;
@@ -170,7 +170,7 @@ namespace ElectricalSim.UI
             }
             AddSoftOutline(sidebar);
 
-            var sidebarTitle = CreateText("SidebarTitle", sidebar, "分类", 18, FontStyle.Bold, MainUiTheme.Hex("1E293B"), true);
+            var sidebarTitle = CreateText("SidebarTitle", sidebar, "分类", 18, FontStyle.Bold, MainUiTheme.Hex("1F2937"));
             sidebarTitle.alignment = TextAnchor.MiddleLeft;
             SetRect(sidebarTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(14f, -16f), new Vector2(-28f, 38f));
 
@@ -186,7 +186,7 @@ namespace ElectricalSim.UI
                     btnImage.type = Image.Type.Sliced;
                 }
                 var button = buttonRect.gameObject.AddComponent<Button>();
-                var label = CreateText("Text", buttonRect, category, 14, FontStyle.Normal, MainUiTheme.Hex("334155"));
+                var label = CreateText("Text", buttonRect, category, 15, FontStyle.Normal, MainUiTheme.Hex("334155"));
                 label.alignment = TextAnchor.MiddleLeft;
                 SetRect(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(12f, 0f), new Vector2(-12f, 0f));
                 var captured = category;
@@ -401,28 +401,33 @@ namespace ElectricalSim.UI
             infoLayout.childControlHeight = true;
             infoLayout.childForceExpandWidth = true;
             infoLayout.childForceExpandHeight = false;
-            infoLayout.spacing = 6f;
+            infoLayout.spacing = 4f;
 
-            var name = CreateText("NameText", infoArea, entry.DisplayName, 20, FontStyle.Bold, MainUiTheme.Hex("111827"), true);
+            var name = CreateText("NameText", infoArea, entry.DisplayName, 17, FontStyle.Bold, MainUiTheme.Hex("1F2937"));
             name.alignment = TextAnchor.MiddleLeft;
             name.lineSpacing = 1.1f;
             name.horizontalOverflow = HorizontalWrapMode.Wrap;
-            name.verticalOverflow = VerticalWrapMode.Overflow;
+            name.verticalOverflow = VerticalWrapMode.Truncate;
+            SetTextLayoutHeight(name, 40f);
 
-            var category = CreateText("CategoryText", infoArea, entry.Category, 15, FontStyle.Normal, MainUiTheme.Hex("475569"));
+            var category = CreateText("CategoryText", infoArea, entry.Category, 14, FontStyle.Normal, MainUiTheme.Hex("64748B"));
             category.alignment = TextAnchor.MiddleLeft;
-            category.horizontalOverflow = HorizontalWrapMode.Wrap;
-            category.verticalOverflow = VerticalWrapMode.Overflow;
+            category.horizontalOverflow = HorizontalWrapMode.Overflow;
+            category.verticalOverflow = VerticalWrapMode.Truncate;
+            SetTextLayoutHeight(category, 18f);
 
-            var param = CreateText("ParamText", infoArea, BuildBasicSummary(entry), 15, FontStyle.Normal, MainUiTheme.Hex("2563EB"));
+            var param = CreateText("ParamText", infoArea, BuildBasicSummary(entry), 14, FontStyle.Normal, MainUiTheme.Hex("2563EB"));
             param.alignment = TextAnchor.MiddleLeft;
-            param.horizontalOverflow = HorizontalWrapMode.Wrap;
-            param.verticalOverflow = VerticalWrapMode.Overflow;
+            param.horizontalOverflow = HorizontalWrapMode.Overflow;
+            param.verticalOverflow = VerticalWrapMode.Truncate;
+            SetTextLayoutHeight(param, 18f);
 
-            var terminals = CreateText("TerminalText", infoArea, BuildTerminalSummary(entry.Definition, entry.Terminals), 15, FontStyle.Normal, MainUiTheme.Hex("475569"));
+            var terminals = CreateText("TerminalText", infoArea, BuildCardTerminalSummary(entry.Definition, entry.Terminals), 14, FontStyle.Normal, MainUiTheme.Hex("475569"));
             terminals.alignment = TextAnchor.MiddleLeft;
+            terminals.lineSpacing = 1.2f;
             terminals.horizontalOverflow = HorizontalWrapMode.Wrap;
-            terminals.verticalOverflow = VerticalWrapMode.Overflow;
+            terminals.verticalOverflow = VerticalWrapMode.Truncate;
+            SetTextLayoutHeight(terminals, 34f);
 
             return card;
         }
@@ -515,7 +520,7 @@ namespace ElectricalSim.UI
             infoLayout.childForceExpandHeight = false;
             infoLayout.spacing = 6f;
 
-            var title = CreateText("NameText", infoPanel, entry.DisplayName, 24, FontStyle.Bold, MainUiTheme.Hex("111827"), true);
+            var title = CreateText("NameText", infoPanel, entry.DisplayName, 20, FontStyle.Bold, MainUiTheme.Hex("1F2937"));
             title.alignment = TextAnchor.MiddleLeft;
             title.verticalOverflow = VerticalWrapMode.Overflow;
             title.gameObject.AddComponent<LayoutElement>().preferredHeight = 38f;
@@ -560,11 +565,11 @@ namespace ElectricalSim.UI
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            var titleText = CreateText("Title", card, title, 18, FontStyle.Bold, MainUiTheme.Hex("1E293B"), true);
+            var titleText = CreateText("Title", card, title, 16, FontStyle.Bold, MainUiTheme.Hex("1F2937"));
             titleText.alignment = TextAnchor.MiddleLeft;
             titleText.gameObject.AddComponent<LayoutElement>().preferredHeight = 28f;
 
-            var bodyText = CreateText("Body", card, body, 15, FontStyle.Normal, MainUiTheme.Hex("475569"));
+            var bodyText = CreateText("Body", card, body, 15, FontStyle.Normal, MainUiTheme.Hex("334155"));
             bodyText.alignment = TextAnchor.UpperLeft;
             bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
             bodyText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -635,8 +640,10 @@ namespace ElectricalSim.UI
 
                 if (i < categoryLabels.Count && categoryLabels[i] != null)
                 {
+                    categoryLabels[i].font = active ? MainUiTheme.UiFontBold : MainUiTheme.DenseUiFont;
+                    categoryLabels[i].fontSize = 15;
+                    categoryLabels[i].fontStyle = FontStyle.Normal;
                     categoryLabels[i].color = active ? MainUiTheme.Hex("2563EB") : MainUiTheme.Hex("334155");
-                    categoryLabels[i].fontStyle = active ? FontStyle.Bold : FontStyle.Normal;
                 }
             }
         }
@@ -722,6 +729,38 @@ namespace ElectricalSim.UI
             for (var i = 0; i < 6; i++) firstSix.Add(parts[i]);
             
             return "端子：共 " + parts.Count + " 个，" + string.Join("、", firstSix) + " 等";
+        }
+
+        private static string BuildCardTerminalSummary(ComponentDefinition definition, string[] fallbackTerminals)
+        {
+            var parts = new List<string>();
+            if (definition != null && definition.terminals != null)
+            {
+                for (var i = 0; i < definition.terminals.Count; i++)
+                {
+                    var terminal = definition.terminals[i];
+                    if (terminal != null)
+                    {
+                        parts.Add(string.IsNullOrWhiteSpace(terminal.label) ? terminal.id : terminal.label);
+                    }
+                }
+            }
+
+            if (parts.Count == 0 && fallbackTerminals != null)
+            {
+                parts.AddRange(fallbackTerminals);
+            }
+
+            if (parts.Count == 0)
+            {
+                return "端子：暂无端子";
+            }
+
+            var visibleCount = Mathf.Min(4, parts.Count);
+            var visible = parts.GetRange(0, visibleCount);
+            return parts.Count > visibleCount
+                ? "端子：" + string.Join("、", visible) + " 等"
+                : "端子：" + string.Join("、", visible);
         }
 
         private static string Fallback(string value)
@@ -933,14 +972,23 @@ namespace ElectricalSim.UI
             var text = new GameObject(name, typeof(RectTransform), typeof(Text)).GetComponent<Text>();
             text.transform.SetParent(parent, false);
             text.text = value;
-            text.font = useTitleFont ? ResolveTitleFont() : ResolveBodyFont();
+            text.font = useTitleFont ? ResolveTitleFont() : style == FontStyle.Bold ? MainUiTheme.UiFontBold : MainUiTheme.DenseUiFont;
             text.fontSize = size;
-            text.fontStyle = style;
+            text.fontStyle = FontStyle.Normal;
             text.color = color;
             text.raycastTarget = false;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = false;
             return text;
+        }
+
+        private static void SetTextLayoutHeight(Text text, float height)
+        {
+            var layout = text.gameObject.GetComponent<LayoutElement>() ?? text.gameObject.AddComponent<LayoutElement>();
+            layout.minHeight = height;
+            layout.preferredHeight = height;
+            layout.flexibleHeight = 0f;
         }
 
         private static void AddSoftOutline(RectTransform rect)

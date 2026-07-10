@@ -77,12 +77,8 @@ namespace ElectricalSim.UI
                 outline.effectColor = MainUiTheme.Hex("D2D2D2");
                 outline.effectDistance = new Vector2(1f, -1f);
                 
-                if (card.GetComponent<UnityEngine.UI.Shadow>() == null)
-                {
-                    var shadow = card.AddComponent<UnityEngine.UI.Shadow>();
-                    shadow.effectColor = new Color(0, 0, 0, 0.04f);
-                    shadow.effectDistance = new Vector2(0, -4);
-                }
+                var shadow = card.GetComponent<UnityEngine.UI.Shadow>();
+                if (shadow != null) Destroy(shadow);
 
                 var btn = card.GetComponentInChildren<Button>(true);
                 if (btn != null)
@@ -97,9 +93,9 @@ namespace ElectricalSim.UI
                         var btnText = btn.GetComponentInChildren<Text>();
                         if (btnText != null)
                         {
-                            btnText.font = MainUiTheme.BodyFont;
-                            btnText.fontSize = 20;
-                            btnText.fontStyle = FontStyle.Bold;
+                            btnText.font = MainUiTheme.UiFontBold;
+                            btnText.fontSize = 16;
+                            btnText.fontStyle = FontStyle.Normal;
                             btnText.color = Color.white;
                             btnText.resizeTextForBestFit = false;
                         }
@@ -127,9 +123,21 @@ namespace ElectricalSim.UI
 
                 if (searchInput.textComponent != null)
                 {
-                    searchInput.textComponent.font = MainUiTheme.BodyFont;
+                    searchInput.textComponent.font = MainUiTheme.DenseUiFont;
                     searchInput.textComponent.fontSize = 16;
-                    searchInput.textComponent.color = MainUiTheme.Hex("464646");
+                    searchInput.textComponent.fontStyle = FontStyle.Normal;
+                    searchInput.textComponent.color = MainUiTheme.Hex("334155");
+                    searchInput.textComponent.resizeTextForBestFit = false;
+                }
+
+                var placeholder = searchInput.placeholder as Text;
+                if (placeholder != null)
+                {
+                    placeholder.font = MainUiTheme.DenseUiFont;
+                    placeholder.fontSize = 16;
+                    placeholder.fontStyle = FontStyle.Normal;
+                    placeholder.color = MainUiTheme.Hex("94A3B8");
+                    placeholder.resizeTextForBestFit = false;
                 }
             }
 
@@ -151,8 +159,9 @@ namespace ElectricalSim.UI
                 var txt = configureButton.GetComponentInChildren<Text>();
                 if (txt != null)
                 {
-                    txt.font = MainUiTheme.BodyFont;
-                    txt.fontSize = 20;
+                    txt.font = MainUiTheme.UiFontBold;
+                    txt.fontSize = 15;
+                    txt.fontStyle = FontStyle.Normal;
                     txt.color = Color.white;
                     txt.resizeTextForBestFit = false;
                 }
@@ -236,21 +245,22 @@ namespace ElectricalSim.UI
                 var text = texts[i];
                 if (text == null) continue;
 
-                text.font = MainUiTheme.BodyFont;
                 text.resizeTextForBestFit = false;
 
                 if (IsActionLabel(text.text))
                 {
+                    text.font = MainUiTheme.UiFontBold;
                     text.fontSize = 16;
-                    text.fontStyle = FontStyle.Bold;
+                    text.fontStyle = FontStyle.Normal;
                     text.color = Color.white;
                     StyleActionButton(text, MainUiTheme.PrimaryBlue);
                 }
                 else if (IsCategoryLabel(text.text) || IsDifficultyLabel(text.text))
                 {
                     var isDifficulty = IsDifficultyLabel(text.text);
+                    text.font = isDifficulty ? MainUiTheme.UiFontBold : MainUiTheme.DenseUiFont;
                     text.fontSize = 14;
-                    text.fontStyle = FontStyle.Bold;
+                    text.fontStyle = FontStyle.Normal;
                     
                     if (isDifficulty)
                     {
@@ -266,9 +276,13 @@ namespace ElectricalSim.UI
                 }
                 else if (!string.IsNullOrWhiteSpace(text.text))
                 {
-                    text.fontSize = 20;
-                    text.fontStyle = FontStyle.Bold;
+                    text.font = MainUiTheme.UiFontBold;
+                    text.fontSize = 19;
+                    text.lineSpacing = 1.05f;
+                    text.fontStyle = FontStyle.Normal;
                     text.color = MainUiTheme.Hex("1F2937");
+                    text.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    text.verticalOverflow = VerticalWrapMode.Truncate;
                 }
             }
         }
@@ -882,7 +896,7 @@ namespace ElectricalSim.UI
         {
             if (referenceRecommendations != null)
             {
-                referenceRecommendations.font = MainUiTheme.BodyFont;
+                referenceRecommendations.font = MainUiTheme.DenseUiFont;
                 referenceRecommendations.fontSize = 14;
                 referenceRecommendations.color = MainUiTheme.Hex("475569");
                 referenceRecommendations.alignment = TextAnchor.UpperLeft;
@@ -1075,8 +1089,10 @@ namespace ElectricalSim.UI
 
             var txt = txtGo.GetComponent<Text>();
             txt.text = text;
-            txt.font = MainUiTheme.BodyFont;
-            txt.fontSize = 16;
+            txt.font = isCurrent ? MainUiTheme.UiFontBold : MainUiTheme.DenseUiFont;
+            txt.fontSize = 15;
+            txt.fontStyle = FontStyle.Normal;
+            txt.resizeTextForBestFit = false;
             txt.alignment = TextAnchor.MiddleCenter;
             txt.color = interactable ? (isCurrent ? Color.white : MainUiTheme.Hex("464646")) : MainUiTheme.Hex("A0A0A0");
 
@@ -1166,8 +1182,9 @@ namespace ElectricalSim.UI
             var label = button.GetComponentInChildren<Text>();
             if (label != null)
             {
-                label.font = MainUiTheme.BodyFont;
-                label.fontSize = 20;
+                label.font = active ? MainUiTheme.UiFontBold : MainUiTheme.DenseUiFont;
+                label.fontSize = 16;
+                label.fontStyle = FontStyle.Normal;
                 label.resizeTextForBestFit = false;
                 label.color = ResolveFilterTextColor(button, active);
             }

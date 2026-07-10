@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using ElectricalSim.Core;
@@ -33,7 +33,7 @@ namespace ElectricalSim.UI
 
             if (label != null)
             {
-                label.text = definition.displayName;
+                label.text = PaletteController.GetPaletteDisplayName(definition);
             }
 
             if (background == null)

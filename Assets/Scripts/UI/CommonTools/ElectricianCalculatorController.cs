@@ -166,13 +166,11 @@ namespace ElectricalSim.UI.CommonTools
             {
                 var img = tabs[i].GetComponent<Image>();
                 var txt = tabs[i].GetComponentInChildren<Text>();
-                var shadow = tabs[i].GetComponent<Shadow>();
                 bool active = (i == index);
                 
                 img.color = active ? C_Card : Color.clear;
                 txt.color = active ? C_Primary : C_TextMuted;
                 txt.fontStyle = active ? FontStyle.Bold : FontStyle.Normal;
-                if(shadow) shadow.enabled = active;
 
                 pages[i].gameObject.SetActive(active);
             }
@@ -180,17 +178,12 @@ namespace ElectricalSim.UI.CommonTools
 
         private Button CreateTabButton(string label, UnityEngine.Events.UnityAction action)
         {
-            var go = new GameObject("Tab", typeof(RectTransform), typeof(Image), typeof(Button), typeof(Shadow));
+            var go = new GameObject("Tab", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(tabsArea, false);
             
             var img = go.GetComponent<Image>();
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
-            
-            var shadow = go.GetComponent<Shadow>();
-            shadow.effectColor = new Color(0, 0, 0, 0.05f);
-            shadow.effectDistance = new Vector2(0, -2);
-            shadow.useGraphicAlpha = false;
 
             var btn = go.GetComponent<Button>();
             btn.onClick.AddListener(action);
@@ -211,11 +204,6 @@ namespace ElectricalSim.UI.CommonTools
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_Card;
-            
-            var shadow = go.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0, 0, 0, 0.03f);
-            shadow.effectDistance = new Vector2(0, -4);
-            shadow.useGraphicAlpha = false;
 
             return go.GetComponent<RectTransform>();
         }
@@ -505,8 +493,6 @@ namespace ElectricalSim.UI.CommonTools
             
             var img = bg.GetComponent<Image>();
             img.color = C_ErrorBg;
-            var outline = bg.GetComponent<Outline>();
-            if(outline) outline.effectColor = C_ErrorBorder;
         }
 
         private void ShowSuccess(Text uiText, RectTransform bg, string msg)
@@ -516,8 +502,6 @@ namespace ElectricalSim.UI.CommonTools
             
             var img = bg.GetComponent<Image>();
             img.color = C_ResultBg;
-            var outline = bg.GetComponent<Outline>();
-            if(outline) outline.effectColor = C_ResultBorder;
         }
 
         private RectTransform CreateFormContainer(RectTransform parent)
@@ -623,10 +607,6 @@ namespace ElectricalSim.UI.CommonTools
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_InputBg;
-
-            var inputBorder = inputBg.AddComponent<Outline>();
-            inputBorder.effectColor = C_Border;
-            inputBorder.effectDistance = new Vector2(1, -1);
             var leInput = inputBg.AddComponent<LayoutElement>();
             leInput.preferredWidth = 260f; // Fixed beautiful width
 
@@ -663,10 +643,6 @@ namespace ElectricalSim.UI.CommonTools
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_InputBg;
-
-            var inputBorder = inputBg.AddComponent<Outline>();
-            inputBorder.effectColor = C_Border;
-            inputBorder.effectDistance = new Vector2(1, -1);
             
             var leInput = inputBg.AddComponent<LayoutElement>();
             leInput.preferredWidth = 120f;
@@ -721,10 +697,6 @@ namespace ElectricalSim.UI.CommonTools
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_InputBg;
-            
-            var outline = go.AddComponent<Outline>();
-            outline.effectColor = C_Border;
-            outline.effectDistance = new Vector2(1, -1);
 
             var le = go.AddComponent<LayoutElement>();
             le.preferredWidth = width;
@@ -749,17 +721,13 @@ namespace ElectricalSim.UI.CommonTools
 
         private Button CreateCalcButton(RectTransform parent, UnityEngine.Events.UnityAction action)
         {
-            var btnGo = new GameObject("CalcBtn", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement), typeof(Shadow));
+            var btnGo = new GameObject("CalcBtn", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             btnGo.transform.SetParent(parent, false);
             
             var img = btnGo.GetComponent<Image>();
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_Primary;
-            
-            var shadow = btnGo.GetComponent<Shadow>();
-            shadow.effectColor = new Color(0.1f, 0.3f, 0.8f, 0.3f);
-            shadow.effectDistance = new Vector2(0, -3);
 
             var le = btnGo.GetComponent<LayoutElement>();
             le.minHeight = 48f;
@@ -776,7 +744,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private Text CreateResultArea(RectTransform parent, out RectTransform bgRect)
         {
-            var bg = new GameObject("ResultBg", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(LayoutElement), typeof(Outline));
+            var bg = new GameObject("ResultBg", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(LayoutElement));
             bg.transform.SetParent(parent, false);
             bgRect = bg.GetComponent<RectTransform>();
 
@@ -784,10 +752,6 @@ namespace ElectricalSim.UI.CommonTools
             img.sprite = GetRoundedSprite();
             img.type = Image.Type.Sliced;
             img.color = C_Bg; // Default to normal bg
-
-            var outline = bg.GetComponent<Outline>();
-            outline.effectColor = C_Border;
-            outline.effectDistance = new Vector2(1, -1);
 
             var layout = bg.GetComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(24, 24, 24, 24);

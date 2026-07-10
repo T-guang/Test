@@ -209,11 +209,39 @@ namespace ElectricalSim.UI.CommonTools
             rect.offsetMax = new Vector2(-right, -top);
         }
 
-        private void AddSoftOutline(RectTransform target)
+        private void CleanupCardDecoration(RectTransform target)
         {
-            var outline = target.gameObject.GetComponent<Outline>() ?? target.gameObject.AddComponent<Outline>();
-            outline.effectColor = BorderColor;
-            outline.effectDistance = new Vector2(1, -1);
+            if (target == null) return;
+            
+            // Clean up Outlines
+            var outlines = target.GetComponentsInChildren<Outline>(true);
+            foreach (var o in outlines) { o.enabled = false; Destroy(o); }
+            
+            // Clean up Shadows (that are not Outlines, though Destroying won't hurt if we already destroyed Outline)
+            var shadows = target.GetComponentsInChildren<Shadow>(true);
+            foreach (var s in shadows)
+            {
+                if (s != null) { s.enabled = false; Destroy(s); }
+            }
+
+            var namesToDestroy = new HashSet<string> { "Shadow", "SoftShadow", "CardShadow", "BorderShadow", "DropShadow", "Glow", "SoftGlow", "OutlineShadow" };
+            var childrenToDestroy = new List<Transform>();
+
+            void CollectSuspects(Transform t)
+            {
+                if (namesToDestroy.Contains(t.name)) childrenToDestroy.Add(t);
+                foreach (Transform child in t) CollectSuspects(child);
+            }
+            CollectSuspects(target);
+
+            foreach (var child in childrenToDestroy)
+            {
+                if (child != null)
+                {
+                    child.gameObject.SetActive(false);
+                    Destroy(child.gameObject);
+                }
+            }
         }
 
         private void BuildHeader()
@@ -235,7 +263,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var sidebar = CreatePanel("ToolSidebar", transform, CardBackground, 12);
             SetRect(sidebar, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(34f, -90f), new Vector2(240f, -120f));
-            AddSoftOutline(sidebar);
+            CleanupCardDecoration(sidebar);
 
             var title = CreateText("SidebarTitle", sidebar, "工具分类", 18, FontStyle.Bold, TextDark);
             title.alignment = TextAnchor.MiddleLeft;
@@ -384,7 +412,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var card = CreatePanel("PreviewCard", resistorPanel, CardBackground, 12);
             SetRect(card, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(10f, -80f), new Vector2(-20f, 260f));
-            AddSoftOutline(card);
+            CleanupCardDecoration(card);
 
             resistorPreview = CreateRect("ResistorPreview", card);
             SetRect(resistorPreview, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -15f), new Vector2(600f, 140f));
@@ -441,7 +469,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var card = CreatePanel("BandSelectCard", resistorPanel, CardBackground, 12);
             SetRect(card, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(10f, -360f), new Vector2(-20f, 100f));
-            AddSoftOutline(card);
+            CleanupCardDecoration(card);
 
             var title = CreateText("Title", card, "选择要编辑的色环", 16, FontStyle.Bold, TextDark);
             SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -15), new Vector2(200, 30));
@@ -465,7 +493,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var card = CreatePanel("ColorPickerCard", resistorPanel, CardBackground, 12);
             SetRect(card, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(10f, -480f), new Vector2(-20f, 160f));
-            AddSoftOutline(card);
+            CleanupCardDecoration(card);
 
             var title = CreateText("Title", card, "可选颜色", 16, FontStyle.Bold, TextDark);
             SetRect(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -15), new Vector2(200, 30));
@@ -485,7 +513,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var card = CreatePanel("ExampleCard", resistorPanel, CardBackground, 12);
             SetRect(card, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(10f, -660f), new Vector2(-20f, 80f));
-            AddSoftOutline(card);
+            CleanupCardDecoration(card);
 
             var title = CreateText("ExampleTitle", card, "常用示例", 16, FontStyle.Bold, TextDark);
             title.alignment = TextAnchor.MiddleLeft;
@@ -671,9 +699,10 @@ namespace ElectricalSim.UI.CommonTools
                 return;
             }
 
-            var outline = button.GetComponent<Outline>() ?? button.gameObject.AddComponent<Outline>();
-            outline.effectColor = color;
-            outline.effectDistance = new Vector2(1f, -1f);
+            var outlines = button.GetComponents<Outline>();
+            foreach (var o in outlines) { o.enabled = false; Destroy(o); }
+            var shadows = button.GetComponents<Shadow>();
+            foreach (var s in shadows) { s.enabled = false; Destroy(s); }
         }
 
         private static bool IsLightColor(Color bg)
@@ -758,7 +787,7 @@ namespace ElectricalSim.UI.CommonTools
         {
             var panel = CreatePanel(name, parent, CardBackground, 12);
             SetRect(panel, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(10f, 0f), new Vector2(260f, -60f));
-            AddSoftOutline(panel);
+            CleanupCardDecoration(panel);
 
             var viewport = CreatePanel(name + "Viewport", panel, new Color(1f, 1f, 1f, 0.01f));
             StretchTo(viewport, 2, 2, 2, 2);
@@ -887,7 +916,7 @@ namespace ElectricalSim.UI.CommonTools
             if (string.IsNullOrWhiteSpace(body)) return null;
 
             var card = CreatePanel("InfoCard_" + title, parent, CardBackground, 10);
-            AddSoftOutline(card);
+            CleanupCardDecoration(card);
 
             var layout = card.gameObject.AddComponent<VerticalLayoutGroup>();
             layout.childAlignment = TextAnchor.UpperLeft;
