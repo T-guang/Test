@@ -20,10 +20,12 @@ namespace ElectricalSim.EditorTools
     {
         private const string BaselineAssetDirectory = "Assets/EditorTests/Baselines/V2.3.9.1";
         private const string EvidenceFileName = "DemoSceneRuntimeEvidence.json";
+        private const int EvidenceSchemaVersion = 3;
         private string stageName = "初始默认示例";
         private string lifecycleNote = "切换六个页面 20 轮后";
         private SceneEvidenceBundle bundle;
         private Vector2 scroll;
+        private int consoleErrorsSinceLastStage;
 
         [MenuItem("Tools/Diagnostics/采集 Demo 场景运行态对象计数")]
         private static void Open()
@@ -33,7 +35,13 @@ namespace ElectricalSim.EditorTools
 
         private void OnEnable()
         {
+            Application.logMessageReceived += OnLogMessageReceived;
             LoadExisting();
+        }
+
+        private void OnDisable()
+        {
+            Application.logMessageReceived -= OnLogMessageReceived;
         }
 
         private void OnGUI()
@@ -96,7 +104,8 @@ namespace ElectricalSim.EditorTools
                     throw new InvalidOperationException("未找到已初始化的 WorkspaceController 或 WireManager。");
                 }
 
-                if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = 1 };
+                if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = EvidenceSchemaVersion };
+                bundle.schemaVersion = EvidenceSchemaVersion;
                 var analyzer = new CircuitStateAnalyzer();
                 var validation = new CircuitValidationService();
                 var state = analyzer.Analyze(workspace.Components, workspace.WireManager.Wires);
@@ -127,10 +136,11 @@ namespace ElectricalSim.EditorTools
                     analyzerSummary = CaptureAnalyzerSummary(state),
                     checkReport = CaptureInspectorEvidence("CheckCurrentCircuit", CaptureInspectorCheckSources(workspace, state, report)),
                     explainReport = CaptureInspectorEvidence("ExplainCurrentCircuit", null),
-                    consoleErrorsSinceCapture = 0
+                    consoleErrorsSinceCapture = consoleErrorsSinceLastStage
                 };
                 bundle.stages.RemoveAll(existing => existing.stageName == item.stageName);
                 bundle.stages.Add(item);
+                consoleErrorsSinceLastStage = 0;
                 Debug.Log("Demo 场景运行态取证已采集：" + item.stageName + "。Workspace=" + item.workspaceComponentCount + " components / " + item.workspaceWireCount + " wires，场景=" + item.sceneCircuitComponentCount + " CircuitComponent。");
             }
             catch (Exception exception)
@@ -141,7 +151,8 @@ namespace ElectricalSim.EditorTools
 
         private void CaptureLifecycle()
         {
-            if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = 1 };
+            if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = EvidenceSchemaVersion };
+            bundle.schemaVersion = EvidenceSchemaVersion;
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             bundle.lifecycle = new LifecycleEvidence
             {
@@ -162,6 +173,14 @@ namespace ElectricalSim.EditorTools
         private static List<T> FindSceneObjects<T>() where T : UnityEngine.Object
         {
             return Resources.FindObjectsOfTypeAll<T>().Where(item => item != null && item is Component component && component.gameObject.scene.IsValid()).ToList();
+        }
+
+        private void OnLogMessageReceived(string condition, string stackTrace, LogType type)
+        {
+            if (type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
+            {
+                consoleErrorsSinceLastStage++;
+            }
         }
 
         private static int GetPrivateLayerChildCount(WorkspaceController workspace, string fieldName)
@@ -306,7 +325,8 @@ namespace ElectricalSim.EditorTools
         {
             var path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, BaselineAssetDirectory, EvidenceFileName);
             if (File.Exists(path)) bundle = JsonUtility.FromJson<SceneEvidenceBundle>(File.ReadAllText(path));
-            if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = 1 };
+            if (bundle == null) bundle = new SceneEvidenceBundle { schemaVersion = EvidenceSchemaVersion };
+            bundle.schemaVersion = EvidenceSchemaVersion;
         }
 
         [Serializable] private sealed class SceneEvidenceBundle { public int schemaVersion; public List<RuntimeStageEvidence> stages = new List<RuntimeStageEvidence>(); public LifecycleEvidence lifecycle; }

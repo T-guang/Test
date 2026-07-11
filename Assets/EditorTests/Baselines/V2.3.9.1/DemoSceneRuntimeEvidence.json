@@ -1,0 +1,714 @@
+{
+    "schemaVersion": 3,
+    "stages": [
+        {
+            "stageName": "初始默认示例",
+            "capturedAtUtc": "2026-07-11T09:19:19.1189502Z",
+            "sceneName": "Demo",
+            "sceneCircuitComponentCount": 422,
+            "sceneTerminalViewCount": 1805,
+            "sceneWireViewCount": 774,
+            "rootObjectCount": 1186,
+            "workspaceComponentCount": 6,
+            "workspaceWireCount": 9,
+            "componentLayerChildCount": 6,
+            "wireLayerChildCount": 9,
+            "rootCircuitObjectCount": 1182,
+            "analyzerComponentInputCount": 6,
+            "analyzerWireInputCount": 9,
+            "validationComponentInputCount": 6,
+            "validationWireInputCount": 9,
+            "analyzerReturned": true,
+            "validationIssueCount": 0,
+            "validationRules": [],
+            "analyzerSummary": {
+                "available": true,
+                "hasShortCircuit": false,
+                "hasPowerConflict": false,
+                "hasInterlockConflict": false,
+                "hasTimerRelays": false,
+                "hasLimitSwitches": false,
+                "hasStarDeltaMotors": false,
+                "hasThreePhaseCircuit": false,
+                "components": [
+                    {
+                        "definitionId": "AC_220V_Power",
+                        "state": "Normal",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Breaker_2P",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Fan_220V",
+                        "state": "Running",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Lamp_220V",
+                        "state": "On",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Single_Control_Switch",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Single_Phase_Meter",
+                        "state": "Conducting",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    }
+                ]
+            },
+            "checkReport": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "最新检查报告",
+                    "参数估算",
+                    "接线校验",
+                    "检查结论",
+                    "当前关键状态",
+                    "问题与风险",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "explainReport": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "当前电路解释",
+                    "电路组成",
+                    "主回路路径",
+                    "控制回路路径",
+                    "元件动作关系",
+                    "当前运行状态",
+                    "当前画布运行态",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "consoleErrorsSinceCapture": 0
+        },
+        {
+            "stageName": "清空画布",
+            "capturedAtUtc": "2026-07-11T09:19:31.7531643Z",
+            "sceneName": "Demo",
+            "sceneCircuitComponentCount": 416,
+            "sceneTerminalViewCount": 1787,
+            "sceneWireViewCount": 765,
+            "rootObjectCount": 1187,
+            "workspaceComponentCount": 0,
+            "workspaceWireCount": 0,
+            "componentLayerChildCount": 0,
+            "wireLayerChildCount": 0,
+            "rootCircuitObjectCount": 1181,
+            "analyzerComponentInputCount": 0,
+            "analyzerWireInputCount": 0,
+            "validationComponentInputCount": 0,
+            "validationWireInputCount": 0,
+            "analyzerReturned": true,
+            "validationIssueCount": 0,
+            "validationRules": [],
+            "analyzerSummary": {
+                "available": true,
+                "hasShortCircuit": false,
+                "hasPowerConflict": false,
+                "hasInterlockConflict": false,
+                "hasTimerRelays": false,
+                "hasLimitSwitches": false,
+                "hasStarDeltaMotors": false,
+                "hasThreePhaseCircuit": false,
+                "components": []
+            },
+            "checkReport": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 3,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "NO_LOAD",
+                        "NO_POWER",
+                        "NO_WIRE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "最新检查报告",
+                    "接线校验",
+                    "检查结论",
+                    "当前关键状态",
+                    "问题与风险",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "explainReport": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "当前电路解释",
+                    "电路组成",
+                    "主回路路径",
+                    "控制回路路径",
+                    "元件动作关系",
+                    "当前运行状态",
+                    "当前画布运行态",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "consoleErrorsSinceCapture": 0
+        },
+        {
+            "stageName": "加载家庭模板",
+            "capturedAtUtc": "2026-07-11T09:19:46.1381087Z",
+            "sceneName": "Demo",
+            "sceneCircuitComponentCount": 420,
+            "sceneTerminalViewCount": 1799,
+            "sceneWireViewCount": 770,
+            "rootObjectCount": 1187,
+            "workspaceComponentCount": 4,
+            "workspaceWireCount": 5,
+            "componentLayerChildCount": 4,
+            "wireLayerChildCount": 5,
+            "rootCircuitObjectCount": 1182,
+            "analyzerComponentInputCount": 4,
+            "analyzerWireInputCount": 5,
+            "validationComponentInputCount": 4,
+            "validationWireInputCount": 5,
+            "analyzerReturned": true,
+            "validationIssueCount": 0,
+            "validationRules": [],
+            "analyzerSummary": {
+                "available": true,
+                "hasShortCircuit": false,
+                "hasPowerConflict": false,
+                "hasInterlockConflict": false,
+                "hasTimerRelays": false,
+                "hasLimitSwitches": false,
+                "hasStarDeltaMotors": false,
+                "hasThreePhaseCircuit": false,
+                "components": [
+                    {
+                        "definitionId": "AC_220V_Power",
+                        "state": "Normal",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Lamp_220V",
+                        "state": "Off",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Two_Way_Switch",
+                        "state": "TwoWayL1",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Two_Way_Switch",
+                        "state": "TwoWayL2",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    }
+                ]
+            },
+            "checkReport": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 1,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "最新检查报告",
+                    "参数估算",
+                    "接线校验",
+                    "检查结论",
+                    "当前关键状态",
+                    "问题与风险",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "explainReport": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "当前电路解释",
+                    "电路组成",
+                    "主回路路径",
+                    "控制回路路径",
+                    "元件动作关系",
+                    "当前运行状态",
+                    "当前画布运行态",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "consoleErrorsSinceCapture": 0
+        },
+        {
+            "stageName": "加载工业模板",
+            "capturedAtUtc": "2026-07-11T09:20:01.0388064Z",
+            "sceneName": "Demo",
+            "sceneCircuitComponentCount": 423,
+            "sceneTerminalViewCount": 1824,
+            "sceneWireViewCount": 782,
+            "rootObjectCount": 1187,
+            "workspaceComponentCount": 7,
+            "workspaceWireCount": 17,
+            "componentLayerChildCount": 7,
+            "wireLayerChildCount": 17,
+            "rootCircuitObjectCount": 1182,
+            "analyzerComponentInputCount": 7,
+            "analyzerWireInputCount": 17,
+            "validationComponentInputCount": 7,
+            "validationWireInputCount": 17,
+            "analyzerReturned": true,
+            "validationIssueCount": 0,
+            "validationRules": [],
+            "analyzerSummary": {
+                "available": true,
+                "hasShortCircuit": false,
+                "hasPowerConflict": false,
+                "hasInterlockConflict": false,
+                "hasTimerRelays": false,
+                "hasLimitSwitches": false,
+                "hasStarDeltaMotors": false,
+                "hasThreePhaseCircuit": true,
+                "components": [
+                    {
+                        "definitionId": "AC_ThreePhase_Power",
+                        "state": "Normal",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Breaker_3P",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Button_Start_NO",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Button_Stop_NC",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Contactor_KM_380V",
+                        "state": "CoilEnergized",
+                        "contactorCoilEnergized": true,
+                        "contactorMainClosed": true,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Fuse_3P",
+                        "state": "Conducting",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Motor_ThreePhase_380V",
+                        "state": "Forward",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    }
+                ]
+            },
+            "checkReport": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "最新检查报告",
+                    "三相电机参数估算",
+                    "控制回路负载估算",
+                    "接线校验",
+                    "检查结论",
+                    "当前关键状态",
+                    "问题与风险",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "explainReport": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "当前电路解释",
+                    "电路组成",
+                    "主回路路径",
+                    "控制回路路径",
+                    "元件动作关系",
+                    "当前运行状态",
+                    "当前画布运行态",
+                    "三相电机参数估算",
+                    "控制回路负载估算",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "consoleErrorsSinceCapture": 0
+        },
+        {
+            "stageName": "保存并导入用户图纸",
+            "capturedAtUtc": "2026-07-11T09:20:27.1142016Z",
+            "sceneName": "Demo",
+            "sceneCircuitComponentCount": 423,
+            "sceneTerminalViewCount": 1824,
+            "sceneWireViewCount": 782,
+            "rootObjectCount": 1187,
+            "workspaceComponentCount": 7,
+            "workspaceWireCount": 17,
+            "componentLayerChildCount": 7,
+            "wireLayerChildCount": 17,
+            "rootCircuitObjectCount": 1182,
+            "analyzerComponentInputCount": 7,
+            "analyzerWireInputCount": 17,
+            "validationComponentInputCount": 7,
+            "validationWireInputCount": 17,
+            "analyzerReturned": true,
+            "validationIssueCount": 0,
+            "validationRules": [],
+            "analyzerSummary": {
+                "available": true,
+                "hasShortCircuit": false,
+                "hasPowerConflict": false,
+                "hasInterlockConflict": false,
+                "hasTimerRelays": false,
+                "hasLimitSwitches": false,
+                "hasStarDeltaMotors": false,
+                "hasThreePhaseCircuit": true,
+                "components": [
+                    {
+                        "definitionId": "AC_ThreePhase_Power",
+                        "state": "Normal",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Breaker_3P",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Button_Start_NO",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Button_Stop_NC",
+                        "state": "Closed",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Contactor_KM_380V",
+                        "state": "CoilEnergized",
+                        "contactorCoilEnergized": true,
+                        "contactorMainClosed": true,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Fuse_3P",
+                        "state": "Conducting",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    },
+                    {
+                        "definitionId": "Motor_ThreePhase_380V",
+                        "state": "Forward",
+                        "contactorCoilEnergized": false,
+                        "contactorMainClosed": false,
+                        "timerCoilEnergized": false,
+                        "timerDelayElapsed": false,
+                        "timerStatus": "",
+                        "limitSwitchTriggered": false,
+                        "motorMode": ""
+                    }
+                ]
+            },
+            "checkReport": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "最新检查报告",
+                    "三相电机参数估算",
+                    "控制回路负载估算",
+                    "接线校验",
+                    "检查结论",
+                    "当前关键状态",
+                    "问题与风险",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "explainReport": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "source": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "sectionTitles": [
+                    "当前电路解释",
+                    "电路组成",
+                    "主回路路径",
+                    "控制回路路径",
+                    "元件动作关系",
+                    "当前运行状态",
+                    "当前画布运行态",
+                    "三相电机参数估算",
+                    "控制回路负载估算",
+                    "教学说明"
+                ],
+                "keyPhrases": []
+            },
+            "consoleErrorsSinceCapture": 0
+        }
+    ],
+    "lifecycle": {
+        "note": "切换六个页面 20 轮后",
+        "capturedAtUtc": "2026-07-11T07:57:43.5233451Z",
+        "localInspectorPanelCount": 1,
+        "simulationGalleryControllerCount": 1,
+        "localProfileControllerCount": 1,
+        "commonToolsControllerCount": 1,
+        "templateLoadControllerCount": 1,
+        "eventSystemCount": 1,
+        "canvasCount": 2,
+        "pageRootCount": 0
+    }
+}
