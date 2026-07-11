@@ -9,6 +9,7 @@ using System.Text;
 using ElectricalSim.AI;
 using ElectricalSim.Core;
 using ElectricalSim.Core.Validation;
+using ElectricalSim.Rules;
 using ElectricalSim.UI;
 using UnityEditor;
 using UnityEngine;
@@ -124,8 +125,8 @@ namespace ElectricalSim.EditorTools
                         .OrderBy(issue => issue.RuleId, StringComparer.Ordinal)
                         .Select(issue => new RuntimeRuleEvidence { ruleId = issue.RuleId, severity = issue.Severity.ToString() }).ToList(),
                     analyzerSummary = CaptureAnalyzerSummary(state),
-                    checkReport = CaptureInspectorEvidence("CheckCurrentCircuit"),
-                    explainReport = CaptureInspectorEvidence("ExplainCurrentCircuit"),
+                    checkReport = CaptureInspectorEvidence("CheckCurrentCircuit", CaptureInspectorCheckSources(workspace, state, report)),
+                    explainReport = CaptureInspectorEvidence("ExplainCurrentCircuit", null),
                     consoleErrorsSinceCapture = 0
                 };
                 bundle.stages.RemoveAll(existing => existing.stageName == item.stageName);
@@ -220,10 +221,43 @@ namespace ElectricalSim.EditorTools
             return evidence;
         }
 
-        private static RuntimeInspectorEvidence CaptureInspectorEvidence(string methodName)
+        private static RuntimeInspectorSourceEvidence CaptureInspectorCheckSources(
+            WorkspaceController workspace,
+            CircuitStateResult analysis,
+            CircuitValidationReport validation)
+        {
+            var result = new RuntimeInspectorSourceEvidence
+            {
+                analyzerErrorCount = analysis == null ? 0 : analysis.Errors.Count,
+                analyzerWarningCount = analysis == null ? 0 : analysis.Warnings.Count,
+                validationErrorCount = validation == null ? 0 : validation.Issues.Count(issue => issue != null && issue.Severity == CircuitValidationSeverity.Error),
+                validationWarningCount = validation == null ? 0 : validation.Issues.Count(issue => issue != null && issue.Severity == CircuitValidationSeverity.Warning),
+                validationRuleIds = validation == null ? new List<string>() : validation.Issues.Where(issue => issue != null).Select(issue => issue.RuleId).Distinct().OrderBy(id => id, StringComparer.Ordinal).ToList()
+            };
+
+            if (IndustrialCircuitRuleAnalyzer.TryAnalyze(workspace, out var industrial) && industrial != null && industrial.IsIndustrial)
+            {
+                result.checkPipeline = "IndustrialCircuitRuleAnalyzer";
+                result.pipelineErrorCount = industrial.ErrorCount;
+                result.pipelineWarningCount = industrial.WarningCount;
+                return result;
+            }
+
+            var raw = new CircuitRuleChecker(workspace).Check();
+            var filter = typeof(LocalInspectorPanel).GetMethod("FilterCheckPanelFalsePositives", BindingFlags.Static | BindingFlags.NonPublic);
+            var displayed = filter == null ? raw : filter.Invoke(null, new object[] { raw, analysis }) as CircuitCheckResult;
+            displayed = displayed ?? raw;
+            result.checkPipeline = "CircuitRuleChecker.FilterCheckPanelFalsePositives";
+            result.pipelineErrorCount = displayed == null ? 0 : displayed.ErrorCount;
+            result.pipelineWarningCount = displayed == null ? 0 : displayed.WarningCount;
+            result.pipelineIssueCodes = displayed == null ? new List<string>() : displayed.issues.Where(issue => issue != null).Select(issue => issue.code).Distinct().OrderBy(code => code, StringComparer.Ordinal).ToList();
+            return result;
+        }
+
+        private static RuntimeInspectorEvidence CaptureInspectorEvidence(string methodName, RuntimeInspectorSourceEvidence source)
         {
             var inspector = UnityEngine.Object.FindObjectOfType<LocalInspectorPanel>();
-            var evidence = new RuntimeInspectorEvidence { entryPoint = methodName };
+            var evidence = new RuntimeInspectorEvidence { entryPoint = methodName, source = source };
             if (inspector == null) return evidence;
             var method = typeof(LocalInspectorPanel).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             var field = typeof(LocalInspectorPanel).GetField("reportContent", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -239,8 +273,6 @@ namespace ElectricalSim.EditorTools
                 var title = texts.Length > 0 ? NormalizeText(texts[0].text) : string.Empty;
                 evidence.sectionTitles.Add(title);
                 var allText = NormalizeText(string.Join(" ", texts.Select(text => text.text).ToArray()));
-                if (allText.IndexOf("错误", StringComparison.OrdinalIgnoreCase) >= 0) evidence.errorBlockCount++;
-                if (allText.IndexOf("提醒", StringComparison.OrdinalIgnoreCase) >= 0 || allText.IndexOf("警告", StringComparison.OrdinalIgnoreCase) >= 0) evidence.warningBlockCount++;
                 foreach (var phrase in new[] { "当前停止", "当前正转运行", "当前反转运行", "KT 正在计时", "星形启动阶段", "三角运行阶段" })
                 {
                     if (allText.IndexOf(phrase, StringComparison.Ordinal) >= 0 && !evidence.keyPhrases.Contains(phrase)) evidence.keyPhrases.Add(phrase);
@@ -282,7 +314,8 @@ namespace ElectricalSim.EditorTools
         [Serializable] private sealed class RuntimeRuleEvidence { public string ruleId; public string severity; }
         [Serializable] private sealed class RuntimeAnalyzerEvidence { public bool available; public bool hasShortCircuit; public bool hasPowerConflict; public bool hasInterlockConflict; public bool hasTimerRelays; public bool hasLimitSwitches; public bool hasStarDeltaMotors; public bool hasThreePhaseCircuit; public List<RuntimeComponentEvidence> components = new List<RuntimeComponentEvidence>(); }
         [Serializable] private sealed class RuntimeComponentEvidence { public string definitionId; public string state; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool timerCoilEnergized; public bool timerDelayElapsed; public string timerStatus; public bool limitSwitchTriggered; public string motorMode; }
-        [Serializable] private sealed class RuntimeInspectorEvidence { public string entryPoint; public bool available; public int errorBlockCount; public int warningBlockCount; public List<string> sectionTitles = new List<string>(); public List<string> keyPhrases = new List<string>(); }
+        [Serializable] private sealed class RuntimeInspectorEvidence { public string entryPoint; public bool available; public RuntimeInspectorSourceEvidence source; public List<string> sectionTitles = new List<string>(); public List<string> keyPhrases = new List<string>(); }
+        [Serializable] private sealed class RuntimeInspectorSourceEvidence { public string checkPipeline; public int pipelineErrorCount; public int pipelineWarningCount; public List<string> pipelineIssueCodes = new List<string>(); public int analyzerErrorCount; public int analyzerWarningCount; public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
         [Serializable] private sealed class LifecycleEvidence { public string note; public string capturedAtUtc; public int localInspectorPanelCount; public int simulationGalleryControllerCount; public int localProfileControllerCount; public int commonToolsControllerCount; public int templateLoadControllerCount; public int eventSystemCount; public int canvasCount; public int pageRootCount; }
     }
 }
