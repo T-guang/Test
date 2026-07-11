@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using ElectricalSim.AI;
 using ElectricalSim.Core;
 using ElectricalSim.Core.Validation;
+using ElectricalSim.Rules;
 using ElectricalSim.Templates;
 using ElectricalSim.UI;
 using UnityEditor;
@@ -172,8 +173,9 @@ namespace ElectricalSim.EditorTools
             snapshot.components = CaptureComponents(analysis);
             snapshot.validationIssues = CaptureIssues(validation);
             snapshot.analysis = CaptureAnalysis(analysis);
-            snapshot.checkReport = CaptureInspectorReport(inspector, "CheckCurrentCircuit");
-            snapshot.explainReport = CaptureInspectorReport(inspector, "ExplainCurrentCircuit");
+            var checkSources = CaptureInspectorCheckSources(workspace, analysis, validation);
+            snapshot.checkReport = CaptureInspectorReport(inspector, "CheckCurrentCircuit", checkSources);
+            snapshot.explainReport = CaptureInspectorReport(inspector, "ExplainCurrentCircuit", null);
             return snapshot;
         }
 
@@ -259,7 +261,44 @@ namespace ElectricalSim.EditorTools
                 .ToList();
         }
 
-        private static InspectorReportSnapshot CaptureInspectorReport(LocalInspectorPanel inspector, string methodName)
+        private static InspectorReportSourceSnapshot CaptureInspectorCheckSources(
+            WorkspaceController workspace,
+            CircuitStateResult analysis,
+            CircuitValidationReport validation)
+        {
+            var sources = new InspectorReportSourceSnapshot
+            {
+                analyzerErrorCount = analysis == null ? 0 : analysis.Errors.Count,
+                analyzerWarningCount = analysis == null ? 0 : analysis.Warnings.Count,
+                validationErrorCount = CountSeverity(validation, CircuitValidationSeverity.Error),
+                validationWarningCount = CountSeverity(validation, CircuitValidationSeverity.Warning),
+                validationRuleIds = validation == null
+                    ? new List<string>()
+                    : validation.Issues.Where(issue => issue != null).Select(issue => issue.RuleId).Distinct().OrderBy(id => id, StringComparer.Ordinal).ToList()
+            };
+
+            if (IndustrialCircuitRuleAnalyzer.TryAnalyze(workspace, out var industrial) && industrial != null && industrial.IsIndustrial)
+            {
+                sources.checkPipeline = "IndustrialCircuitRuleAnalyzer";
+                sources.pipelineErrorCount = industrial.ErrorCount;
+                sources.pipelineWarningCount = industrial.WarningCount;
+                return sources;
+            }
+
+            var raw = new CircuitRuleChecker(workspace).Check();
+            var filter = typeof(LocalInspectorPanel).GetMethod("FilterCheckPanelFalsePositives", BindingFlags.Static | BindingFlags.NonPublic);
+            var displayed = filter == null ? raw : filter.Invoke(null, new object[] { raw, analysis }) as CircuitCheckResult;
+            displayed = displayed ?? raw;
+            sources.checkPipeline = "CircuitRuleChecker.FilterCheckPanelFalsePositives";
+            sources.pipelineErrorCount = displayed == null ? 0 : displayed.ErrorCount;
+            sources.pipelineWarningCount = displayed == null ? 0 : displayed.WarningCount;
+            sources.pipelineIssueCodes = displayed == null
+                ? new List<string>()
+                : displayed.issues.Where(issue => issue != null).Select(issue => issue.code).Distinct().OrderBy(code => code, StringComparer.Ordinal).ToList();
+            return sources;
+        }
+
+        private static InspectorReportSnapshot CaptureInspectorReport(LocalInspectorPanel inspector, string methodName, InspectorReportSourceSnapshot sources)
         {
             var method = typeof(LocalInspectorPanel).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             var field = typeof(LocalInspectorPanel).GetField("reportContent", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -276,7 +315,7 @@ namespace ElectricalSim.EditorTools
                 LayoutRebuilder.ForceRebuildLayoutImmediate(content);
             }
 
-            var snapshot = new InspectorReportSnapshot { entryPoint = methodName, available = content != null };
+            var snapshot = new InspectorReportSnapshot { entryPoint = methodName, available = content != null, sources = sources };
             if (content == null)
             {
                 return snapshot;
@@ -300,8 +339,6 @@ namespace ElectricalSim.EditorTools
                 });
             }
 
-            snapshot.errorCount = snapshot.blocks.Count(block => block.severity == "Error");
-            snapshot.warningCount = snapshot.blocks.Count(block => block.severity == "Warning");
             return snapshot;
         }
 
@@ -341,22 +378,80 @@ namespace ElectricalSim.EditorTools
 
         private static RuleCatalogSnapshot CreateRuleCatalog()
         {
-            var severity = new Dictionary<string, string>
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            var validationDirectory = Path.Combine(projectRoot, "Assets", "Scripts", "Core", "Validation");
+            if (!Directory.Exists(validationDirectory))
             {
-                { "POWER_POTENTIAL_CONFLICT", "Error" }, { "LIVE_TO_PE_FAULT", "Error" }, { "NEUTRAL_PE_MISUSE", "Error" },
-                { "COIL_VOLTAGE_MISMATCH", "ErrorOrWarningByMismatchDirection" }, { "BREAKER_OR_FUSE_BYPASSED", "Error" },
-                { "MOTOR_CONTACTOR_BYPASSED", "Error" }, { "REVERSING_INTERLOCK_MISSING", "Error" },
-                { "THERMAL_RELAY_CONTROL_BYPASSED", "Error" }, { "THERMAL_RELAY_MAIN_CIRCUIT_BYPASSED", "Error" },
-                { "TIMER_CONTROL_BYPASSED", "Error" }, { "STOP_BUTTON_BYPASSED", "Error" },
-                { "SELF_HOLDING_BRANCH_INCOMPLETE", "Warning" }, { "REVERSING_CONTACTOR_CONFLICT", "Error" },
-                { "STAR_DELTA_PARTIAL_STARPOINT_SHORT", "Error" }, { "STAR_DELTA_INPUT_TERMINAL_SHORT", "Error" },
-                { "COMPLEX_LOOP_OR_UNSUPPORTED_TOPOLOGY", "Warning" }
-            };
-            return new RuleCatalogSnapshot
+                throw new DirectoryNotFoundException("无法读取生产验证规则目录：" + validationDirectory);
+            }
+
+            var coreDirectory = Path.Combine(projectRoot, "Assets", "Scripts", "Core");
+            var allCoreFiles = Directory.GetFiles(coreDirectory, "*.cs", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal).ToList();
+            var discovered = new Dictionary<string, RuleSeveritySnapshot>(StringComparer.Ordinal);
+            var constPattern = new Regex("const\\s+string\\s+(?<symbol>[A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\\\"(?<id>[A-Z0-9_]+)\\\"", RegexOptions.Multiline);
+            var issuePattern = new Regex("(?:AddIssue|CreateIssue)\\s*\\(\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*,\\s*)?(?<symbol>[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|\\\"[A-Z0-9_]+\\\")\\s*,\\s*CircuitValidationSeverity\\.(?<severity>[A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*CircuitValidationCategory\\.(?<category>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Singleline);
+            var indirectIssuePattern = new Regex("(?:AddIssue|CreateIssue)\\s*\\(\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*,\\s*)?(?<symbol>[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|\\\"[A-Z0-9_]+\\\")\\s*,\\s*(?<severitySymbol>[A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*CircuitValidationCategory\\.(?<category>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Singleline);
+            var symbols = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var coreFile in allCoreFiles)
             {
-                schemaVersion = 1,
-                rules = KnownRuleIds.Select(id => new RuleSeveritySnapshot { ruleId = id, expectedSeverity = severity[id] }).ToList()
-            };
+                var text = File.ReadAllText(coreFile);
+                var className = Regex.Match(text, "(?:class|struct)\\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)").Groups["name"].Value;
+                foreach (Match constant in constPattern.Matches(text))
+                {
+                    symbols[constant.Groups["symbol"].Value] = constant.Groups["id"].Value;
+                    if (!string.IsNullOrWhiteSpace(className)) symbols[className + "." + constant.Groups["symbol"].Value] = constant.Groups["id"].Value;
+                }
+            }
+
+            foreach (var file in Directory.GetFiles(validationDirectory, "*.cs", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
+            {
+                var text = File.ReadAllText(file);
+                foreach (Match match in issuePattern.Matches(text))
+                {
+                    var token = match.Groups["symbol"].Value;
+                    var ruleId = token.StartsWith("\"") ? token.Trim('\"') : (symbols.TryGetValue(token, out var value) ? value : null);
+                    if (string.IsNullOrWhiteSpace(ruleId) || Array.IndexOf(KnownRuleIds, ruleId) < 0) continue;
+                    if (!discovered.TryGetValue(ruleId, out var rule))
+                    {
+                        rule = new RuleSeveritySnapshot { ruleId = ruleId };
+                        discovered.Add(ruleId, rule);
+                    }
+                    AddDistinct(rule.severities, match.Groups["severity"].Value);
+                    AddDistinct(rule.categories, match.Groups["category"].Value);
+                    AddDistinct(rule.sourceLocations, MakeSourceLocation(projectRoot, file, text, match.Index));
+                }
+
+                foreach (Match match in indirectIssuePattern.Matches(text))
+                {
+                    if (!string.Equals(match.Groups["severitySymbol"].Value, "severity", StringComparison.Ordinal)) continue;
+                    var token = match.Groups["symbol"].Value;
+                    var ruleId = token.StartsWith("\"") ? token.Trim('\"') : (symbols.TryGetValue(token, out var value) ? value : null);
+                    if (string.IsNullOrWhiteSpace(ruleId) || Array.IndexOf(KnownRuleIds, ruleId) < 0) continue;
+                    var methodName = FindContainingMethodName(text, match.Index);
+                    if (string.IsNullOrWhiteSpace(methodName)) continue;
+                    var invocationPattern = new Regex(methodName + "\\s*\\([\\s\\S]{0,420}?CircuitValidationSeverity\\.(?<severity>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Singleline);
+                    foreach (Match invocation in invocationPattern.Matches(text))
+                    {
+                        if (invocation.Index >= match.Index) continue;
+                        if (!discovered.TryGetValue(ruleId, out var rule))
+                        {
+                            rule = new RuleSeveritySnapshot { ruleId = ruleId };
+                            discovered.Add(ruleId, rule);
+                        }
+                        AddDistinct(rule.severities, invocation.Groups["severity"].Value);
+                        AddDistinct(rule.categories, match.Groups["category"].Value);
+                        AddDistinct(rule.sourceLocations, MakeSourceLocation(projectRoot, file, text, invocation.Index));
+                    }
+                }
+            }
+
+            var missing = KnownRuleIds.Where(id => !discovered.ContainsKey(id)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new InvalidOperationException("未能从生产 CircuitValidationIssue 发射点解析以下 RuleId 的 Severity：" + string.Join("、", missing));
+            }
+
+            return new RuleCatalogSnapshot { schemaVersion = 2, rules = KnownRuleIds.Select(id => discovered[id]).ToList() };
         }
 
         private static void WriteBaseline(BaselineBundle bundle, RuleCatalogSnapshot ruleCatalog)
@@ -394,9 +489,9 @@ namespace ElectricalSim.EditorTools
             foreach (var expectedRule in expectedRules.rules)
             {
                 var current = actualRules.rules.FirstOrDefault(item => item.ruleId == expectedRule.ruleId);
-                if (current == null || current.expectedSeverity != expectedRule.expectedSeverity)
+                if (current == null || !SameSequence(expectedRule.severities, current.severities) || !SameSequence(expectedRule.categories, current.categories))
                 {
-                    differences.Add("Rule severity contract: " + expectedRule.ruleId + " expected=" + expectedRule.expectedSeverity + ", actual=" + (current == null ? "<missing>" : current.expectedSeverity));
+                    differences.Add("Rule severity contract: " + expectedRule.ruleId + " expected=" + DescribeRule(expectedRule) + ", actual=" + (current == null ? "<missing>" : DescribeRule(current)));
                 }
             }
             return differences;
@@ -419,6 +514,35 @@ namespace ElectricalSim.EditorTools
             var left = string.Join("|", expected.ToArray());
             var right = string.Join("|", actual.ToArray());
             if (!string.Equals(left, right, StringComparison.Ordinal)) differences.Add(label + " expected=[" + left + "], actual=[" + right + "]");
+        }
+
+        private static bool SameSequence(IEnumerable<string> left, IEnumerable<string> right)
+        {
+            return string.Join("|", left ?? new List<string>()) == string.Join("|", right ?? new List<string>());
+        }
+
+        private static string DescribeRule(RuleSeveritySnapshot rule)
+        {
+            return "severity=" + string.Join("/", rule.severities.ToArray()) + ", category=" + string.Join("/", rule.categories.ToArray());
+        }
+
+        private static string MakeSourceLocation(string projectRoot, string file, string text, int offset)
+        {
+            var line = 1;
+            for (var i = 0; i < offset && i < text.Length; i++) if (text[i] == '\n') line++;
+            return file.Substring(projectRoot.Length + 1).Replace('\\', '/') + ":" + line;
+        }
+
+        private static string FindContainingMethodName(string text, int offset)
+        {
+            var prefix = text.Substring(0, Math.Min(offset, text.Length));
+            var matches = Regex.Matches(prefix, "(?:private|public|internal|protected)\\s+(?:static\\s+)?(?:[A-Za-z_][A-Za-z0-9_<> ,\\[\\]]*)\\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\\s*\\(");
+            return matches.Count == 0 ? string.Empty : matches[matches.Count - 1].Groups["name"].Value;
+        }
+
+        private static void AddDistinct(List<string> values, string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !values.Contains(value)) values.Add(value);
         }
 
         private static string EnsureBaselineDirectory()
@@ -449,12 +573,13 @@ namespace ElectricalSim.EditorTools
         [Serializable] private sealed class SemanticComponentSnapshot { public string definitionId; public int ordinal; public string state; public string judgement; public bool isBreaker; public bool breakerInputHasSupply; public bool breakerOutputHasSupply; public bool isContactor; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool isTimerRelay; public bool timerCoilEnergized; public bool timerDelayElapsed; public bool timerNoClosed; public bool timerNcClosed; public string timerDelayStatus; public bool isLimitSwitch; public bool limitSwitchTriggered; public bool isMotor; public bool isStarDeltaMotor; public string starDeltaMode; public string motorFeederContactors; }
         [Serializable] private sealed class AnalysisSnapshot { public bool available; public bool hasShortCircuit; public bool hasPowerConflict; public bool hasContactorInterlockConflict; public bool hasLimitSwitches; public bool hasTimerRelays; public bool hasStarDeltaMotors; public bool hasThreePhaseCircuit; public bool unsupportedThreePhaseTopology; public int analyzerErrorCount; public int analyzerWarningCount; }
         [Serializable] private sealed class RuleIssueSnapshot { public string ruleId; public string severity; public string category; }
-        [Serializable] private sealed class InspectorReportSnapshot { public string entryPoint; public bool available; public int errorCount; public int warningCount; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); }
+        [Serializable] private sealed class InspectorReportSnapshot { public string entryPoint; public bool available; public InspectorReportSourceSnapshot sources; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); }
+        [Serializable] private sealed class InspectorReportSourceSnapshot { public string checkPipeline; public int pipelineErrorCount; public int pipelineWarningCount; public List<string> pipelineIssueCodes = new List<string>(); public int analyzerErrorCount; public int analyzerWarningCount; public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
         [Serializable] private sealed class InspectorBlockSnapshot { public string title; public string blockType; public string severity; public List<string> ruleIds = new List<string>(); public List<string> keyPhrases = new List<string>(); public bool containsRuntimeParagraph; public bool containsParameterParagraph; }
         [Serializable] private sealed class InspectorBundle { public int schemaVersion; public List<InspectorTemplateSnapshot> templates = new List<InspectorTemplateSnapshot>(); }
         [Serializable] private sealed class InspectorTemplateSnapshot { public string templateId; public InspectorReportSnapshot check; public InspectorReportSnapshot explain; }
         [Serializable] private sealed class RuleCatalogSnapshot { public int schemaVersion; public List<RuleSeveritySnapshot> rules = new List<RuleSeveritySnapshot>(); }
-        [Serializable] private sealed class RuleSeveritySnapshot { public string ruleId; public string expectedSeverity; }
+        [Serializable] private sealed class RuleSeveritySnapshot { public string ruleId; public List<string> severities = new List<string>(); public List<string> categories = new List<string>(); public List<string> sourceLocations = new List<string>(); }
     }
 }
 #endif
