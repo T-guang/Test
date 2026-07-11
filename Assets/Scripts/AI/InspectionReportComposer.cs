@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using ElectricalSim.Core;
 using ElectricalSim.Core.Validation;
@@ -37,7 +38,7 @@ namespace ElectricalSim.AI
                 title,
                 body.ToString().TrimEnd(),
                 InspectionReportBlockKind.Summary,
-                InspectionReportSeverity.Information));
+                ResolveSummarySeverity(reportType, riskLevel)));
             return data;
         }
 
@@ -133,7 +134,9 @@ namespace ElectricalSim.AI
                     title,
                     body,
                     kind,
-                    ResolveSeverity(message),
+                    kind == InspectionReportBlockKind.Validation
+                        ? ResolveValidationSeverity(message, validationIssues)
+                        : ResolveSeverity(message),
                     kind == InspectionReportBlockKind.Validation ? CollectRuleIds(validationIssues) : null));
             }
 
@@ -213,8 +216,28 @@ namespace ElectricalSim.AI
             if (title.IndexOf("参数", StringComparison.Ordinal) >= 0 || title.IndexOf("估算", StringComparison.Ordinal) >= 0) return InspectionReportBlockKind.Parameter;
             if (title.IndexOf("教学", StringComparison.Ordinal) >= 0 || title.IndexOf("说明", StringComparison.Ordinal) >= 0) return InspectionReportBlockKind.Teaching;
             if (title.IndexOf("接线校验", StringComparison.Ordinal) >= 0) return InspectionReportBlockKind.Validation;
-            if (title.IndexOf("状态", StringComparison.Ordinal) >= 0) return InspectionReportBlockKind.Runtime;
+            if (title.IndexOf("状态", StringComparison.Ordinal) >= 0 || title.IndexOf("运行态", StringComparison.Ordinal) >= 0) return InspectionReportBlockKind.Runtime;
             return InspectionReportBlockKind.General;
+        }
+
+        private static InspectionReportSeverity ResolveSummarySeverity(string reportType, string riskLevel)
+        {
+            if (!string.Equals(reportType, "接线检查", StringComparison.Ordinal)) return InspectionReportSeverity.Information;
+            if (string.Equals(riskLevel, "错误", StringComparison.Ordinal)) return InspectionReportSeverity.Error;
+            if (string.Equals(riskLevel, "提醒", StringComparison.Ordinal)) return InspectionReportSeverity.Warning;
+            if (string.Equals(riskLevel, "正常", StringComparison.Ordinal)) return InspectionReportSeverity.Success;
+            return InspectionReportSeverity.Information;
+        }
+
+        private static InspectionReportSeverity ResolveValidationSeverity(
+            string message,
+            IReadOnlyList<CircuitValidationIssue> validationIssues)
+        {
+            if (validationIssues == null) return ResolveSeverity(message);
+            if (validationIssues.Any(issue => issue != null && issue.Severity == CircuitValidationSeverity.Error)) return InspectionReportSeverity.Error;
+            if (validationIssues.Any(issue => issue != null && issue.Severity == CircuitValidationSeverity.Warning)) return InspectionReportSeverity.Warning;
+            if (validationIssues.Any(issue => issue != null && issue.Severity == CircuitValidationSeverity.Info)) return InspectionReportSeverity.Information;
+            return InspectionReportSeverity.Success;
         }
 
         private static InspectionReportSeverity ResolveSeverity(string message)
@@ -227,14 +250,14 @@ namespace ElectricalSim.AI
 
         private static IReadOnlyList<string> CollectRuleIds(IReadOnlyList<CircuitValidationIssue> issues)
         {
-            var result = new List<string>();
-            if (issues == null) return result;
-            for (var i = 0; i < issues.Count; i++)
-            {
-                var ruleId = issues[i] == null ? string.Empty : issues[i].RuleId;
-                if (!string.IsNullOrWhiteSpace(ruleId) && !result.Contains(ruleId)) result.Add(ruleId);
-            }
-            return result;
+            // Section-level aggregation: all validation RuleIds represented by this block.
+            return issues == null
+                ? Array.Empty<string>()
+                : issues.Where(issue => issue != null && !string.IsNullOrWhiteSpace(issue.RuleId))
+                    .Select(issue => issue.RuleId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(ruleId => ruleId, StringComparer.Ordinal)
+                    .ToList();
         }
 
         private static bool ContainsAny(string text, params string[] values)

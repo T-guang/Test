@@ -1,5 +1,5 @@
 {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "templates": [
         {
             "templateId": "breaker_lamp_fan_parallel",
@@ -82,6 +82,50 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
                     }
                 ]
             },
@@ -171,6 +215,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -257,6 +351,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -345,6 +483,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -429,6 +617,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -517,6 +749,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -603,6 +885,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -691,6 +1017,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -777,6 +1153,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -865,6 +1285,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -949,6 +1419,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -1037,6 +1551,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -1139,6 +1703,62 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前自动往返运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -1255,6 +1875,74 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前自动往返运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             }
         },
@@ -1346,6 +2034,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             },
@@ -1453,6 +2191,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -1546,6 +2346,56 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -1652,6 +2502,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -1745,6 +2657,56 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -1851,6 +2813,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -1944,6 +2968,56 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -2050,6 +3124,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -2143,6 +3279,58 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Error",
+                        "ruleIds": [
+                            "MOTOR_MISSING_PHASE"
+                        ]
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -2249,6 +3437,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -2342,6 +3592,56 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -2448,6 +3748,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -2541,6 +3903,56 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -2648,6 +4060,68 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             }
         },
@@ -2739,6 +4213,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "星三角参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             },
@@ -2846,6 +4370,68 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "星三角参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -2948,6 +4534,62 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "热继整定匹配估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -3064,6 +4706,74 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "三相电机参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "热继整定匹配估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路负载估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
+                    }
                 ]
             }
         },
@@ -3148,6 +4858,50 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
                     }
                 ]
             },
@@ -3237,6 +4991,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }
@@ -3323,6 +5127,50 @@
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
                     }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "最新检查报告",
+                        "kind": "Summary",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "参数估算",
+                        "kind": "Parameter",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "接线校验",
+                        "kind": "Validation",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "检查结论",
+                        "kind": "General",
+                        "severity": "Success",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前关键状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "问题与风险",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Success",
+                        "ruleIds": []
+                    }
                 ]
             },
             "explain": {
@@ -3411,6 +5259,56 @@
                         "keyPhrases": [],
                         "containsRuntimeParagraph": false,
                         "containsParameterParagraph": false
+                    }
+                ],
+                "modelBlocks": [
+                    {
+                        "sectionTitle": "当前电路解释",
+                        "kind": "Summary",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "电路组成",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "主回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "控制回路路径",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "元件动作关系",
+                        "kind": "General",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前运行状态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "当前画布运行态",
+                        "kind": "Runtime",
+                        "severity": "Information",
+                        "ruleIds": []
+                    },
+                    {
+                        "sectionTitle": "教学说明",
+                        "kind": "Teaching",
+                        "severity": "Information",
+                        "ruleIds": []
                     }
                 ]
             }

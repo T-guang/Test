@@ -30,6 +30,8 @@ namespace ElectricalSim.AI
         [SerializeField] private bool showDeveloperDebugInfo = false;
 
         private CircuitSummaryBuilder summaryBuilder;
+        // Diagnostic-only mirror of the blocks currently rendered in reportContent.
+        private InspectionReportData renderedReportData = new InspectionReportData();
         private Sprite collapseHandleSprite;
         private Button collapseHandleButton;
         private Image collapseHandleIcon;
@@ -381,6 +383,12 @@ namespace ElectricalSim.AI
         private void ExplainCurrentCircuit()
         {
             ClearReport();
+            if (workspace == null)
+            {
+                AddAssistantMessage("【电路解释失败】\n电路解释失败：未能读取当前画布。");
+                return;
+            }
+
             var stateResult = AnalyzeCircuitState();
             ApplyRuntimeDisplayOverrides(stateResult);
             var report = InspectionReportComposer.CreateSummary(
@@ -2458,6 +2466,7 @@ namespace ElectricalSim.AI
 
         private void ClearReport()
         {
+            renderedReportData = new InspectionReportData();
             if (reportContent == null)
             {
                 return;
@@ -2503,7 +2512,9 @@ namespace ElectricalSim.AI
 
             for (var i = 0; i < report.Blocks.Count; i++)
             {
-                CreateReportBlock(reportContent, report.Blocks[i].ToLegacyText());
+                var block = report.Blocks[i];
+                CreateReportBlock(reportContent, block);
+                renderedReportData.Add(block);
             }
 
             RebuildReportLayout(true);
@@ -2520,56 +2531,21 @@ namespace ElectricalSim.AI
             }
         }
 
-        private static List<string> SplitReportBlocks(string message)
+        private static RectTransform CreateReportBlock(Transform parent, InspectionReportBlock block)
         {
-            var blocks = new List<string>();
-            if (string.IsNullOrWhiteSpace(message))
-            {
-                return blocks;
-            }
-
-            var normalized = message.Replace("\r\n", "\n").Replace('\r', '\n');
-            var lines = normalized.Split('\n');
-            var current = new StringBuilder();
-
-            for (var i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                var trimmed = line.Trim();
-                var startsSection = trimmed.Length >= 2 && trimmed[0] == '【' && trimmed[trimmed.Length - 1] == '】';
-
-                if (startsSection && current.Length > 0)
-                {
-                    blocks.Add(current.ToString().Trim());
-                    current.Length = 0;
-                }
-
-                current.AppendLine(line);
-            }
-
-            if (current.Length > 0)
-            {
-                blocks.Add(current.ToString().Trim());
-            }
-
-            if (blocks.Count == 0)
-            {
-                blocks.Add(message.Trim());
-            }
-
-            return blocks;
-        }
-
-        private static RectTransform CreateReportBlock(Transform parent, string message)
-        {
-            var go = new GameObject("ReportBlock", typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            var safeBlock = block ?? new InspectionReportBlock(
+                "检查报告",
+                string.Empty,
+                InspectionReportBlockKind.General,
+                InspectionReportSeverity.Information);
+            var go = new GameObject("ReportBlock_" + safeBlock.Kind, typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             go.transform.SetParent(parent, false);
 
             var image = go.GetComponent<Image>();
-            image.color = ResolveReportBackground(message);
+            image.color = ResolveReportBackground(safeBlock.Severity);
             image.raycastTarget = false;
             var outline = go.GetComponent<Outline>() ?? go.gameObject.AddComponent<Outline>();
-            outline.effectColor = ResolveReportBorder(message);
+            outline.effectColor = ResolveReportBorder(safeBlock.Severity);
             outline.effectDistance = new Vector2(1f, -1f);
 
             var layout = go.GetComponent<VerticalLayoutGroup>();
@@ -2589,114 +2565,60 @@ namespace ElectricalSim.AI
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            var title = CreateLayoutText("Title", go.transform, ResolveReportTitle(message), 15, TextAnchor.UpperLeft, 24f);
+            var title = CreateLayoutText("Title", go.transform, safeBlock.SectionTitle, 15, TextAnchor.UpperLeft, 24f);
             MainUiTheme.ApplyTextRole(title, MainUiTheme.UiTextRole.InspectorCardTitle);
-            title.color = ResolveReportTitleColor(message);
+            title.color = ResolveReportTitleColor(safeBlock.Severity);
 
-            var body = CreateLayoutText("Body", go.transform, StripLeadingReportTitle(message), 13, TextAnchor.UpperLeft, 0f);
+            var body = CreateLayoutText("Body", go.transform, safeBlock.Body, 13, TextAnchor.UpperLeft, 0f);
             MainUiTheme.ApplyTextRole(body, MainUiTheme.UiTextRole.InspectorBody);
             body.color = MainUiTheme.SecondaryText;
 
             return go.GetComponent<RectTransform>();
         }
 
-        private static string ResolveReportTitle(string message)
+        private static Color ResolveReportBackground(InspectionReportSeverity severity)
         {
-            if (string.IsNullOrWhiteSpace(message))
+            switch (severity)
             {
-                return "检查报告";
+                case InspectionReportSeverity.Error:
+                    return MainUiTheme.Hex("FEF2F2");
+                case InspectionReportSeverity.Warning:
+                    return MainUiTheme.Hex("FFFBEB");
+                case InspectionReportSeverity.Success:
+                    return MainUiTheme.Hex("F0FDF4");
+                default:
+                    return MainUiTheme.Hex("EFF6FF");
             }
-
-            var firstLineEnd = message.IndexOf('\n');
-            var firstLine = firstLineEnd >= 0 ? message.Substring(0, firstLineEnd).Trim() : message.Trim();
-            if (firstLine.StartsWith("【") && firstLine.EndsWith("】"))
-            {
-                return firstLine.Trim('【', '】');
-            }
-
-            return "检查报告";
         }
 
-        private static string StripLeadingReportTitle(string message)
+        private static Color ResolveReportTitleColor(InspectionReportSeverity severity)
         {
-            if (string.IsNullOrWhiteSpace(message))
+            switch (severity)
             {
-                return string.Empty;
+                case InspectionReportSeverity.Error:
+                    return MainUiTheme.DangerRed;
+                case InspectionReportSeverity.Warning:
+                    return MainUiTheme.Hex("D97706");
+                case InspectionReportSeverity.Success:
+                    return MainUiTheme.SuccessGreen;
+                default:
+                    return MainUiTheme.PrimaryBlue;
             }
-
-            var firstLineEnd = message.IndexOf('\n');
-            if (firstLineEnd <= 0)
-            {
-                return message;
-            }
-
-            var firstLine = message.Substring(0, firstLineEnd).Trim();
-            if (firstLine.StartsWith("【") && firstLine.EndsWith("】"))
-            {
-                return message.Substring(firstLineEnd + 1).Trim();
-            }
-
-            return message.Trim();
         }
 
-        private static Color ResolveReportBackground(string message)
+        private static Color ResolveReportBorder(InspectionReportSeverity severity)
         {
-            if (ContainsAny(message, "错误", "失败", "短路", "未形成有效"))
+            switch (severity)
             {
-                return MainUiTheme.Hex("FEF2F2");
+                case InspectionReportSeverity.Error:
+                    return MainUiTheme.Hex("FECACA");
+                case InspectionReportSeverity.Warning:
+                    return MainUiTheme.Hex("FDE68A");
+                case InspectionReportSeverity.Success:
+                    return MainUiTheme.Hex("BBF7D0");
+                default:
+                    return MainUiTheme.Hex("BFDBFE");
             }
-
-            if (ContainsAny(message, "警告", "提醒", "建议"))
-            {
-                return MainUiTheme.Hex("FFFBEB");
-            }
-
-            if (ContainsAny(message, "通过", "正常", "完成"))
-            {
-                return MainUiTheme.Hex("F0FDF4");
-            }
-
-            return MainUiTheme.Hex("EFF6FF");
-        }
-
-        private static Color ResolveReportTitleColor(string message)
-        {
-            if (ContainsAny(message, "错误", "失败", "短路", "未形成有效"))
-            {
-                return MainUiTheme.DangerRed;
-            }
-
-            if (ContainsAny(message, "警告", "提醒", "建议"))
-            {
-                return MainUiTheme.Hex("D97706");
-            }
-
-            if (ContainsAny(message, "通过", "正常", "完成"))
-            {
-                return MainUiTheme.SuccessGreen;
-            }
-
-            return MainUiTheme.PrimaryBlue;
-        }
-
-        private static Color ResolveReportBorder(string message)
-        {
-            if (ContainsAny(message, "错误", "失败", "短路", "未形成有效"))
-            {
-                return MainUiTheme.Hex("FECACA");
-            }
-
-            if (ContainsAny(message, "警告", "提醒", "建议"))
-            {
-                return MainUiTheme.Hex("FDE68A");
-            }
-
-            if (ContainsAny(message, "通过", "正常", "完成"))
-            {
-                return MainUiTheme.Hex("BBF7D0");
-            }
-
-            return MainUiTheme.Hex("BFDBFE");
         }
 
         private static void BindButton(Button button, UnityEngine.Events.UnityAction action)

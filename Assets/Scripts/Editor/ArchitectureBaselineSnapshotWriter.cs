@@ -44,6 +44,27 @@ namespace ElectricalSim.EditorTools
             Run(writeBaseline: false);
         }
 
+        [MenuItem("Tools/Tests/生成 Inspector 报告模型基线")]
+        private static void GenerateInspectorModelMenu()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                EditorUtility.DisplayDialog("Inspector 报告模型基线", "请先进入 Play Mode，并等待主界面和默认示例加载完成。", "知道了");
+                return;
+            }
+
+            try
+            {
+                WriteInspectorBaseline(CaptureAllTemplates());
+                Debug.Log("Inspector 报告模型基线已生成：" + BaselineAssetDirectory + "（未改写模板和规则基线）。");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                Debug.LogError("Inspector 报告模型基线未完成；未写入或覆盖任何 expected 快照。");
+            }
+        }
+
         private static void Run(bool writeBaseline)
         {
             if (!EditorApplication.isPlaying)
@@ -302,9 +323,10 @@ namespace ElectricalSim.EditorTools
         {
             var method = typeof(LocalInspectorPanel).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             var field = typeof(LocalInspectorPanel).GetField("reportContent", BindingFlags.Instance | BindingFlags.NonPublic);
-            if (method == null || field == null)
+            var modelField = typeof(LocalInspectorPanel).GetField("renderedReportData", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (method == null || field == null || modelField == null)
             {
-                throw new MissingMemberException("LocalInspectorPanel", methodName + " 或 reportContent");
+                throw new MissingMemberException("LocalInspectorPanel", methodName + "、reportContent 或 renderedReportData");
             }
 
             method.Invoke(inspector, null);
@@ -337,6 +359,42 @@ namespace ElectricalSim.EditorTools
                     containsRuntimeParagraph = ContainsAny(body, "当前停止", "当前正转运行", "当前反转运行", "KT 正在计时", "星形启动阶段", "三角运行阶段"),
                     containsParameterParagraph = ContainsAny(body, "参数估算", "估算")
                 });
+            }
+
+            var renderedReportData = modelField.GetValue(inspector) as InspectionReportData;
+            if (renderedReportData == null)
+            {
+                throw new InvalidOperationException(methodName + " 未保留 renderedReportData。");
+            }
+
+            for (var i = 0; i < renderedReportData.Blocks.Count; i++)
+            {
+                var block = renderedReportData.Blocks[i];
+                if (block == null) continue;
+                snapshot.modelBlocks.Add(new InspectorModelBlockSnapshot
+                {
+                    sectionTitle = NormalizeText(block.SectionTitle),
+                    kind = block.Kind.ToString(),
+                    severity = block.Severity.ToString(),
+                    ruleIds = (block.RuleIds ?? Array.Empty<string>())
+                        .Where(ruleId => !string.IsNullOrWhiteSpace(ruleId))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(ruleId => ruleId, StringComparer.Ordinal)
+                        .ToList()
+                });
+            }
+
+            if (snapshot.blocks.Count != snapshot.modelBlocks.Count)
+            {
+                throw new InvalidOperationException(methodName + " 的 UI Block 数量与报告模型数量不一致：" + snapshot.blocks.Count + "/" + snapshot.modelBlocks.Count);
+            }
+
+            for (var i = 0; i < snapshot.blocks.Count; i++)
+            {
+                if (!string.Equals(snapshot.blocks[i].title, snapshot.modelBlocks[i].sectionTitle, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(methodName + " 的 UI Block 与报告模型标题顺序不一致：" + snapshot.blocks[i].title + "/" + snapshot.modelBlocks[i].sectionTitle);
+                }
             }
 
             return snapshot;
@@ -458,9 +516,30 @@ namespace ElectricalSim.EditorTools
         {
             var directory = EnsureBaselineDirectory();
             WriteJson(Path.Combine(directory, "TemplateStaticSnapshots.json"), bundle);
-            WriteJson(Path.Combine(directory, "InspectorReportSnapshots.json"), new InspectorBundle { schemaVersion = 1, templates = bundle.templates.Select(template => new InspectorTemplateSnapshot { templateId = template.templateId, check = template.checkReport, explain = template.explainReport }).ToList() });
+            WriteInspectorBaseline(bundle);
             WriteJson(Path.Combine(directory, "ValidationRuleSnapshots.json"), ruleCatalog);
             AssetDatabase.Refresh();
+        }
+
+        private static void WriteInspectorBaseline(BaselineBundle bundle)
+        {
+            var directory = EnsureBaselineDirectory();
+            WriteJson(Path.Combine(directory, "InspectorReportSnapshots.json"), CreateInspectorBundle(bundle));
+            AssetDatabase.Refresh();
+        }
+
+        private static InspectorBundle CreateInspectorBundle(BaselineBundle bundle)
+        {
+            return new InspectorBundle
+            {
+                schemaVersion = 2,
+                templates = bundle.templates.Select(template => new InspectorTemplateSnapshot
+                {
+                    templateId = template.templateId,
+                    check = template.checkReport,
+                    explain = template.explainReport
+                }).ToList()
+            };
         }
 
         private static List<string> VerifyAgainstBaseline(BaselineBundle actual, RuleCatalogSnapshot actualRules)
@@ -468,6 +547,7 @@ namespace ElectricalSim.EditorTools
             var directory = EnsureBaselineDirectory();
             var expected = ReadJson<BaselineBundle>(Path.Combine(directory, "TemplateStaticSnapshots.json"));
             var expectedRules = ReadJson<RuleCatalogSnapshot>(Path.Combine(directory, "ValidationRuleSnapshots.json"));
+            var expectedInspector = ReadJson<InspectorBundle>(Path.Combine(directory, "InspectorReportSnapshots.json"));
             var differences = new List<string>();
             if (expected == null || expectedRules == null)
             {
@@ -494,7 +574,38 @@ namespace ElectricalSim.EditorTools
                     differences.Add("Rule severity contract: " + expectedRule.ruleId + " expected=" + DescribeRule(expectedRule) + ", actual=" + (current == null ? "<missing>" : DescribeRule(current)));
                 }
             }
+            if (expectedInspector != null && expectedInspector.schemaVersion >= 2)
+            {
+                CompareInspectorBundle(expectedInspector, CreateInspectorBundle(actual), differences);
+            }
             return differences;
+        }
+
+        private static void CompareInspectorBundle(InspectorBundle expected, InspectorBundle actual, List<string> differences)
+        {
+            foreach (var expectedTemplate in expected.templates)
+            {
+                var actualTemplate = actual.templates.FirstOrDefault(template => template.templateId == expectedTemplate.templateId);
+                if (actualTemplate == null)
+                {
+                    differences.Add("Inspector model: expected template missing " + expectedTemplate.templateId);
+                    continue;
+                }
+
+                CompareInspectorReportModel(expectedTemplate.templateId + ": Check", expectedTemplate.check, actualTemplate.check, differences);
+                CompareInspectorReportModel(expectedTemplate.templateId + ": Explain", expectedTemplate.explain, actualTemplate.explain, differences);
+            }
+        }
+
+        private static void CompareInspectorReportModel(string prefix, InspectorReportSnapshot expected, InspectorReportSnapshot actual, List<string> differences)
+        {
+            CompareStringSequence(prefix + " UI blocks", expected.blocks.Select(block => block.title + ":" + block.blockType), actual.blocks.Select(block => block.title + ":" + block.blockType), differences);
+            CompareStringSequence(prefix + " model blocks", expected.modelBlocks.Select(DescribeModelBlock), actual.modelBlocks.Select(DescribeModelBlock), differences);
+        }
+
+        private static string DescribeModelBlock(InspectorModelBlockSnapshot block)
+        {
+            return block.sectionTitle + ":" + block.kind + ":" + block.severity + ":" + string.Join(",", block.ruleIds ?? new List<string>());
         }
 
         private static void CompareTemplate(TemplateSnapshot expected, TemplateSnapshot actual, List<string> differences)
@@ -573,9 +684,10 @@ namespace ElectricalSim.EditorTools
         [Serializable] private sealed class SemanticComponentSnapshot { public string definitionId; public int ordinal; public string state; public string judgement; public bool isBreaker; public bool breakerInputHasSupply; public bool breakerOutputHasSupply; public bool isContactor; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool isTimerRelay; public bool timerCoilEnergized; public bool timerDelayElapsed; public bool timerNoClosed; public bool timerNcClosed; public string timerDelayStatus; public bool isLimitSwitch; public bool limitSwitchTriggered; public bool isMotor; public bool isStarDeltaMotor; public string starDeltaMode; public string motorFeederContactors; }
         [Serializable] private sealed class AnalysisSnapshot { public bool available; public bool hasShortCircuit; public bool hasPowerConflict; public bool hasContactorInterlockConflict; public bool hasLimitSwitches; public bool hasTimerRelays; public bool hasStarDeltaMotors; public bool hasThreePhaseCircuit; public bool unsupportedThreePhaseTopology; public int analyzerErrorCount; public int analyzerWarningCount; }
         [Serializable] private sealed class RuleIssueSnapshot { public string ruleId; public string severity; public string category; }
-        [Serializable] private sealed class InspectorReportSnapshot { public string entryPoint; public bool available; public InspectorReportSourceSnapshot sources; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); }
+        [Serializable] private sealed class InspectorReportSnapshot { public string entryPoint; public bool available; public InspectorReportSourceSnapshot sources; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); public List<InspectorModelBlockSnapshot> modelBlocks = new List<InspectorModelBlockSnapshot>(); }
         [Serializable] private sealed class InspectorReportSourceSnapshot { public string checkPipeline; public int pipelineErrorCount; public int pipelineWarningCount; public List<string> pipelineIssueCodes = new List<string>(); public int analyzerErrorCount; public int analyzerWarningCount; public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
         [Serializable] private sealed class InspectorBlockSnapshot { public string title; public string blockType; public string severity; public List<string> ruleIds = new List<string>(); public List<string> keyPhrases = new List<string>(); public bool containsRuntimeParagraph; public bool containsParameterParagraph; }
+        [Serializable] private sealed class InspectorModelBlockSnapshot { public string sectionTitle; public string kind; public string severity; public List<string> ruleIds = new List<string>(); }
         [Serializable] private sealed class InspectorBundle { public int schemaVersion; public List<InspectorTemplateSnapshot> templates = new List<InspectorTemplateSnapshot>(); }
         [Serializable] private sealed class InspectorTemplateSnapshot { public string templateId; public InspectorReportSnapshot check; public InspectorReportSnapshot explain; }
         [Serializable] private sealed class RuleCatalogSnapshot { public int schemaVersion; public List<RuleSeveritySnapshot> rules = new List<RuleSeveritySnapshot>(); }

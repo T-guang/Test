@@ -41,7 +41,9 @@ namespace ElectricalSim.AI
             Body = body ?? string.Empty;
             Kind = kind;
             Severity = severity;
-            RuleIds = ruleIds ?? new List<string>();
+            RuleIds = ruleIds == null
+                ? Array.Empty<string>()
+                : new List<string>(ruleIds).AsReadOnly();
         }
 
         public string ToLegacyText()
