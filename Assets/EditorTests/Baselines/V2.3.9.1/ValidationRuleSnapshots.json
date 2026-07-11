@@ -1,0 +1,199 @@
+{
+    "schemaVersion": 2,
+    "rules": [
+        {
+            "ruleId": "POWER_POTENTIAL_CONFLICT",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "PowerSafety"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/PowerPotentialValidationHelper.cs:87"
+            ]
+        },
+        {
+            "ruleId": "LIVE_TO_PE_FAULT",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "GroundSafety"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/PowerPotentialValidationHelper.cs:100"
+            ]
+        },
+        {
+            "ruleId": "NEUTRAL_PE_MISUSE",
+            "severities": [
+                "Warning"
+            ],
+            "categories": [
+                "GroundSafety"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/PowerPotentialValidationHelper.cs:113"
+            ]
+        },
+        {
+            "ruleId": "COIL_VOLTAGE_MISMATCH",
+            "severities": [
+                "Error",
+                "Warning"
+            ],
+            "categories": [
+                "PowerSafety"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/PowerPotentialValidationHelper.cs:162",
+                "Assets/Scripts/Core/Validation/PowerPotentialValidationHelper.cs:171"
+            ]
+        },
+        {
+            "ruleId": "BREAKER_OR_FUSE_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "Protection"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/ProtectionBypassValidationHelper.cs:66"
+            ]
+        },
+        {
+            "ruleId": "MOTOR_CONTACTOR_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "PowerSafety"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/ProtectionBypassValidationHelper.cs:100"
+            ]
+        },
+        {
+            "ruleId": "REVERSING_INTERLOCK_MISSING",
+            "severities": [
+                "Warning"
+            ],
+            "categories": [
+                "Interlock"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/ProtectionBypassValidationHelper.cs:185"
+            ]
+        },
+        {
+            "ruleId": "THERMAL_RELAY_CONTROL_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "Protection"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:653"
+            ]
+        },
+        {
+            "ruleId": "THERMAL_RELAY_MAIN_CIRCUIT_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "Protection"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/ProtectionBypassValidationHelper.cs:139"
+            ]
+        },
+        {
+            "ruleId": "TIMER_CONTROL_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "ControlCircuit"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/TimerControlBypassValidationHelper.cs:61"
+            ]
+        },
+        {
+            "ruleId": "STOP_BUTTON_BYPASSED",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "ControlCircuit"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:719"
+            ]
+        },
+        {
+            "ruleId": "SELF_HOLDING_BRANCH_INCOMPLETE",
+            "severities": [
+                "Warning"
+            ],
+            "categories": [
+                "ControlCircuit"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:606"
+            ]
+        },
+        {
+            "ruleId": "REVERSING_CONTACTOR_CONFLICT",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "ControlCircuit"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:528"
+            ]
+        },
+        {
+            "ruleId": "STAR_DELTA_PARTIAL_STARPOINT_SHORT",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "StarDelta"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:394"
+            ]
+        },
+        {
+            "ruleId": "STAR_DELTA_INPUT_TERMINAL_SHORT",
+            "severities": [
+                "Error"
+            ],
+            "categories": [
+                "StarDelta"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:373"
+            ]
+        },
+        {
+            "ruleId": "COMPLEX_LOOP_OR_UNSUPPORTED_TOPOLOGY",
+            "severities": [
+                "Warning"
+            ],
+            "categories": [
+                "General"
+            ],
+            "sourceLocations": [
+                "Assets/Scripts/Core/Validation/CircuitValidationService.cs:888"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,3419 @@
+{
+    "schemaVersion": 1,
+    "templates": [
+        {
+            "templateId": "breaker_lamp_fan_parallel",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 1,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "breaker_lamp_template",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 1,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "double_control_lamp_template",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 1,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "double_lamp_single_switch",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 5,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "lamp_fan_parallel_template",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 2,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "meter_lamp_template",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_auto_reciprocating_control",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前自动往返运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前自动往返运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_forward_reverse_control",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_forward_reverse_double_interlock",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_forward_reverse_interlock",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_jog_continuous",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_jog_control",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_self_hold_control",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_sequential_start_timer",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_star_delta_start",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "星三角参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "星三角参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "motor_thermal_protection",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "IndustrialCircuitRuleAnalyzer",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "热继整定匹配估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "三相电机参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "热继整定匹配估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "控制回路负载估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "single_lamp_template",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 1,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        },
+        {
+            "templateId": "two_switch_two_lamp",
+            "check": {
+                "entryPoint": "CheckCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "CircuitRuleChecker.FilterCheckPanelFalsePositives",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [
+                        "OPEN_DEVICE"
+                    ],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 5,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "最新检查报告",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "参数估算",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": true
+                    },
+                    {
+                        "title": "接线校验",
+                        "blockType": "Section",
+                        "severity": "Error",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "检查结论",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前关键状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "问题与风险",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            },
+            "explain": {
+                "entryPoint": "ExplainCurrentCircuit",
+                "available": true,
+                "sources": {
+                    "checkPipeline": "",
+                    "pipelineErrorCount": 0,
+                    "pipelineWarningCount": 0,
+                    "pipelineIssueCodes": [],
+                    "analyzerErrorCount": 0,
+                    "analyzerWarningCount": 0,
+                    "validationErrorCount": 0,
+                    "validationWarningCount": 0,
+                    "validationRuleIds": []
+                },
+                "blocks": [
+                    {
+                        "title": "当前电路解释",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "电路组成",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "主回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "控制回路路径",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "元件动作关系",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前运行状态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "当前画布运行态",
+                        "blockType": "Section",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    },
+                    {
+                        "title": "教学说明",
+                        "blockType": "Information",
+                        "severity": "None",
+                        "ruleIds": [],
+                        "keyPhrases": [],
+                        "containsRuntimeParagraph": false,
+                        "containsParameterParagraph": false
+                    }
+                ]
+            }
+        }
+    ]
+}
