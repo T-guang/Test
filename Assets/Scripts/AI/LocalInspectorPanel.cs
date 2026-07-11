@@ -383,24 +383,33 @@ namespace ElectricalSim.AI
             ClearReport();
             var stateResult = AnalyzeCircuitState();
             ApplyRuntimeDisplayOverrides(stateResult);
-            AddReportBlocks(BuildReportSummary("当前电路解释", "电路解释", stateResult, 0, 0, "以下内容基于当前元件状态和接线拓扑生成。"));
-            AddReportBlocks(BuildCurrentCircuitExplanationReport(stateResult));
+            var report = InspectionReportComposer.CreateSummary(
+                "当前电路解释",
+                "电路解释",
+                workspace != null && workspace.IsSimulationRunning,
+                ResolveCurrentCircuitDisplayName(),
+                "以下内容基于当前元件状态和接线拓扑生成。",
+                string.Empty);
+            report.AddRange(BuildCurrentCircuitExplanationReportData(stateResult));
 
             if (IndustrialCircuitExplainer.TryExplain(workspace, out var industrialExplanation))
             {
                 industrialExplanation = ApplyCurrentCircuitName(industrialExplanation);
-                AddReportBlocks("【教学说明】\n" + StripReportSections(industrialExplanation));
+                report.AddRange(InspectionReportComposer.CreateTeaching(industrialExplanation));
+                AddReportBlocks(report);
                 return;
             }
 
             var summary = summaryBuilder != null ? summaryBuilder.BuildDetailedSummary() : string.Empty;
             if (string.IsNullOrWhiteSpace(summary))
             {
-                AddReportBlocks("【教学说明】\n当前画布为空，请先搭建电路或加载标准图纸。");
+                report.AddRange(InspectionReportComposer.CreateTeaching("当前画布为空，请先搭建电路或加载标准图纸。"));
+                AddReportBlocks(report);
                 return;
             }
 
-            AddReportBlocks("【教学说明】\n" + summary);
+            report.AddRange(InspectionReportData.FromLegacyText("【教学说明】\n" + summary));
+            AddReportBlocks(report);
         }
 
         private void CheckCurrentCircuit()
@@ -428,16 +437,18 @@ namespace ElectricalSim.AI
                     var industrialDebugDetails = BuildRuntimeDisplaySummary(industrialStateResult) +
                         "\n\n" + industrialResult.FormatForAssistant() +
                         "\n\n" + industrialStateResult.ToReadableText();
-                    AddReportBlocks(BuildReportSummary(
+                    var industrialSummaryReport = InspectionReportComposer.CreateSummary(
                         "最新检查报告",
                         "接线检查",
-                        industrialStateResult,
-                        industrialResult.ErrorCount,
-                        industrialResult.WarningCount,
-                        BuildCheckSummaryConclusion(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount)));
-                    AddReportBlocks(PrependCheckPanelRuntimeNotices(
+                        workspace != null && workspace.IsSimulationRunning,
+                        ResolveCurrentCircuitDisplayName(),
+                        InspectionReportComposer.BuildCheckSummaryConclusion(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount),
+                        InspectionReportComposer.ResolveRiskLevel(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount));
+                    var industrialNotices = PrependCheckPanelRuntimeNotices(
                         TeachingCheckReportFormatter.Format(industrialStateResult, industrialResult, industrialDebugDetails, showDeveloperDebugInfo),
-                        industrialStateResult));
+                        industrialStateResult,
+                        out var industrialValidationIssues);
+                    AddReportBlocks(InspectionReportComposer.ComposeCheckReport(industrialSummaryReport, industrialNotices, industrialValidationIssues));
                     var industrialSummary = "工业电路检查完成：";
                     if (industrialResult.ErrorCount > 0)
                     {
@@ -463,16 +474,18 @@ namespace ElectricalSim.AI
                 var debugDetails = BuildRuntimeDisplaySummary(stateResult) +
                     "\n\n" + CircuitRuleCheckTeacherFormatter.FormatForTeaching(displayResult) +
                     "\n\n" + stateResult.ToReadableText();
-                AddReportBlocks(BuildReportSummary(
+                var summaryReport = InspectionReportComposer.CreateSummary(
                     "最新检查报告",
                     "接线检查",
-                    stateResult,
-                    displayResult.ErrorCount,
-                    displayResult.WarningCount,
-                    BuildCheckSummaryConclusion(stateResult, displayResult.ErrorCount, displayResult.WarningCount)));
-                AddReportBlocks(PrependCheckPanelRuntimeNotices(
+                    workspace != null && workspace.IsSimulationRunning,
+                    ResolveCurrentCircuitDisplayName(),
+                    InspectionReportComposer.BuildCheckSummaryConclusion(stateResult, displayResult.ErrorCount, displayResult.WarningCount),
+                    InspectionReportComposer.ResolveRiskLevel(stateResult, displayResult.ErrorCount, displayResult.WarningCount));
+                var notices = PrependCheckPanelRuntimeNotices(
                     TeachingCheckReportFormatter.Format(stateResult, displayResult, debugDetails, showDeveloperDebugInfo),
-                    stateResult));
+                    stateResult,
+                    out var validationIssues);
+                AddReportBlocks(InspectionReportComposer.ComposeCheckReport(summaryReport, notices, validationIssues));
                 
                 string summary = "电路检查完成：";
                 if (displayResult.ErrorCount > 0 || displayResult.WarningCount > 0)
@@ -533,102 +546,21 @@ namespace ElectricalSim.AI
             return string.Empty;
         }
 
-        private string BuildReportSummary(
-            string title,
-            string reportType,
-            CircuitStateResult stateResult,
-            int errorCount,
-            int warningCount,
-            string conclusion)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine("【" + title + "】");
-            builder.AppendLine("报告类型：" + reportType);
-            builder.AppendLine("生成时间：" + DateTime.Now.ToString("HH:mm:ss"));
-            builder.AppendLine("当前状态：" + (workspace != null && workspace.IsSimulationRunning ? "仿真运行中" : "仿真停止"));
-            builder.AppendLine("识别电路：" + ResolveCurrentCircuitDisplayName());
-            if (reportType.Contains("检查"))
-            {
-                builder.AppendLine("检查结论：" + (string.IsNullOrWhiteSpace(conclusion) ? "当前报告已根据画布现状生成。" : conclusion));
-                builder.AppendLine("风险等级：" + ResolveRiskLevel(stateResult, errorCount, warningCount));
-            }
-            else
-            {
-                builder.AppendLine("说明：" + (string.IsNullOrWhiteSpace(conclusion) ? "以下内容基于当前元件状态和接线拓扑生成。" : conclusion));
-            }
-            return builder.ToString().TrimEnd();
-        }
-
         private string ResolveCurrentCircuitDisplayName()
         {
             var name = ResolveCurrentCircuitName();
             return string.IsNullOrWhiteSpace(name) ? "未识别模板" : name;
         }
 
-        private static string BuildCheckSummaryConclusion(CircuitStateResult stateResult, int errorCount, int warningCount)
+        private InspectionReportData BuildCurrentCircuitExplanationReportData(CircuitStateResult stateResult)
         {
-            if (stateResult != null && (stateResult.HasShortCircuit || stateResult.HasPowerConflict))
-            {
-                return "当前电路存在短路或电源冲突风险，建议先停止仿真并检查电源与主回路。";
-            }
-
-            if (errorCount > 0)
-            {
-                return "当前电路存在接线风险或逻辑异常，建议先处理“问题与风险”中的错误项。";
-            }
-
-            if (warningCount > 0)
-            {
-                return "当前电路存在需要关注的提醒项，建议按图纸继续核对控制回路和保护回路。";
-            }
-
-            return "当前未发现已支持规则范围内的严重接线错误。";
-        }
-
-        private static string ResolveRiskLevel(CircuitStateResult stateResult, int errorCount, int warningCount)
-        {
-            if (stateResult != null && (stateResult.HasShortCircuit || stateResult.HasPowerConflict))
-            {
-                return "错误";
-            }
-
-            if (errorCount > 0)
-            {
-                return "错误";
-            }
-
-            if (warningCount > 0)
-            {
-                return "提醒";
-            }
-
-            return "正常";
-        }
-
-        private string BuildCurrentCircuitExplanationReport(CircuitStateResult stateResult)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine("【电路组成】");
-            builder.AppendLine(BuildCompositionText(stateResult));
-            builder.AppendLine();
-            builder.AppendLine("【主回路路径】");
-            builder.AppendLine(BuildMainCircuitPathText(stateResult));
-            builder.AppendLine();
-            builder.AppendLine("【控制回路路径】");
-            builder.AppendLine(BuildControlCircuitPathText(stateResult));
-            builder.AppendLine();
-            builder.AppendLine("【元件动作关系】");
-            builder.AppendLine(BuildActionRelationText(stateResult));
-            builder.AppendLine();
-            builder.AppendLine("【当前运行状态】");
-            builder.AppendLine(BuildRuntimeDisplaySummary(stateResult));
-            var parameterSummary = BuildIndustrialParameterEstimationSummary(stateResult);
-            if (!string.IsNullOrWhiteSpace(parameterSummary))
-            {
-                builder.AppendLine();
-                builder.Append(parameterSummary);
-            }
-            return builder.ToString().TrimEnd();
+            return InspectionReportComposer.CreateExplanation(
+                BuildCompositionText(stateResult),
+                BuildMainCircuitPathText(stateResult),
+                BuildControlCircuitPathText(stateResult),
+                BuildActionRelationText(stateResult),
+                BuildRuntimeDisplaySummary(stateResult),
+                BuildIndustrialParameterEstimationSummary(stateResult));
         }
 
         private string BuildCompositionText(CircuitStateResult stateResult)
@@ -718,16 +650,6 @@ namespace ElectricalSim.AI
             }
 
             return false;
-        }
-
-        private static string StripReportSections(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return string.Empty;
-            }
-
-            return text.Replace("【当前电路解释】", string.Empty).Trim();
         }
 
         private void AppendCircuitStateAnalysis()
@@ -1045,21 +967,29 @@ namespace ElectricalSim.AI
             return builder.ToString().TrimEnd();
         }
 
-        private string PrependCheckPanelRuntimeNotices(string report, CircuitStateResult stateResult)
+        private string PrependCheckPanelRuntimeNotices(
+            string report,
+            CircuitStateResult stateResult,
+            out IReadOnlyList<CircuitValidationIssue> validationIssues)
         {
+            validationIssues = null;
             return PrependUnsupportedComponentNotice(
                 PrependParameterEstimationSummary(
                     PrependIndustrialParameterEstimationSummary(
                         PrependCircuitValidationSummary(
                             PrependAutoReciprocatingRuntimeSummary(report),
-                            stateResult),
+                            stateResult,
+                            out validationIssues),
                         stateResult),
                     stateResult));
         }
 
-        private string PrependCircuitValidationSummary(string report, CircuitStateResult stateResult)
+        private string PrependCircuitValidationSummary(
+            string report,
+            CircuitStateResult stateResult,
+            out IReadOnlyList<CircuitValidationIssue> validationIssues)
         {
-            var summary = BuildCircuitValidationSummary(stateResult);
+            var summary = BuildCircuitValidationSummary(stateResult, out validationIssues);
             if (string.IsNullOrWhiteSpace(summary))
             {
                 return report;
@@ -1073,8 +1003,11 @@ namespace ElectricalSim.AI
             return summary + "\n\n" + report;
         }
 
-        private string BuildCircuitValidationSummary(CircuitStateResult stateResult)
+        private string BuildCircuitValidationSummary(
+            CircuitStateResult stateResult,
+            out IReadOnlyList<CircuitValidationIssue> validationIssues)
         {
+            validationIssues = null;
             if (stateResult == null || workspace == null || workspace.Components == null)
             {
                 return string.Empty;
@@ -1089,6 +1022,8 @@ namespace ElectricalSim.AI
             {
                 return string.Empty;
             }
+
+            validationIssues = report.Issues;
 
             var builder = new StringBuilder();
             builder.AppendLine("【接线校验】");
@@ -2556,15 +2491,19 @@ namespace ElectricalSim.AI
 
         private void AddReportBlocks(string message)
         {
-            if (reportContent == null)
+            AddReportBlocks(InspectionReportData.FromLegacyText(message));
+        }
+
+        private void AddReportBlocks(InspectionReportData report)
+        {
+            if (reportContent == null || report == null)
             {
                 return;
             }
 
-            var blocks = SplitReportBlocks(message);
-            for (var i = 0; i < blocks.Count; i++)
+            for (var i = 0; i < report.Blocks.Count; i++)
             {
-                CreateReportBlock(reportContent, blocks[i]);
+                CreateReportBlock(reportContent, report.Blocks[i].ToLegacyText());
             }
 
             RebuildReportLayout(true);
