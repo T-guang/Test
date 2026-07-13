@@ -6,6 +6,11 @@ using UnityEngine.UI;
 namespace ElectricalSim.Core
 {
     [RequireComponent(typeof(RectTransform))]
+    /// <summary>
+    /// 表示一条活动导线的可视与交互层，保存端点、颜色、走线折点和选中/拖拽状态。
+    /// 电气连通关系仅由 StartTerminal 与 EndTerminal 决定，几何路由和颜色不改变拓扑；
+    /// 修改后需回归接线、折点拖动、已有线改色、撤销重做及保存导入。
+    /// </summary>
     public sealed class WireView : MonoBehaviour, IPointerClickHandler
     {
         [SerializeField] private Image segmentPrefab;
@@ -60,6 +65,7 @@ namespace ElectricalSim.Core
 
         public void Initialize(TerminalView start, TerminalView end, Color color, WireStyle style, WorkspaceController owner)
         {
+            // WireId 仅用于该导线实例和保存恢复；端点引用才是 Analyzer 与 Validation 使用的连接事实。
             WireId = System.Guid.NewGuid().ToString("N");
             StartTerminal = start;
             EndTerminal = end;
@@ -101,6 +107,7 @@ namespace ElectricalSim.Core
 
         public void SetWireColor(Color color)
         {
+            // 只改变已选中导线的显示与保存颜色，不应写回 Workspace 的新建导线默认色。
             color.a = 1f;
             WireColor = color;
             RefreshSegmentStyle();
@@ -127,6 +134,7 @@ namespace ElectricalSim.Core
             }
 
             manualRoute = manualPoints.Count >= 2;
+            // 手工折点优先于自动避让；保留端点出口段，避免拖动后导线直接穿过元件本体。
             if (manualRoute)
             {
                 ResolveManualRouteAxisFromPoints(manualPoints);
@@ -359,6 +367,8 @@ namespace ElectricalSim.Core
 
         private List<Vector2> ResolveAutomaticRoute(TerminalExit startExit, TerminalExit endExit)
         {
+            // 从有限的正交走廊候选中选取代价最低路径。评分只处理显示避让，
+            // 不可将其结果用于判定电气连接或替代用户已保存的手工走线。
             var start = startExit.Point;
             var end = endExit.Point;
             var candidates = new List<List<Vector2>>();

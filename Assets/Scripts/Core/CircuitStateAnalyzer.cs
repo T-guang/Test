@@ -357,6 +357,8 @@ namespace ElectricalSim.Core
             IReadOnlyDictionary<string, bool> contactorCoilStates,
             IReadOnlyDictionary<string, bool> timerRelayCoilStates)
         {
+            // 单次推导严格按“登记端子 -> 外部导线 -> 内部触点 -> 电源标签 -> 元件状态”执行。
+            // 动态线圈状态由 Analyze 的有界稳定循环提供，本方法本身不推进时间也不修改场景。
             terminalsByKey.Clear();
             wiredTerminalKeys.Clear();
             connectionGraph.Clear();
@@ -2711,6 +2713,8 @@ namespace ElectricalSim.Core
 
         private List<string> FindShortestPath(List<string> sourceKeys, string targetKey)
         {
+            // 报告路径采用有界 BFS。复杂环路时宁可返回未找到并记录一次安全告警，
+            // 也不能为生成教学说明无限遍历；预算调整必须运行 Topology Safety 测试。
             if (sourceKeys == null || string.IsNullOrWhiteSpace(targetKey))
             {
                 return null;

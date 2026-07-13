@@ -5,17 +5,23 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 表示工作区中的单个元件实例，而不是元件定义资产。
+    /// 它持有实例参数、端子、当前开合/得电/测量状态和视觉引用；Definition 提供静态规格，
+    /// WorkspaceController 负责实例生命周期。端子会被导线直接引用，不能在已有接线期间随意重建。
+    /// 修改后需回归元件拖动、参数保存加载、视觉 Prefab、接线与运行态模板。
+    /// </summary>
     [RequireComponent(typeof(RectTransform))]
     public sealed class CircuitComponent : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerDownHandler, IPointerUpHandler
     {
-        // Temporary KM visual pilot. Set to false to restore the default rectangular appearance.
+        // KM 视觉试点。关闭后恢复默认矩形外观。
         private const bool useExperimentalKmVisualPrefab = true;
         private const bool showExperimentalKmTerminalDebugMarkers = false;
         private const string experimentalKmVisualDefinitionName = "Contactor_KM_380V";
         private const string experimentalKmVisualAssetPath = "Assets/Prefab/Contactor_KM_380V_Visual.prefab";
         private const string experimentalKmDefaultSpritePath = "Assets/Art/Components/Contactor_KM_380V_Default.png";
         private const string experimentalKmEnergizedSpritePath = "Assets/Art/Components/Contactor_KM_380V_Energized.png";
-        // Temporary push button visual pilot. Set to false to restore the default rectangular appearance.
+        // 按钮视觉试点。关闭后恢复默认矩形外观。
         private const bool useExperimentalButtonVisualPrefab = true;
         private const bool showExperimentalButtonTerminalDebugMarkers = false;
         private const string experimentalStartButtonDefinitionName = "Button_Start_NO";
@@ -26,7 +32,7 @@ namespace ElectricalSim.Core
         private const string experimentalStartButtonPressedSpritePath = "Assets/Art/Components/Button_Start_NO_Pressed.png";
         private const string experimentalStopButtonDefaultSpritePath = "Assets/Art/Components/Button_Stop_NC_Default.png";
         private const string experimentalStopButtonPressedSpritePath = "Assets/Art/Components/Button_Stop_NC_Pressed.png";
-        // Temporary compound button visual pilot. Set to false to restore the default rectangular appearance.
+        // 复合按钮视觉试点。关闭后恢复默认矩形外观。
         private const bool useExperimentalCompoundButtonVisualPrefab = true;
         private const bool showExperimentalCompoundButtonTerminalDebugMarkers = false;
         private const string experimentalCompoundRedButtonDefinitionName = "Button_Compound_SB";
@@ -37,7 +43,7 @@ namespace ElectricalSim.Core
         private const string experimentalCompoundRedButtonPressedSpritePath = "Assets/Art/Components/Button_Compound_SB_Pressed.png";
         private const string experimentalCompoundGreenButtonDefaultSpritePath = "Assets/Art/Components/Button_Compound_Green_SB_Default.png";
         private const string experimentalCompoundGreenButtonPressedSpritePath = "Assets/Art/Components/Button_Compound_Green_SB_Pressed.png";
-        // Temporary self-lock button visual pilot. Set to false to restore the default rectangular appearance.
+        // 自锁按钮视觉试点。关闭后恢复默认矩形外观。
         private const bool useExperimentalSelfLockButtonVisualPrefab = true;
         private const bool showExperimentalSelfLockButtonTerminalDebugMarkers = false;
         private const string experimentalSelfLockRedButtonDefinitionName = "Button_SelfLock_SB";
@@ -48,13 +54,13 @@ namespace ElectricalSim.Core
         private const string experimentalSelfLockRedButtonPressedSpritePath = "Assets/Art/Components/Button_SelfLock_SB_Locked.png";
         private const string experimentalSelfLockGreenButtonDefaultSpritePath = "Assets/Art/Components/Button_SelfLock_Green_SB_Default.png";
         private const string experimentalSelfLockGreenButtonPressedSpritePath = "Assets/Art/Components/Button_SelfLock_Green_SB_Locked.png";
-        // Temporary three-phase power visual pilot. Set to false to restore the default appearance.
+        // 三相电源视觉试点。关闭后恢复默认外观。
         private const bool useExperimentalThreePhasePowerVisualPrefab = true;
         private const bool showExperimentalThreePhasePowerTerminalDebugMarkers = false;
         private const string experimentalThreePhasePowerDefinitionName = "AC_ThreePhase_Power";
         private const string experimentalThreePhasePowerVisualAssetPath = "Assets/Prefab/AC_ThreePhase_Power_Visual.prefab";
         private const string experimentalThreePhasePowerSpritePath = "Assets/Art/Components/AC_ThreePhase_Power_Visual.png";
-        // Temporary fuse visual pilot. Set to false to restore the default appearance.
+        // 熔断器视觉试点。关闭后恢复默认外观。
         private const bool useExperimentalFuseVisualPrefab = true;
         private const bool showExperimentalFuseTerminalDebugMarkers = false;
         private const string experimentalFuse1PDefinitionName = "Fuse_1P";
@@ -116,6 +122,8 @@ namespace ElectricalSim.Core
 
         public void Initialize(ComponentDefinition definition, WorkspaceController owner, string instanceId = null)
         {
+            // 初始化顺序不可随意调整：先复制定义参数，再挂接视觉与端子，
+            // 保证视觉锚点、参数面板和后续导线都绑定同一实例身份。
             InstanceId = string.IsNullOrWhiteSpace(instanceId) ? System.Guid.NewGuid().ToString("N") : instanceId;
             Definition = definition;
             workspace = owner;
@@ -181,6 +189,7 @@ namespace ElectricalSim.Core
 
         public void EnsureInstanceParametersFromDefinition()
         {
+            // 仅补齐缺失键，绝不覆盖已经保存或由参数面板修改过的实例参数。
             if (Definition == null || Definition.parameters == null || Definition.parameters.Count == 0)
             {
                 return;
@@ -463,6 +472,8 @@ namespace ElectricalSim.Core
 
         private void BuildTerminals()
         {
+            // 端子定义变化或初始化时才调用。此方法会销毁旧端子，因此在已有 WireView 引用时重建
+            // 会使活动接线失效；正常运行期间应只刷新视觉，不应调用这里。
             foreach (var terminal in terminals)
             {
                 if (terminal != null)
@@ -1564,6 +1575,8 @@ namespace ElectricalSim.Core
 
         private void TryApplyConfiguredVisualPrefab()
         {
+            // Visual Prefab 只替换外观和锚点；电气端子身份仍来自 Definition，
+            // 因此不能让视觉资源决定规则、连接或保存数据。
             configuredVisualPrefab = null;
 
             if (Definition == null ||

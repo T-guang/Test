@@ -71,6 +71,7 @@ namespace ElectricalSim.Core
                 return null;
             }
 
+            // 同一对端子只保留一条活动导线；重复点击返回原对象，避免拓扑、保存快照和撤销记录出现双份边。
             var existing = wires.Find(w => (w.StartTerminal == start && w.EndTerminal == end) || (w.StartTerminal == end && w.EndTerminal == start));
             if (existing != null)
             {
@@ -109,6 +110,7 @@ namespace ElectricalSim.Core
                 return;
             }
 
+            // 先从权威集合移除，再延迟销毁视图；分析和保存加载只应读取移除后的集合。
             wires.Remove(wire);
             Destroy(wire.gameObject);
             ReflowOffsets();
@@ -161,6 +163,7 @@ namespace ElectricalSim.Core
 
         private void ReflowOffsets()
         {
+            // 偏移仅改善同层导线的可读性，不参与电气连接或保存语义。
             var lanes = new[] { 0f, 22f, -22f, 44f, -44f, 66f, -66f, 88f, -88f };
 
             for (var i = 0; i < wires.Count; i++)

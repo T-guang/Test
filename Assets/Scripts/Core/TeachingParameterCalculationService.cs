@@ -78,6 +78,11 @@ namespace ElectricalSim.Core
         public bool HasEnoughParameters;
     }
 
+    /// <summary>
+    /// 基于活动元件参数和已推导的运行状态生成教学用途的电压、电流、功率与整定估算。
+    /// 输出用于显示和检查报告，不替代工程测量、仿真求解或规则校验；拓扑异常、缺相和
+    /// 星三角冲突等情况不应伪造为正常估算。修改后需回归工业模板报告与参数估算基线。
+    /// </summary>
     public static class TeachingParameterCalculationService
     {
         public delegate IReadOnlyCollection<string> PhaseResolver(TerminalView terminal);
@@ -192,6 +197,8 @@ namespace ElectricalSim.Core
             var ratedPower = Mathf.Max(0f, ResolveParameterValue(component, ParameterKeys.RatedPower, component.Definition.ratedPower));
             var efficiency = Mathf.Max(0.01f, ResolveParameterValue(component, ParameterKeys.Efficiency, 0.85f));
             var powerFactor = Mathf.Max(0.01f, ResolveParameterValue(component, ParameterKeys.PowerFactor, 0.8f));
+            // 星形阶段仅按教学近似将三角运行线电流折算为三分之一；
+            // 非正常阶段保留参数但不输出“正常运行”估算，避免掩盖冲突或供电故障。
             var deltaCurrent = lineVoltage > 0f && ratedPower > 0f
                 ? ratedPower / (Mathf.Sqrt(3f) * lineVoltage * efficiency * powerFactor)
                 : 0f;
@@ -247,6 +254,8 @@ namespace ElectricalSim.Core
                 ratedPower = ratedVoltage * ratedCurrent;
             }
 
+            // 真实供电不可确认时才回退额定电压，并在结果中显式标记；
+            // 报告层可据此说明估算依据，不能把回退值误表示为实测供电。
             var resolvedActualVoltage = hasActualSupplyVoltage && actualSupplyVoltage > 0f
                 ? actualSupplyVoltage
                 : ratedVoltage;

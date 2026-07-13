@@ -109,6 +109,8 @@ namespace ElectricalSim.Core
 
         private void StabilizeDynamicControlDevices()
         {
+            // 接触器自保持、KT 延时触点和互锁会反过来改变连通图。这里以有限轮次求稳定，
+            // 每轮重建图后再判断是否收敛；不要将其与后续负载通电判断合并或调换顺序。
             closedContactors.Clear();
             energizedOnDelayTimers.Clear();
             timerRuntimeAdvancedThisRun = false;
@@ -191,6 +193,8 @@ namespace ElectricalSim.Core
                 return;
             }
 
+            // 教学估算优先使用已确认的运行态；异常阶段返回零或非正常结果，
+            // 不应由通用额定值计算覆盖星三角、缺相等特例。
             if (TeachingParameterCalculationService.TryCalculateSinglePhaseLoad(
                 component,
                 active,
@@ -575,6 +579,8 @@ namespace ElectricalSim.Core
 
         private static void UpdateOnDelayTimerRuntimeState(CircuitComponent component, bool coilEnergized, float deltaSeconds)
         {
+            // KT 状态由 RuntimeStateManager 持有。线圈失电必须先复位，再由下一轮图分析决定延时触点，
+            // 否则停止后可能遗留已动作触点。KT、两电机顺序启动和星三角修改后必须回归。
             var runtimeState = RuntimeStateManager.Shared.GetOrCreateTimerState(component != null ? component.InstanceId : null);
             if (runtimeState == null)
             {

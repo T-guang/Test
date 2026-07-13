@@ -29,6 +29,11 @@ namespace ElectricalSim.Core
         public string Reason { get; }
     }
 
+    /// <summary>
+    /// 从活动工作区中的电源元件和端子电压标签解析实际供电电压。
+    /// 只读取元件实例参数及其定义回退值，不修改元件、拓扑或运行态；调用方应传入
+    /// WorkspaceController.Components，而不是扫描场景中的全部 CircuitComponent。
+    /// </summary>
     public static class ActualSupplyVoltageResolver
     {
         public const float DefaultSinglePhaseVoltage = 220f;
@@ -116,6 +121,8 @@ namespace ElectricalSim.Core
                 return new ActualSupplyVoltageResult(false, 0f, ActualSupplyVoltageKind.Unknown, "Terminal voltage label is empty.");
             }
 
+            // 端子标签优先决定电压种类；不能仅凭元件名称猜测 220V/380V，
+            // 否则同类不同规格元件会得到错误的线圈或负载供电判断。
             if ((IsLineOrPhase(firstVoltage) && secondVoltage == TerminalConstants.N) ||
                 (IsLineOrPhase(secondVoltage) && firstVoltage == TerminalConstants.N))
             {

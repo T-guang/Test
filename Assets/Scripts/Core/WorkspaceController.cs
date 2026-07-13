@@ -64,6 +64,8 @@ namespace ElectricalSim.Core
 
         private void Awake()
         {
+            // 仅在缺少场景注入时补挂 WireManager，随后统一由当前工作区初始化。
+            // 不从场景扫描历史对象；Components 与 WireManager.Wires 才是活动电路权威集合。
             if (wireManager == null)
             {
                 wireManager = gameObject.AddComponent<WireManager>();
@@ -127,6 +129,8 @@ namespace ElectricalSim.Core
 
         public CircuitComponent SpawnComponent(ComponentDefinition definition, Vector2 anchoredPosition, string instanceId = null, bool recordHistory = true)
         {
+            // 所有模板、导入和自由放置都应通过此入口加入活动集合，
+            // 以便拓扑脏标记、撤销快照、仿真与保存加载观察到同一份实例数据。
             if (IsInteractionLocked)
             {
                 SetStatus("画布已锁定，解锁后再添加元件。");
@@ -238,6 +242,8 @@ namespace ElectricalSim.Core
 
         public void HandleTerminalClicked(TerminalView terminal)
         {
+            // 两次端子点击构成一次接线事务：创建前记录历史，创建后刷新导线并重置运行态。
+            // 不要绕过此入口直接向 WireManager 添加导线，否则预览、撤销和状态提示会失同步。
             if (IsInteractionLocked)
             {
                 SetStatus("画布已锁定，解锁后再接线。");
@@ -336,6 +342,8 @@ namespace ElectricalSim.Core
 
         private void EvaluateSimulation(float deltaTime = 0f)
         {
+            // Workspace 控制仿真生命周期，具体状态推导仍委托 SimulationEngine；
+            // 任何拓扑、参数或交互变更后都必须先清除旧结果，避免展示过期运行态。
             var result = new SimulationEngine(components, wireManager.Wires, deltaTime).Run();
             simulationDirty = false;
             SetStatus(result);
@@ -362,6 +370,8 @@ namespace ElectricalSim.Core
 
         public void MarkTopologyDirty(string message = null)
         {
+            // 清空活动电路的运行态而不删除场景历史对象。Analyzer/Validation 的输入始终来自
+            // Components 与 WireManager.Wires，因此 ClearDrawing 后活动输入应为空。
             simulationDirty = true;
             ClearRuntimeLatchedStates();
 
@@ -580,6 +590,8 @@ namespace ElectricalSim.Core
 
         public void ClearDrawing(bool recordHistory)
         {
+            // 清空画布会同步删除活动导线、元件、测量面板和运行态；
+            // 不应以 FindObjectsOfType 替代此集合操作，否则可能误删 Demo 场景中的历史对象。
             if (IsInteractionLocked)
             {
                 SetStatus("画布已锁定，解锁后再清空画布。");
@@ -1036,6 +1048,8 @@ namespace ElectricalSim.Core
 
         private void RestoreSnapshot(DrawingSnapshot snapshot)
         {
+            // 撤销/重做通过同一生成与接线入口恢复快照，保证实例参数、手工折点和拓扑脏状态一致。
+            // 修改快照字段或恢复顺序后必须回归撤销重做、保存导入和真实模板基线。
             restoringHistory = true;
             CancelPendingWire(null);
             ClearSelection();

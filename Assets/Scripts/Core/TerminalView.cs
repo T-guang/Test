@@ -4,6 +4,11 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 表示画布上一个可接线端子，并负责端子点击、悬停和选中反馈。
+    /// 端子的身份、角色和所属元件来自 TerminalDefinition；视觉状态不能替代 WireManager
+    /// 中的真实连接关系。修改端子尺寸或命中区域后需回归自由接线与端子命中测试。
+    /// </summary>
     public sealed class TerminalView : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         public string TerminalId { get; private set; }
@@ -22,6 +27,8 @@ namespace ElectricalSim.Core
 
         public void Initialize(CircuitComponent owner, TerminalDefinition definition, WorkspaceController ownerWorkspace)
         {
+            // 仅在所属元件构建端子时绑定一次。接线数据按 TerminalView 引用建立，
+            // 因此不要在已有导线仍引用该端子时随意重建端子对象。
             Owner = owner;
             TerminalId = definition.id;
             Label = definition.label;

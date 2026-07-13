@@ -144,6 +144,7 @@ namespace ElectricalSim.Core
                 return null;
             }
 
+            // 运行态以稳定的实例 ID 隔离；模板静态参数和 UI 显示都不能成为这里的权威来源。
             if (!timerStates.TryGetValue(componentId, out var state))
             {
                 state = new TimerRuntimeState();
@@ -207,6 +208,7 @@ namespace ElectricalSim.Core
                 return;
             }
 
+            // 删除元件时必须一并清理三类运行态，避免同一实例 ID 在撤销、导入后继承旧状态。
             timerStates.Remove(componentId);
             motionStates.Remove(componentId);
             protectionStates.Remove(componentId);
@@ -214,6 +216,8 @@ namespace ElectricalSim.Core
 
         public void ResetAll(string reason)
         {
+            // 清空画布、加载模板、停止并重建等生命周期边界调用此处；
+            // 不将计时、往返位置或保护脱扣状态写入模板和保存定义。
             LastResetReason = reason;
             timerStates.Clear();
             motionStates.Clear();

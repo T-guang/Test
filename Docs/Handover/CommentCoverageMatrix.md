@@ -1,0 +1,89 @@
+# 注释覆盖矩阵
+
+## 状态定义
+
+| 状态 | 含义 | 数量 |
+|---|---|---:|
+| 已完成 | 已有中文类级职责/边界说明；复杂类仍可能在后续批次补方法级说明。 | 14 |
+| 需要详细注释 | 状态多、顺序敏感、影响规则/保存/模板/场景；需要类级与关键方法约束。 | 30 |
+| 只需类级注释 | 普通控制器、页面、列表、格式化器或中等复杂服务。 | 67 |
+| 可以豁免 | DTO、枚举、短常量/适配器或极短且用途清楚脚本。 | 38 |
+
+完整逐脚本的路径、代码行数、模块、风险和当前注释状态见 [CodebaseInventory.md](CodebaseInventory.md)。本矩阵规定后续处理方式、豁免理由、测试和批次；任何脚本即使豁免也不从盘点中消失。
+
+## Batch A1 当前完成状态
+
+> 本表记录本批 12 个核心脚本的实际完成状态；目标等级为“详细注释”，
+> 已补充类级职责、关键顺序或生命周期约束。原有统计口径待全部批次结束后统一重算。
+
+| 脚本 | 当前完成状态 | 目标注释等级 | 后续补充 |
+|---|---|---|---|
+| `Core/ActualSupplyVoltageResolver.cs` | 类级与关键解析约束已完成 | 详细注释 | 无 |
+| `Core/CircuitComponent.cs` | 类级、实例参数、端子和视觉 Prefab 约束已完成 | 详细注释 | 无 |
+| `Core/CircuitStateAnalyzer.cs` | 类级与危险方法约束已完成 | 详细注释 | 无 |
+| `Core/ParameterValueResolver.cs` | 类级与实例/定义回退边界已完成 | 详细注释 | 无 |
+| `Core/RuntimeStateManager.cs` | 类级与运行态清理边界已完成 | 详细注释 | 无 |
+| `Core/SimulationEngine.cs` | 类级与稳定循环、KT 顺序约束已完成 | 详细注释 | 无 |
+| `Core/TeachingParameterCalculationService.cs` | 类级与教学估算边界已完成 | 详细注释 | 无 |
+| `Core/TerminalView.cs` | 类级与端子引用生命周期已完成 | 详细注释 | 无 |
+| `Core/TopologyTraversalLimits.cs` | 类级与安全预算约束已完成 | 详细注释 | 无 |
+| `Core/WireManager.cs` | 类级与活动导线集合约束已完成 | 详细注释 | 无 |
+| `Core/WireView.cs` | 类级与路由、颜色、保存边界已完成 | 详细注释 | 无 |
+| `Core/WorkspaceController.cs` | 类级与活动图、快照、仿真生命周期已完成 | 详细注释 | 无 |
+
+## 已完成（14）
+
+| 脚本 | 覆盖内容 | 后续 | 测试 |
+|---|---|---|---|
+| `Core/CircuitStateAnalyzer.cs` | 职责、活动图输入、稳定循环约束 | Batch A 补危险方法 | 18 模板、规则、运行态 |
+| `Core/SimulationEngine.cs` | 步进职责、非 SPICE 边界、稳定顺序 | Batch A 补状态更新方法 | 运行态模板 |
+| `Core/RuntimeStateManager.cs` | 运行态归属和重置边界 | Batch A 复核 | 运行态模板 |
+| `Core/WorkspaceController.cs` | 活动图权威来源、场景扫描禁令 | Batch A 补历史/仿真方法 | 模板、保存加载 |
+| `Core/WireManager.cs` | 活动导线权威输入 | Batch A 复核 | 接线、保存加载 |
+| `Core/Validation/CircuitValidationService.cs` | 聚合职责、规则契约、调用顺序 | Batch B 补关键 Helper 顺序 | 规则、18 模板 |
+| `Core/Validation/PowerPotentialValidationHelper.cs` | 电位证据边界 | Batch B 补遍历方法 | 电源安全 |
+| `Core/Validation/ProtectionBypassValidationHelper.cs` | 旁路检测与保守遍历 | Batch B 补路径方法 | 保护旁路 |
+| `Core/Validation/TimerControlBypassValidationHelper.cs` | KT 旁路契约 | Batch B 补路径方法 | 时间继电器旁路 |
+| `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
+| `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
+| `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |
+| `AI/InspectionWorkflowService.cs` | 无 UGUI 编排与顺序约束 | Batch C 复核 | Inspector、18 模板 |
+| `AI/InspectionReportComposer.cs` | 结构化 Block 契约 | Batch C 复核 | 模型测试 |
+
+## 需要详细注释（30）
+
+| 模块 | 脚本 | 必须说明 | 批次 |
+|---|---|---|---|
+| Core | `ActualSupplyVoltageResolver`、`CircuitComponent`、`TeachingParameterCalculationService`、`WireView` | 电压来源、元件状态、参数估算、导线副作用 | A |
+| Validation | `MotorPhaseValidationHelper`、`ReversingPairScopeHelper`、`SelfHoldingBranchValidationHelper`、`ThermalRelayProtectionScopeHelper` | 遍历边界、互锁/保护判断、RuleId 契约 | B |
+| Rules/Inspector | `CircuitRuleChecker`、`IndustrialCircuitRuleAnalyzer`、`TeachingCheckReportFormatter` | 旧规则/工业规则与教学文本边界 | B/C |
+| Templates/SaveLoad | `TemplateLoadController`、`SystemTemplateLayoutUpdater` | 模板入口、布局更新、副作用 | B |
+| Practice | `ComponentMappingSolver`、`Practice/PracticeConnectionChecker`、`PracticeSessionController` | 网表匹配、评分、会话状态 | C |
+| UI | `ComponentParameterView`、`DemoRuntimeBootstrap`、`DemoUIController`、`PageRouter`、`PaletteController`、`VisualPrefab/KTDelaySettingDialog`、`VisualPrefabRegistry` | 场景注入、动态创建、监听器、KT 保存边界 | D/E |
+| Editor | `ArchitectureBaselineSnapshotWriter`、`DemoSceneBuilder`、`TemplateIntegrityChecker` | 基线不可覆盖、场景构建、真实模板路径 | F |
+
+## 只需类级注释（67）
+
+处理原则：写清“负责什么、不负责什么、主要依赖/调用方、修改后跑什么”，不逐行解释 UI 创建代码。具体文件分批如下：
+
+- **Batch A**：`ParameterValueResolver`、`TerminalView`、`TopologyTraversalLimits`、`MeasurementPanel`、`OscilloscopeWaveform`、`WorkspaceGrid`、`KTTimerVisualController`、`VisualPrefabInstance`。
+- **Batch B**：`CircuitRuleCheckTeacherFormatter`、`CircuitTemplateCatalogLoader`、`CircuitTemplateLoader`、`TemplateSelectionPanel`、`ImportBlueprintPanel`、`SaveBlueprintDialog`、`UpdateTemplateLayoutController`。
+- **Batch C**：`CircuitSummaryBuilder`、`IndustrialCircuitExplainer`、`Practice/Netlist/PracticeConnectionChecker`、`StandardNetlistBuilder`、`StudentNetlistBuilder`、`UnionFind`、`PracticeScoreCalculator`、`CircuitRuleCheckFormatter`。
+- **Batch D**：`AppSession`、`BlueprintController`、`BlueprintReferencePanel`、`CurrentUserView`、`LocalProfilePageController`、`LoginController`、`MainUiTheme`、`PaletteItem`、`SavedBlueprintListItem`、`SimulationGalleryPageController`、`TemplateListItem`、`TopNavigationController`、`UiIconLibrary`、`UpdateTemplateLayoutConfirmDialog`。
+- **Batch E**：`EncyclopediaController`、`CommonToolsPageController`、`CommonToolsTeachingContent`、`ElectricianCalculatorController`、`KTTimerHitArea`、`VisualPrefabConfig`、`MotorVisualController`。
+- **Batch F**：`EditRuntimeUiComparisonWindow`、`FinalUiAuditWindow`、`SimulationUiFontComparisonWindow`、`UiTypographyRuntimeAuditWindow`、`UiTypographyRuntimeAuditRunner`、`SceneRuntimeEvidenceWindow`、`InspectionReportComposerTests`、`PowerSafetyValidationTests`、`ProtectionBypassValidationTests`、`ThermalTimerBypassValidationTests`、`TopologySafetyTests`、`CommonToolsAuditor`、`PhaseA_Auditor`、`ExpandCanvasScript`、`ImportUIAssets`。
+
+## 可以豁免（27）
+
+| 类别 | 文件 | 原因 |
+|---|---|---|
+| 数据/DTO | `CircuitAnalysisResult`、`InspectionReportData`、`ComponentDefinition`、`ComponentParameter`、`ComponentParameterSet`、`CircuitValidationIssue`、`CircuitValidationReport`、`MotorPhaseValidationResult`、`CircuitCheckResult`、`CircuitIssue`、`CircuitTemplateCatalogDto`、`CircuitTemplateDto`、`SavedBlueprintInfo`、`TemplateEditSession`、`PracticeConnectionCheckResult`、`PracticeConnectionIssue`、`PracticeNetlist`、`PracticeNetlistConnection`、`PracticeNetlistTerminal`、`CommonArticleEntry`、`CommonFormulaEntry`、`CommonToolsSeedData`、`ResistorColorEntry`、`VisualPrefabConfig` | 字段意义清楚或纯数据承载；必要时仅补字段说明。 |
+| 枚举/常量/短适配器 | `ElectricalEnums`、`TerminalConstants`、`ParameterKeys`、`CircuitValidationCategory`、`CircuitValidationSeverity`、`CircuitIssueSeverity`、`PageId`、`IInspectionWorkflowRuntimeAdapter`、`InspectionWorkflowResult`、`WireBendHandle`、`ParameterPanelDragHandle`、`NativeFileBrowser`、`NativeFileBrowserReceiver`、`WindowsFileDialog` | 代码短且职责明确；只需保留清单和调用点。 |
+
+## 尚待人工确认
+
+`PhaseA_Auditor.cs`、`UiTypographyRuntimeAuditWindow.cs`、`LoginController.cs`、`CurrentUserView.cs`、`DemoSceneBuilder.cs`、平台文件对话框包装层，需要在后续批次确认是否仍有菜单、场景、Prefab、Build 或反射引用。确认前不得标记废弃。
+
+## 覆盖率结论
+
+首批已对 14/138 个脚本完成类级职责覆盖，约 **10.1%**。若按“必须详细注释”的 High 风险脚本计算，已有首批覆盖但未完全方法级封口的核心类不应被误计为完成；仍有约 18 个 High 风险脚本缺少清晰说明。
