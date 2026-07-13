@@ -10,7 +10,7 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.AI
 {
-    public sealed class LocalInspectorPanel : MonoBehaviour
+    public sealed class LocalInspectorPanel : MonoBehaviour, IInspectionWorkflowRuntimeAdapter
     {
         private const float PanelWidth = 320f;
         private const float CollapsedPanelWidth = 0f;
@@ -29,7 +29,7 @@ namespace ElectricalSim.AI
         [SerializeField] private RectTransform reportContent;
         [SerializeField] private bool showDeveloperDebugInfo = false;
 
-        private CircuitSummaryBuilder summaryBuilder;
+        private InspectionWorkflowService inspectionWorkflowService;
         // Diagnostic-only mirror of the blocks currently rendered in reportContent.
         private InspectionReportData renderedReportData = new InspectionReportData();
         private Sprite collapseHandleSprite;
@@ -86,7 +86,7 @@ namespace ElectricalSim.AI
         public void Initialize(WorkspaceController workspaceController)
         {
             workspace = workspaceController;
-            summaryBuilder = new CircuitSummaryBuilder(workspace);
+            inspectionWorkflowService = new InspectionWorkflowService(workspace, this, showDeveloperDebugInfo);
 
             BindButton(explainButton, ExplainCurrentCircuit);
             BindButton(checkButton, CheckCurrentCircuit);
@@ -389,35 +389,14 @@ namespace ElectricalSim.AI
                 return;
             }
 
-            var stateResult = AnalyzeCircuitState();
-            ApplyRuntimeDisplayOverrides(stateResult);
-            var report = InspectionReportComposer.CreateSummary(
-                "当前电路解释",
-                "电路解释",
-                workspace != null && workspace.IsSimulationRunning,
-                ResolveCurrentCircuitDisplayName(),
-                "以下内容基于当前元件状态和接线拓扑生成。",
-                string.Empty);
-            report.AddRange(BuildCurrentCircuitExplanationReportData(stateResult));
-
-            if (IndustrialCircuitExplainer.TryExplain(workspace, out var industrialExplanation))
+            var result = inspectionWorkflowService.CreateExplanationReport();
+            if (!result.Succeeded)
             {
-                industrialExplanation = ApplyCurrentCircuitName(industrialExplanation);
-                report.AddRange(InspectionReportComposer.CreateTeaching(industrialExplanation));
-                AddReportBlocks(report);
+                AddAssistantMessage("【电路解释失败】\n" + result.UserMessage);
                 return;
             }
 
-            var summary = summaryBuilder != null ? summaryBuilder.BuildDetailedSummary() : string.Empty;
-            if (string.IsNullOrWhiteSpace(summary))
-            {
-                report.AddRange(InspectionReportComposer.CreateTeaching("当前画布为空，请先搭建电路或加载标准图纸。"));
-                AddReportBlocks(report);
-                return;
-            }
-
-            report.AddRange(InspectionReportData.FromLegacyText("【教学说明】\n" + summary));
-            AddReportBlocks(report);
+            AddReportBlocks(result.Report);
         }
 
         private void CheckCurrentCircuit()
@@ -432,79 +411,15 @@ namespace ElectricalSim.AI
 
             try
             {
-                if (IndustrialCircuitRuleAnalyzer.TryAnalyze(workspace, out var industrialResult) && industrialResult.IsIndustrial)
+                var result = inspectionWorkflowService.CreateCheckReport();
+                if (!result.Succeeded)
                 {
-                    var currentCircuitName = ResolveCurrentCircuitName();
-                    if (!string.IsNullOrWhiteSpace(currentCircuitName))
-                    {
-                        industrialResult.CircuitType = currentCircuitName;
-                    }
-
-                    var industrialStateResult = AnalyzeCircuitState();
-                    ApplyRuntimeDisplayOverrides(industrialStateResult);
-                    var industrialDebugDetails = BuildRuntimeDisplaySummary(industrialStateResult) +
-                        "\n\n" + industrialResult.FormatForAssistant() +
-                        "\n\n" + industrialStateResult.ToReadableText();
-                    var industrialSummaryReport = InspectionReportComposer.CreateSummary(
-                        "最新检查报告",
-                        "接线检查",
-                        workspace != null && workspace.IsSimulationRunning,
-                        ResolveCurrentCircuitDisplayName(),
-                        InspectionReportComposer.BuildCheckSummaryConclusion(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount),
-                        InspectionReportComposer.ResolveRiskLevel(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount));
-                    var industrialNotices = PrependCheckPanelRuntimeNotices(
-                        TeachingCheckReportFormatter.Format(industrialStateResult, industrialResult, industrialDebugDetails, showDeveloperDebugInfo),
-                        industrialStateResult,
-                        out var industrialValidationIssues);
-                    AddReportBlocks(InspectionReportComposer.ComposeCheckReport(industrialSummaryReport, industrialNotices, industrialValidationIssues));
-                    var industrialSummary = "工业电路检查完成：";
-                    if (industrialResult.ErrorCount > 0)
-                    {
-                        industrialSummary += "发现 " + industrialResult.ErrorCount + " 个严重问题。";
-                    }
-                    else if (industrialResult.WarningCount > 0)
-                    {
-                        industrialSummary += "发现 " + industrialResult.WarningCount + " 个提醒。";
-                    }
-                    else
-                    {
-                        industrialSummary += "未发现严重错误。";
-                    }
-                    workspace.SetStatus(industrialSummary);
+                    AddAssistantMessage(result.UserMessage);
                     return;
                 }
 
-                var checker = new CircuitRuleChecker(workspace);
-                var result = checker.Check();
-                var stateResult = AnalyzeCircuitState();
-                ApplyRuntimeDisplayOverrides(stateResult);
-                var displayResult = FilterCheckPanelFalsePositives(result, stateResult);
-                var debugDetails = BuildRuntimeDisplaySummary(stateResult) +
-                    "\n\n" + CircuitRuleCheckTeacherFormatter.FormatForTeaching(displayResult) +
-                    "\n\n" + stateResult.ToReadableText();
-                var summaryReport = InspectionReportComposer.CreateSummary(
-                    "最新检查报告",
-                    "接线检查",
-                    workspace != null && workspace.IsSimulationRunning,
-                    ResolveCurrentCircuitDisplayName(),
-                    InspectionReportComposer.BuildCheckSummaryConclusion(stateResult, displayResult.ErrorCount, displayResult.WarningCount),
-                    InspectionReportComposer.ResolveRiskLevel(stateResult, displayResult.ErrorCount, displayResult.WarningCount));
-                var notices = PrependCheckPanelRuntimeNotices(
-                    TeachingCheckReportFormatter.Format(stateResult, displayResult, debugDetails, showDeveloperDebugInfo),
-                    stateResult,
-                    out var validationIssues);
-                AddReportBlocks(InspectionReportComposer.ComposeCheckReport(summaryReport, notices, validationIssues));
-                
-                string summary = "电路检查完成：";
-                if (displayResult.ErrorCount > 0 || displayResult.WarningCount > 0)
-                {
-                    summary += "发现 " + displayResult.ErrorCount + " 个严重问题，" + displayResult.WarningCount + " 个提醒。";
-                }
-                else
-                {
-                    summary += "未发现明显接线错误。";
-                }
-                workspace.SetStatus(summary);
+                AddReportBlocks(result.Report);
+                workspace.SetStatus(result.StatusMessage);
             }
             catch (Exception exception)
             {
@@ -558,6 +473,49 @@ namespace ElectricalSim.AI
         {
             var name = ResolveCurrentCircuitName();
             return string.IsNullOrWhiteSpace(name) ? "未识别模板" : name;
+        }
+
+        CircuitStateResult IInspectionWorkflowRuntimeAdapter.AnalyzeCircuitState()
+        {
+            return AnalyzeCircuitState();
+        }
+
+        void IInspectionWorkflowRuntimeAdapter.ApplyRuntimeDisplayOverrides(CircuitStateResult stateResult)
+        {
+            ApplyRuntimeDisplayOverrides(stateResult);
+        }
+
+        string IInspectionWorkflowRuntimeAdapter.BuildRuntimeDisplaySummary(CircuitStateResult stateResult)
+        {
+            return BuildRuntimeDisplaySummary(stateResult);
+        }
+
+        InspectionReportData IInspectionWorkflowRuntimeAdapter.BuildCurrentCircuitExplanationReportData(CircuitStateResult stateResult)
+        {
+            return BuildCurrentCircuitExplanationReportData(stateResult);
+        }
+
+        CircuitCheckResult IInspectionWorkflowRuntimeAdapter.FilterCheckPanelFalsePositives(CircuitCheckResult ruleResult, CircuitStateResult stateResult)
+        {
+            return FilterCheckPanelFalsePositives(ruleResult, stateResult);
+        }
+
+        string IInspectionWorkflowRuntimeAdapter.PrependCheckPanelRuntimeNotices(
+            string report,
+            CircuitStateResult stateResult,
+            out IReadOnlyList<CircuitValidationIssue> validationIssues)
+        {
+            return PrependCheckPanelRuntimeNotices(report, stateResult, out validationIssues);
+        }
+
+        string IInspectionWorkflowRuntimeAdapter.ResolveCurrentCircuitName()
+        {
+            return ResolveCurrentCircuitName();
+        }
+
+        string IInspectionWorkflowRuntimeAdapter.ApplyCurrentCircuitName(string text)
+        {
+            return ApplyCurrentCircuitName(text);
         }
 
         private InspectionReportData BuildCurrentCircuitExplanationReportData(CircuitStateResult stateResult)
