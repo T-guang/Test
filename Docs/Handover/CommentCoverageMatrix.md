@@ -11,6 +11,20 @@
 
 完整逐脚本的路径、代码行数、模块、风险和当前注释状态见 [CodebaseInventory.md](CodebaseInventory.md)。本矩阵规定后续处理方式、豁免理由、测试和批次；任何脚本即使豁免也不从盘点中消失。
 
+## Batch A2 当前完成状态
+
+> 本表记录本批 6 个测量、画布显示与 Visual Prefab 运行脚本的实际完成状态；目标等级为“详细注释”。
+> 示波器当前没有可操作的元件池入口，本轮只记录该人工验证缺口，不新增入口或改变器件池。
+
+| 脚本 | 当前完成状态 | 目标注释等级 | 修改后必跑测试 |
+|---|---|---|---|
+| `UI/MeasurementPanel.cs` | 类级、测量显示数据来源和空闲显示边界已完成 | 详细注释 | 选中元件、测量/参数面板、Inspector 模型测试 |
+| `UI/OscilloscopeWaveform.cs` | 类级、教学波形边界和 UGUI 重绘约束已完成 | 详细注释 | 当前示波器入口不可达，后续恢复入口后检查波形与分辨率 |
+| `UI/WorkspaceGrid.cs` | 类级、纯视觉网格与交互边界已完成 | 详细注释 | 1366×768、1920×1080、4K 画布显示 |
+| `UI/VisualPrefab/MotorVisualController.cs` | 类级、父级状态读取和动画边界已完成 | 详细注释 | 普通电机、正反转、自动往返、星三角 |
+| `UI/VisualPrefab/KTTimerVisualController.cs` | 类级、KT 参数/运行态显示边界已完成 | 详细注释 | KT 设置、倒计时、停止复位、保存导入 |
+| `UI/VisualPrefab/VisualPrefabInstance.cs` | 类级、视觉实例、端子锚点缓存和保守回退约束已完成 | 详细注释 | 普通元件、KT、电机 Visual Prefab、保存导入 |
+
 ## Batch A1 当前完成状态
 
 > 本表记录本批 12 个核心脚本的实际完成状态；目标等级为“详细注释”，

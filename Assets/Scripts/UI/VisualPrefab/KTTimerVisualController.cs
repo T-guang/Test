@@ -3,6 +3,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 负责通电延时时间继电器 Visual Prefab 的显示屏和四个局部操作热区。
+    /// 延时设定读取 CircuitComponent 参数，计时/复位阶段读取 RuntimeStateManager；显示文本只是结果，
+    /// 不能替代 KT 的真实运行态或保存数据。该控制器由元件视觉初始化绑定，停止、失电和重置后
+    /// 应显示运行态管理器给出的结果。修改后需回归 KT 设置、倒计时、停止复位和保存导入。
+    /// </summary>
     public sealed class KTTimerVisualController : MonoBehaviour
     {
         private const string DelayParameterKey = "delaySeconds";
@@ -23,6 +29,7 @@ namespace ElectricalSim.Core
 
         public void Initialize(CircuitComponent owner, WorkspaceController ownerWorkspace)
         {
+            // 初始化只绑定当前元件及已有 Prefab 子节点；热区回调仍通过参数入口和工作区脏标记生效。
             component = owner;
             workspace = ownerWorkspace;
             ResolveReferences();
@@ -47,6 +54,7 @@ namespace ElectricalSim.Core
 
         public void RefreshNow()
         {
+            // 以“显示秒数 + 阶段 + 线圈得电”去重，避免 Update 每帧重写同一段文本。
             if (displayText == null || component == null)
             {
                 return;
@@ -152,6 +160,8 @@ namespace ElectricalSim.Core
 
         private void SetDelaySeconds(float value)
         {
+            // 参数写入元件实例，随后只刷新显示和参数面板；真实计时仍由仿真循环维护，
+            // 不能在此处自行推进或重置 RuntimeStateManager。
             if (component == null)
             {
                 return;
@@ -170,6 +180,7 @@ namespace ElectricalSim.Core
 
         private float ResolveDisplaySeconds(out TimerRuntimePhase phase, out bool coilEnergized)
         {
+            // 运行时计时优先于静态设定值：KT 通电计时显示剩余时间，失电或无状态时显示设定时间。
             var delaySeconds = ResolveDelaySeconds();
             phase = TimerRuntimePhase.Reset;
             coilEnergized = false;

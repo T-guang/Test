@@ -4,6 +4,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 将当前选中元件的已计算测量值和额定参数渲染为万用表、示波器文字与波形显示。
+    /// 数据来自 CircuitComponent 的实例参数和仿真写入的 Measured* 状态；本类只负责展示，
+    /// 不能通过修改文本改变电气计算、元件参数或 Analyzer 的输入。选择变更、仿真启停后由
+    /// WorkspaceController 刷新。修改后需检查测量面板、参数面板和示波器入口。
+    /// </summary>
     public sealed class MeasurementPanel : MonoBehaviour
     {
         [SerializeField] private Text multimeterText;
@@ -12,6 +18,7 @@ namespace ElectricalSim.UI
 
         public void ShowComponent(CircuitComponent component, bool simulationRunning)
         {
+            // 未选中有效元件时统一回到空闲显示，并清空波形输入，避免上一个元件的视觉结果残留。
             if (component == null || component.Definition == null)
             {
                 SetIdle();
@@ -21,6 +28,8 @@ namespace ElectricalSim.UI
             var definition = component.Definition;
             var isSource = definition.kind == ComponentKind.PowerSource;
             var active = simulationRunning && (component.IsEnergized || isSource);
+            // Component.Measured* 是 SimulationEngine 写入的显示依据；额定参数仅用于补充说明，
+            // 不能把这里的格式化或回退值当作实际测量结果再写回元件。
             var voltage = active ? GetDisplayVoltage(component, definition, component.MeasuredVoltage) : 0f;
             var current = active && !isSource ? component.MeasuredCurrent : 0f;
             var power = active && !isSource ? component.MeasuredPower : 0f;

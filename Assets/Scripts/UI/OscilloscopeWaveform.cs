@@ -3,6 +3,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 使用 UGUI 顶点绘制简化的教学示波器网格和参考波形。
+    /// 波形由 MeasurementPanel 提供的电压、交直流标记和活动状态生成，不是采样设备数据，
+    /// 不参与 CircuitStateAnalyzer 或规则校验。RectTransform 尺寸变化会触发重绘；无有效信号时
+    /// 保持零线。修改后需检查示波器入口及不同分辨率下的显示。
+    /// </summary>
     [RequireComponent(typeof(CanvasRenderer))]
     public sealed class OscilloscopeWaveform : MaskableGraphic
     {
@@ -22,6 +28,7 @@ namespace ElectricalSim.UI
 
         public void SetSignal(float signalVoltage, bool isAlternating, bool isActive)
         {
+            // 仅缓存下一次 OnPopulateMesh 所需的显示输入；不保存历史采样，也不修改元件运行态。
             voltage = Mathf.Max(0f, signalVoltage);
             alternating = isAlternating;
             active = isActive;
@@ -30,6 +37,7 @@ namespace ElectricalSim.UI
 
         protected override void OnPopulateMesh(VertexHelper vh)
         {
+            // 网格和曲线都由当前 RectTransform 生成，避免将某一分辨率的 UI 几何缓存为权威坐标。
             vh.Clear();
 
             var rect = rectTransform.rect;

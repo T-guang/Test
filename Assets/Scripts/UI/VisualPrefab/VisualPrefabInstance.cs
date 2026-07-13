@@ -4,6 +4,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 封装一个绑定到 CircuitComponent 的运行时 Visual Prefab 实例及其外观、端子锚点缓存。
+    /// 它通过 VisualPrefabConfig/VisualPrefabRegistry 的配置创建视觉层，不替代 ComponentDefinition、
+    /// CircuitComponent 或用户图纸数据；缓存引用仅服务当前运行时，不能进入保存格式。视觉资源或
+    /// 端子锚点缺失时返回失败并保守回退。修改后需检查普通元件、KT 与电机 Visual Prefab。
+    /// </summary>
     public sealed class VisualPrefabInstance
     {
         private readonly VisualPrefabConfig config;
@@ -42,6 +48,8 @@ namespace ElectricalSim.Core
             Text legacyTitle,
             out VisualPrefabInstance instance)
         {
+            // 仅在 Editor 通过配置路径加载视觉资源。失败时调用方继续使用旧外观，
+            // 不应让缺失的视觉资源改变元件端子、规则或运行态。
             instance = null;
             if (config == null || parent == null || string.IsNullOrWhiteSpace(config.PrefabPath))
             {
@@ -116,6 +124,7 @@ namespace ElectricalSim.Core
 
         public bool TryGetTerminalPosition(string terminalId, out Vector2 localPosition)
         {
+            // 锚点只决定 TerminalView 的视觉位置；端子 ID 和电气连接仍由元件定义与 WireManager 保持。
             localPosition = Vector2.zero;
             if (!IsActive || string.IsNullOrWhiteSpace(terminalId))
             {
@@ -149,6 +158,8 @@ namespace ElectricalSim.Core
 
         private static Dictionary<string, RectTransform> CollectTerminalAnchors(Transform visualRoot)
         {
+            // 缓存 Prefab 中约定命名的 Terminal_* 子节点，避免每次刷新重复遍历层级；
+            // 该缓存随 Visual Prefab 实例销毁，不属于用户图纸或模板数据。
             var anchors = new Dictionary<string, RectTransform>(System.StringComparer.OrdinalIgnoreCase);
             if (visualRoot == null)
             {

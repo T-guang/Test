@@ -3,6 +3,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 为工作区绘制纯视觉网格背景，帮助用户观察画布位置和留白。
+    /// 元件吸附和真实坐标由 WorkspaceController 管理，本类不保存元件位置、不参与接线拓扑，
+    /// 也不应成为任何分析或保存加载的输入。RectTransform 重绘时按当前可见区域生成网格。
+    /// 修改后需检查 1366×768、1920×1080 与 4K 画布显示。
+    /// </summary>
     public sealed class WorkspaceGrid : MaskableGraphic
     {
         [SerializeField] private float spacing = 20f;
@@ -14,6 +20,7 @@ namespace ElectricalSim.UI
 
         protected override void Awake()
         {
+            // 场景中的背景 Graphic 初始化后关闭射线检测，确保网格不会拦截元件和导线交互。
             base.Awake();
             raycastTarget = false;
             ApplyDesignDefaults();
@@ -38,6 +45,7 @@ namespace ElectricalSim.UI
 
         protected override void OnPopulateMesh(VertexHelper vh)
         {
+            // 仅根据当前 UI 矩形生成顶点；网格线数量和间距不改变 WorkspaceController 的吸附规则。
             vh.Clear();
             var rect = rectTransform.rect;
             var index = 0;
