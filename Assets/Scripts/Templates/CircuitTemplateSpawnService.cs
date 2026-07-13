@@ -4,6 +4,11 @@ using UnityEngine;
 
 namespace ElectricalSim.Templates
 {
+    /// <summary>
+    /// 校验模板 DTO，并使用目录定义将其生成到活动工作区。
+    /// 仅在校验成功后才清空并替换工作区；不把场景内样例对象当作模板数据。
+    /// 真实模板基线依赖这条生产生成路径。
+    /// </summary>
     public static class CircuitTemplateSpawnService
     {
         private sealed class TemplateValidationResult
@@ -17,6 +22,7 @@ namespace ElectricalSim.Templates
             IReadOnlyList<ComponentDefinition> catalog,
             out string message)
         {
+            // 必须先校验再 ClearDrawing，避免格式错误的 JSON 清掉学习者当前电路。
             message = string.Empty;
 
             if (workspace == null)

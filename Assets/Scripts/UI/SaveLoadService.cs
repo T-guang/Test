@@ -8,6 +8,11 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 通过活动 WorkspaceController 和元件目录序列化、恢复用户图纸。
+    /// 它不是标准模板加载器，必须保持图纸兼容性、实例 ID 和用户数据路径；
+    /// 修改保存加载逻辑后必须覆盖模板与用户图纸回归。
+    /// </summary>
     public sealed class SaveLoadService : MonoBehaviour
     {
         [SerializeField] private WorkspaceController workspace;

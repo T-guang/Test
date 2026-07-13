@@ -118,6 +118,11 @@ namespace ElectricalSim.Core
         }
     }
 
+    /// <summary>
+    /// 按元件实例 ID 持有仅运行期的时间、运动和保护状态。
+    /// 不创建元件、不持久化图纸；工作区和仿真代码会在生命周期边界重置它，
+    /// 避免旧 KT、自动往返和热继状态泄漏到另一张电路图。
+    /// </summary>
     public sealed class RuntimeStateManager
     {
         private readonly Dictionary<string, TimerRuntimeState> timerStates = new Dictionary<string, TimerRuntimeState>();

@@ -4,6 +4,11 @@ using System.Text;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 根据当前工作区的元件和导线推导可读的电气与拓扑状态。
+    /// 不修改场景、不推进仿真时间，也不决定教学报告的呈现；调用方必须只传入活动工作区图，
+    /// 不得把 Demo.unity 中的全部对象作为输入。主要调用方为检查、校验和回归基线路径。
+    /// </summary>
     public sealed class CircuitStateAnalyzer
     {
         public const string VoltageNone = "None";
@@ -26,6 +31,8 @@ namespace ElectricalSim.Core
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
         {
+            // 动态线圈与时间继电器触点可能相互依赖。必须保持有界稳定循环的确定性；
+            // 改动顺序或迭代上限后，必须验证 18 张真实模板基线。
             traversalBudgetWarningLogged = false;
             friendlyNamesByInstanceId.Clear();
             BuildFriendlyNames(components);

@@ -8,6 +8,11 @@ using UnityEngine;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 将既有检查文本段落和校验问题转换为结构化报告 Block。
+    /// 不执行分析、不校验接线，也不渲染 UGUI。Block 的 Kind、Severity 和 RuleIds 是受回归保护的模型数据；
+    /// 旧文本解析只用于兼容，不能再作为新 UI 的数据来源。
+    /// </summary>
     public static class InspectionReportComposer
     {
         public static InspectionReportData CreateSummary(

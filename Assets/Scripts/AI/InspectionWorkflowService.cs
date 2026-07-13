@@ -4,6 +4,12 @@ using ElectricalSim.Rules;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 在不依赖 UGUI 的条件下编排 Check 和 Explain 报告生成流程。
+    /// 它保持既有 Analyzer、规则、格式化器和 Composer 的调用顺序，并通过窄适配器取得
+    /// 尚未抽离的运行态显示信息。只返回数据，面板负责 UI 与状态文字。
+    /// 改动流程顺序后必须通过 Inspector 模型测试和 18 张模板基线。
+    /// </summary>
     public sealed class InspectionWorkflowService
     {
         private readonly WorkspaceController workspace;
@@ -24,6 +30,7 @@ namespace ElectricalSim.AI
 
         public InspectionWorkflowResult CreateCheckReport()
         {
+            // 工业与普通电路路径必须保留分支：两者的分析器、摘要和状态文案均属于既定学习者体验。
             if (workspace == null || runtimeAdapter == null)
             {
                 return InspectionWorkflowResult.Failure("电路检查失败：未能读取当前画布。");

@@ -3,6 +3,11 @@ using UnityEngine;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 管理一个 WorkspaceController 所属的导线视图，并执行本地导线创建约束。
+    /// 不负责元件生命周期或电气分析；其 Wires 集合是仿真、分析、校验和保存加载的
+    /// 活动工作区导线唯一权威输入。
+    /// </summary>
     public sealed class WireManager : MonoBehaviour
     {
         [SerializeField] private RectTransform wireLayer;

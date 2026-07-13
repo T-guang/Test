@@ -10,6 +10,11 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 检查助手的 UGUI 宿主：按钮、报告 Block 渲染、练习控制和面板状态。
+    /// Check/Explain 流程已委托给 InspectionWorkflowService；本类在后续重构前仍提供窄运行态显示适配。
+    /// 渲染结构化数据时不得改变报告顺序。
+    /// </summary>
     public sealed class LocalInspectorPanel : MonoBehaviour, IInspectionWorkflowRuntimeAdapter
     {
         private const float PanelWidth = 320f;

@@ -4,6 +4,11 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.Core.Validation
 {
+    /// <summary>
+    /// 校验活动图中的危险电位组合和线圈电压兼容性。
+    /// 它是规则证据 Helper，不是仿真引擎或 UI 格式化器；有界静态图可避免把任意场景对象
+    /// 误当作电气连接。
+    /// </summary>
     internal sealed class PowerPotentialValidationHelper
     {
         private const string PowerPotentialConflict = "POWER_POTENTIAL_CONFLICT";

@@ -6,6 +6,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 管理可编辑电路工作区：元件/导线集合、选择、历史、交互和仿真生命周期。
+    /// UI、模板和保存服务必须通过此控制器取得活动图，不能扫描全场景对象，
+    /// 因为 Demo.unity 含有活动图之外的历史/静态对象。
+    /// 修改会影响接线、撤销重做、保存加载和仿真，之后必须运行模板与安全测试。
+    /// </summary>
     public sealed class WorkspaceController : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         [SerializeField] private RectTransform workspaceRect;

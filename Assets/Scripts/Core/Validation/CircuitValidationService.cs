@@ -4,6 +4,11 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.Core.Validation
 {
+    /// <summary>
+    /// 将生产校验 Helper 聚合为已分析工作区图的规则报告。
+    /// 不执行仿真，也不格式化中文教学文案。RuleId 与 Severity 属于测试和快照保护的契约数据；
+    /// 改动 Helper 顺序或严重级别后，必须运行规则和模板验证。
+    /// </summary>
     public sealed class CircuitValidationService
     {
         public CircuitValidationReport Validate(
@@ -11,6 +16,8 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<WireView> wires,
             CircuitStateResult analysisResult)
         {
+            // 必须保持 Helper 调用顺序稳定。多个 Helper 依赖 Analyzer 证据，结果随后会被
+            // 结构化 Inspector Block 与回归基线消费。
             var report = new CircuitValidationReport();
             var phaseHelper = new MotorPhaseValidationHelper(components, wires);
             AddMotorIssues(report, components, analysisResult, phaseHelper);

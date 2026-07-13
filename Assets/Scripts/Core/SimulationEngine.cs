@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 对工作区图执行一次仿真步进，并更新元件与运行态。
+    /// 它不是通用 SPICE 求解器，输入必须是工作区拥有的元件和导线列表。
+    /// 副作用包括时间继电器、保护、运动、接触器及可视电气状态更新。
+    /// 主要调用方是 WorkspaceController；修改后必须回归运行态模板。
+    /// </summary>
     public sealed class SimulationEngine
     {
         private readonly List<CircuitComponent> components;
@@ -32,6 +38,8 @@ namespace ElectricalSim.Core
 
         public string Run()
         {
+            // 必须先稳定自保持、时间继电器、互锁与星三角状态，再进行图连通扩散和负载判断。
+            // 调整该顺序会改变可观察到的运行行为。
             ResetTraversalBudgetState();
             StabilizeDynamicControlDevices();
 

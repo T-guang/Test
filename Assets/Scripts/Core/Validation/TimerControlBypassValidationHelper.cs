@@ -3,6 +3,11 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.Core.Validation
 {
+    /// <summary>
+    /// 使用静态连通性与 Analyzer 证据检测时间继电器控制旁路接线。
+    /// 仅报告既有的 TIMER_CONTROL_BYPASSED 契约；不得修改 KT 计时状态、规则严重级别
+    /// 或教学输出格式。
+    /// </summary>
     internal sealed class TimerControlBypassValidationHelper
     {
         private const string TimerControlBypassed = "TIMER_CONTROL_BYPASSED";

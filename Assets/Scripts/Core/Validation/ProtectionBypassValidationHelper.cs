@@ -3,6 +3,11 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.Core.Validation
 {
+    /// <summary>
+    /// 基于有界静态导线图和 Analyzer 证据检测保护路径与互锁旁路。
+    /// 仅产出问题，聚合由 CircuitValidationService 负责；调用方不得借此修改接线。
+    /// 遍历超限时必须保守处理，不能静默相信环路结果。
+    /// </summary>
     internal sealed class ProtectionBypassValidationHelper
     {
         private const string BreakerOrFuseBypassed = "BREAKER_OR_FUSE_BYPASSED";
