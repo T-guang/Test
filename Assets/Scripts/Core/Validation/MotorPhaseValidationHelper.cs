@@ -4,6 +4,11 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.Core.Validation
 {
+    /// <summary>
+    /// 基于活动导线与已建内部连接图校验三相电机端子的相线证据。
+    /// 动态图用于反映当前可导通路径，静态图用于区分既有接线；本类只提供规则证据，不修改电机运行态或 UI。
+    /// 遍历受拓扑预算保护，预算耗尽时调用方必须保守处理并运行拓扑安全测试与电机、星三角负向用例。
+    /// </summary>
     internal sealed class MotorPhaseValidationHelper
     {
         private readonly IReadOnlyList<CircuitComponent> components;
@@ -26,6 +31,8 @@ namespace ElectricalSim.Core.Validation
             ComponentStateInfo info,
             bool starDelta)
         {
+            // 普通三相电机使用 U/V/W，星三角电机在本规则中以 U1/V1/W1 作为相线入口；
+            // 不可把两种端子结构混为一谈，否则正常星点或三角支路会被误判。
             var result = new MotorPhaseValidationResult
             {
                 Motor = motor,
@@ -87,6 +94,8 @@ namespace ElectricalSim.Core.Validation
             bool hasAnyPhaseOrConflict,
             MotorPhaseValidationResult result)
         {
+            // 已得电、已有相线冲突或 Analyzer 明确故障时才强制评价。接触器输出尚未建立的停止电机
+            // 缺少相线证据是常见正常状态，应保守跳过，避免把未运行模板当作缺相故障。
             if (motor != null && motor.IsEnergized)
             {
                 return true;

@@ -45,7 +45,7 @@
 | `Core/WireView.cs` | 类级与路由、颜色、保存边界已完成 | 详细注释 | 无 |
 | `Core/WorkspaceController.cs` | 类级与活动图、快照、仿真生命周期已完成 | 详细注释 | 无 |
 
-## 已完成（14）
+## 已完成
 
 | 脚本 | 覆盖内容 | 后续 | 测试 |
 |---|---|---|---|
@@ -54,10 +54,14 @@
 | `Core/RuntimeStateManager.cs` | 运行态归属和重置边界 | Batch A 复核 | 运行态模板 |
 | `Core/WorkspaceController.cs` | 活动图权威来源、场景扫描禁令 | Batch A 补历史/仿真方法 | 模板、保存加载 |
 | `Core/WireManager.cs` | 活动导线权威输入 | Batch A 复核 | 接线、保存加载 |
-| `Core/Validation/CircuitValidationService.cs` | 聚合职责、规则契约、调用顺序 | Batch B 补关键 Helper 顺序 | 规则、18 模板 |
-| `Core/Validation/PowerPotentialValidationHelper.cs` | 电位证据边界 | Batch B 补遍历方法 | 电源安全 |
-| `Core/Validation/ProtectionBypassValidationHelper.cs` | 旁路检测与保守遍历 | Batch B 补路径方法 | 保护旁路 |
-| `Core/Validation/TimerControlBypassValidationHelper.cs` | KT 旁路契约 | Batch B 补路径方法 | 时间继电器旁路 |
+| `Core/Validation/CircuitValidationService.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。聚合职责、规则契约、调用顺序。 | 无 | Inspector 报告模型测试；18 张真实模板架构基线；四组 Validation 规则测试 |
+| `Core/Validation/MotorPhaseValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。相线与星三角证据边界。 | 无 | 18 模板基线；Topology Safety；普通三相电机与星三角负向用例 |
+| `Core/Validation/PowerPotentialValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。电位证据边界。 | 无 | Power Safety Validation Tests；18 模板基线 |
+| `Core/Validation/ProtectionBypassValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。旁路检测与保守遍历。 | 无 | Protection Bypass Validation Tests；18 模板基线 |
+| `Core/Validation/ReversingPairScopeHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。正反转作用域与互锁边界。 | 无 | Protection Bypass Validation Tests；正反转互锁与冲突人工回归；Topology Safety |
+| `Core/Validation/SelfHoldingBranchValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。自锁与点动分支边界。 | 无 | 连续运行、点动、自锁支路人工回归；18 模板基线；Topology Safety |
+| `Core/Validation/ThermalRelayProtectionScopeHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。热继电器保护作用域。 | 无 | Thermal / Timer Bypass Validation Tests；热继保护模板人工回归；Topology Safety |
+| `Core/Validation/TimerControlBypassValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。KT 控制旁路证据边界。 | 无 | Thermal / Timer Bypass Validation Tests；两电机顺序启动与星三角人工回归；Topology Safety |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |
@@ -69,7 +73,6 @@
 | 模块 | 脚本 | 必须说明 | 批次 |
 |---|---|---|---|
 | Core | `ActualSupplyVoltageResolver`、`CircuitComponent`、`TeachingParameterCalculationService`、`WireView` | 电压来源、元件状态、参数估算、导线副作用 | A |
-| Validation | `MotorPhaseValidationHelper`、`ReversingPairScopeHelper`、`SelfHoldingBranchValidationHelper`、`ThermalRelayProtectionScopeHelper` | 遍历边界、互锁/保护判断、RuleId 契约 | B |
 | Rules/Inspector | `CircuitRuleChecker`、`IndustrialCircuitRuleAnalyzer`、`TeachingCheckReportFormatter` | 旧规则/工业规则与教学文本边界 | B/C |
 | Templates/SaveLoad | `TemplateLoadController`、`SystemTemplateLayoutUpdater` | 模板入口、布局更新、副作用 | B |
 | Practice | `ComponentMappingSolver`、`Practice/PracticeConnectionChecker`、`PracticeSessionController` | 网表匹配、评分、会话状态 | C |

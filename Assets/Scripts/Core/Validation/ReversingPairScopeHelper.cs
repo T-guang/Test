@@ -27,6 +27,11 @@ namespace ElectricalSim.Core.Validation
         public string Reason { get; }
     }
 
+    /// <summary>
+    /// 根据静态主回路连接为正反转规则解析接触器、电机的可靠作用域。
+    /// 配对依据是到同一电机端子的三相映射，不能只凭 KM 名称；证据不唯一时宁可不返回作用域，避免跨电机误报。
+    /// 本类不判断运行态冲突，修改后必须回归正反转互锁缺失、接触器冲突和多电机模板测试。
+    /// </summary>
     public sealed class ReversingPairScopeHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -79,6 +84,7 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
         {
+            // 仅使用静态主回路构建作用域，不能把当前接触器吸合状态混入配对依据；运行态冲突由独立规则消费该作用域。
             var scopes = new List<ReversingPairScope>();
             BuildStaticMainCircuitGraph(components, wires);
 
@@ -101,7 +107,8 @@ namespace ElectricalSim.Core.Validation
                 }
             }
 
-            // First version only treats a single unambiguous reversing scope as reliable.
+            // 当前实现只把唯一、无歧义的正反转作用域视为可靠；多个候选可能属于不同电机或复杂拓扑，
+            // 清空结果比错误配对更安全，调用方应保持保守不报。
             if (scopes.Count > 1)
             {
                 scopes.Clear();

@@ -33,6 +33,11 @@ namespace ElectricalSim.Core.Validation
         public string Reason { get; }
     }
 
+    /// <summary>
+    /// 在单接触器、单启停按钮的已支持控制结构中，验证 13/14 是否构成启动按钮并联自锁支路。
+    /// 它只检查静态接线证据，不判定接触器当前吸合状态；复合按钮、星三角和自锁按钮等复杂结构应保守跳过。
+    /// 修改后必须回归点动、连续运行和自锁支路缺失规则测试，避免将合法点动模板误判为故障。
+    /// </summary>
     public sealed class SelfHoldingBranchValidationHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -45,6 +50,7 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<WireView> wires,
             out SelfHoldingBranchValidationResult result)
         {
+            // 每次评估都重建当前活动导线图，结果不可跨工作区或模板复用；遍历限制会通过属性交给 Validation Service。
             HasTraversalLimitExceeded = false;
             BuildStaticWireGraph(components, wires);
 
@@ -71,6 +77,8 @@ namespace ElectricalSim.Core.Validation
 
             var contactor13 = contactor.GetTerminal(TerminalConstants.AuxNO13);
             var contactor14 = contactor.GetTerminal(TerminalConstants.AuxNO14);
+            // 未接出 13/14 说明当前没有尝试自锁，连续运行规则可据此判断；不能直接当作接线错误，
+            // 因为点动控制本来就不需要自锁支路。
             var hasSelfHoldAttempt = HasExternalWire(contactor13) || HasExternalWire(contactor14);
             if (!hasSelfHoldAttempt)
             {

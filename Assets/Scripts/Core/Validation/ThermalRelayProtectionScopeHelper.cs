@@ -27,6 +27,11 @@ namespace ElectricalSim.Core.Validation
         public string Reason { get; }
     }
 
+    /// <summary>
+    /// 在静态主回路中解析热继电器、其上游接触器和受保护三相电机之间的唯一保护作用域。
+    /// 作用域依赖端子连通证据，不依据显示名称或画布距离；无法唯一对应时返回不可靠结果，避免多电机场景跨范围误报。
+    /// 本类不判断热继电器当前脱扣状态，修改后必须回归热继主回路与控制旁路规则测试。
+    /// </summary>
     public sealed class ThermalRelayProtectionScopeHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -40,6 +45,7 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<WireView> wires,
             out ThermalRelayProtectionScope scope)
         {
+            // 先锁定唯一上游接触器，再锁定唯一受保护电机；顺序不能调换，否则并联主回路会把不相关元件纳入同一保护范围。
             HasTraversalLimitExceeded = false;
             BuildStaticMainCircuitGraph(components, wires);
 
@@ -71,6 +77,7 @@ namespace ElectricalSim.Core.Validation
             out CircuitComponent contactor,
             out string reason)
         {
+            // 多个候选接触器或电机均意味着静态证据不足，不把“距离最近”或名称相似作为兜底依据。
             contactor = null;
             var matchCount = 0;
 

@@ -37,6 +37,8 @@ namespace ElectricalSim.Core.Validation
 
         public List<CircuitValidationIssue> Validate()
         {
+            // 先按纯导线静态连通组判断电位直接混接，再用 Analyzer 的 A1/A2 电压证据校验线圈额定值。
+            // 导线颜色不是电位来源；遍历超限或电压无法解析时宁可不报，不能凭名称猜测故障。
             var issues = new List<CircuitValidationIssue>();
             AddDirectPowerPotentialIssues(issues);
             AddCoilVoltageMismatchIssues(issues);
@@ -65,6 +67,8 @@ namespace ElectricalSim.Core.Validation
 
         private void EvaluatePotentialGroup(List<CircuitValidationIssue> issues, List<TerminalView> group)
         {
+            // 同一静态导线组内同时出现多种电源输出电位才进入判断。N 与 PE 的教学接线风险保持 Warning，
+            // 不得因文本或颜色猜测提升为 Error；其余 RuleId 和 Severity 由现有规则契约固定。
             var potentials = new Dictionary<string, TerminalView>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < group.Count; i++)
             {
@@ -129,6 +133,7 @@ namespace ElectricalSim.Core.Validation
 
         private void AddCoilVoltageMismatchIssues(List<CircuitValidationIssue> issues)
         {
+            // 线圈额定值来自元件参数，实际供电由 A1/A2 的 Analyzer 电压标签解析；UI 显示文本不能作为证据。
             if (components == null || analysisResult == null || analysisResult.Components == null)
             {
                 return;

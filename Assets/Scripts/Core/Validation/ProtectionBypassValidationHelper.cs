@@ -36,6 +36,8 @@ namespace ElectricalSim.Core.Validation
 
         public List<CircuitValidationIssue> Validate()
         {
+            // 四类问题各自采用不同的作用域和证据：不能为了减少遍历而合并，否则会扩大正常并联支路的误报范围。
+            // 本 Helper 只生成 Issue；接线状态与教学报告由调用方分别维护。
             var issues = new List<CircuitValidationIssue>();
             AddBreakerOrFuseBypassedIssues(issues);
             AddMotorContactorBypassedIssues(issues);
@@ -46,6 +48,7 @@ namespace ElectricalSim.Core.Validation
 
         private void AddBreakerOrFuseBypassedIssues(List<CircuitValidationIssue> issues)
         {
+            // 仅在保护器件已断开且 Analyzer 仍确认其下游带电时报告；静态存在并联导线本身不等价于有效旁路。
             if (components == null || analysisResult == null)
             {
                 return;
@@ -160,6 +163,7 @@ namespace ElectricalSim.Core.Validation
 
         private void AddReversingInterlockMissingIssues(List<CircuitValidationIssue> issues)
         {
+            // 缺失互锁只针对静态主回路能唯一确定的同一电机正反转作用域。运行态双吸合冲突由 Service 的独立规则处理。
             if (components == null)
             {
                 return;

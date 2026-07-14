@@ -6,7 +6,7 @@ namespace ElectricalSim.Core.Validation
 {
     /// <summary>
     /// 将生产校验 Helper 聚合为已分析工作区图的规则报告。
-    /// 不执行仿真，也不格式化中文教学文案。RuleId 与 Severity 属于测试和快照保护的契约数据；
+    /// 不推进仿真，也不负责检查助手的报告排版和教学报告组装。RuleId 与 Severity 属于测试和快照保护的契约数据；
     /// 改动 Helper 顺序或严重级别后，必须运行规则和模板验证。
     /// </summary>
     public sealed class CircuitValidationService
@@ -16,6 +16,8 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<WireView> wires,
             CircuitStateResult analysisResult)
         {
+            // 生产规则只接收活动工作区的元件、导线和同一次 Analyzer 结果；不负责推进仿真、
+            // 修改接线或排版教学报告。Helper 调用顺序以及 RuleId、Severity、Category 是快照与报告的稳定契约。
             // 必须保持 Helper 调用顺序稳定。多个 Helper 依赖 Analyzer 证据，结果随后会被
             // 结构化 Inspector Block 与回归基线消费。
             var report = new CircuitValidationReport();
@@ -493,6 +495,8 @@ namespace ElectricalSim.Core.Validation
             IReadOnlyList<WireView> wires,
             CircuitStateResult analysisResult)
         {
+            // 控制回路结构问题与保护旁路问题不能合并：前者结合运行态识别互锁冲突和支路结构，
+            // 后者验证静态供电路径；两者对正常教学模板的保守边界不同。
             AddStopButtonBypassedIssues(report, components, analysisResult);
             AddThermalRelayControlBypassedIssues(report, components, wires, analysisResult);
             AddSelfHoldingBranchIssues(report, components, wires);
@@ -851,6 +855,8 @@ namespace ElectricalSim.Core.Validation
             CircuitComponent component,
             params string[] relatedTerminals)
         {
+            // 以 RuleId 和元件实例去重，避免多个 Helper 对同一证据重复报错；不要在这里改变
+            // Severity 或 Category，否则会破坏 Validation 与 Inspector 的稳定快照契约。
             if (report == null || HasIssue(report, ruleId, component))
             {
                 return;

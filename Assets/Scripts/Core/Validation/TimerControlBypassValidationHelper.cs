@@ -33,6 +33,8 @@ namespace ElectricalSim.Core.Validation
 
         public List<CircuitValidationIssue> Validate()
         {
+            // 仅在 Analyzer 确认 KT 正处于计时、延时触点尚未完成而下游线圈已经得电时检查旁路。
+            // 静态存在其他控制支路不等于错误；运行态证据和静态接线证据必须同时成立。
             var issues = new List<CircuitValidationIssue>();
             AddTimerControlBypassedIssues(issues);
             return issues;
@@ -81,6 +83,7 @@ namespace ElectricalSim.Core.Validation
 
         private bool IsTimerTiming(CircuitComponent timer)
         {
+            // 计时状态由 Analyzer/RuntimeStateManager 维护，不能反向读取 KT 显示文本或视觉倒计时来改变规则结论。
             var info = FindComponentInfo(timer != null ? timer.InstanceId : null);
             return info != null &&
                 info.IsTimerRelay &&
