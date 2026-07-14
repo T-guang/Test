@@ -4,8 +4,17 @@ using ElectricalSim.Templates;
 
 namespace ElectricalSim.Practice.Netlist
 {
+    /// <summary>
+    /// 练习网表算法层的连接比对入口：建立标准和学生网表、求解元件映射，再输出缺失、接错与多余连通等结构化结果。
+    /// 它不同于外层 Practice/PracticeConnectionChecker，后者负责练习会话、提交动作和 UI 流程；本类不修改画布、
+    /// 不负责评分或反馈排版。修改直接连接、等价节点或结果去重方式后，必须回归正确、缺失、多余、无法映射和等价连接用例。
+    /// </summary>
     public static class PracticeConnectionChecker
     {
+        /// <summary>
+        /// 依次构建两侧网表、建立元件映射，并按缺失连接、学生直接接错、学生额外电气合并的顺序收集结果。
+        /// 映射成功不等于连接正确，三类比对必须保留，避免只看直接导线而遗漏跨多根导线形成的额外连通。
+        /// </summary>
         public static PracticeConnectionCheckResult Check(WorkspaceController workspace, CircuitTemplateDto template)
         {
             var result = new PracticeConnectionCheckResult();
@@ -44,6 +53,7 @@ namespace ElectricalSim.Practice.Netlist
             return result;
         }
 
+        // 标准侧期望连通在映射后以学生侧等价节点判断；无映射端子仍按标准侧描述缺失项，避免丢失关键反馈。
         private static void AddMissingConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> standardToStudent)
         {
             var reported = new HashSet<string>();
@@ -76,6 +86,7 @@ namespace ElectricalSim.Practice.Netlist
             }
         }
 
+        // 学生直接导线映射回标准侧后再判定，防止仅凭实例 ID 差异把正确同类元件接线误报为接错。
         private static void AddWrongDirectConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> studentToStandard)
         {
             var reported = new HashSet<string>();
@@ -108,6 +119,7 @@ namespace ElectricalSim.Practice.Netlist
             }
         }
 
+        // 并查集得到的是学生侧电气等价节点组；同组端子在标准侧不应连通时，才构成额外连接。
         private static void AddExtraNodeMerges(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> studentToStandard)
         {
             var reported = new HashSet<string>();

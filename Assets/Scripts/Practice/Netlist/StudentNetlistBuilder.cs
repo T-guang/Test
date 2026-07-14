@@ -2,8 +2,17 @@
 
 namespace ElectricalSim.Practice.Netlist
 {
+    /// <summary>
+    /// 从当前活动 Workspace 建立学生侧网表，读取 Components 中有效元件及 WireManager 的活动导线端点。
+    /// 它只采集身份、定义、端子和连接关系，不修改画布，也不得通过 FindObjectsOfType 扫描 Demo 场景历史对象。
+    /// 修改活动集合、无效对象过滤或端子取数后，必须回归自由接线、撤销重做、清空画布和模板进入练习。
+    /// </summary>
     public static class StudentNetlistBuilder
     {
+        /// <summary>
+        /// 按当前工作区的活动元件与导线快照建表。导线必须在元件和端子登记之后加入，
+        /// 使 PracticeNetlist 能以实例 ID 与端子 ID 建立统一的连通键。
+        /// </summary>
         public static PracticeNetlist Build(WorkspaceController workspace)
         {
             var netlist = new PracticeNetlist();

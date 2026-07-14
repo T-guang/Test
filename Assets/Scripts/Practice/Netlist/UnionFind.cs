@@ -3,6 +3,11 @@ using System.Linq;
 
 namespace ElectricalSim.Practice.Netlist
 {
+    /// <summary>
+    /// 为练习网表维护端子连通等价分组的通用并查集；PracticeNetlist 用它判断两端子是否属于同一电气节点。
+    /// 元素会在 Add、Find 或 Union 时登记，Find 会执行路径压缩；本类不拥有元件语义、端子规则或评分职责。
+    /// 修改根节点合并或未知元素处理会改变网表连通比较，必须回归重复 Union、多分组隔离和连接比对。
+    /// </summary>
     public sealed class UnionFind<T>
     {
         private readonly Dictionary<T, T> parent = new Dictionary<T, T>();
@@ -15,6 +20,7 @@ namespace ElectricalSim.Practice.Netlist
             }
         }
 
+        // Find 会将访问路径直接压缩到当前根；不要改为仅查询，否则连通分组遍历的性能与代表项行为都会变化。
         public T Find(T item)
         {
             if (!parent.ContainsKey(item))
@@ -54,6 +60,7 @@ namespace ElectricalSim.Practice.Netlist
             return EqualityComparer<T>.Default.Equals(Find(first), Find(second));
         }
 
+        // 先复制键集合再调用 Find，避免路径压缩过程中枚举 Dictionary.Keys 产生集合修改风险。
         public IReadOnlyList<IReadOnlyList<T>> GetGroups()
         {
             var groups = new Dictionary<T, List<T>>();

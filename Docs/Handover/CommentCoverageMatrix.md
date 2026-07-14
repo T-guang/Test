@@ -124,3 +124,13 @@
 ## 覆盖率结论
 
 首批已对 14/138 个脚本完成类级职责覆盖，约 **10.1%**。若按“必须详细注释”的 High 风险脚本计算，已有首批覆盖但未完全方法级封口的核心类不应被误计为完成；仍有约 18 个 High 风险脚本缺少清晰说明。
+
+## Batch C2 当前完成状态
+
+| 脚本 | 当前完成状态 | 目标注释等级 | 完成批次 | 修改后必跑测试 |
+|---|---|---|---|---|
+| `Practice/Netlist/ComponentMappingSolver.cs` | 详细注释已完成 | 详细 | Batch C2 | 多同类元件映射；映射失败案例；标准/学生网表连接比较；练习模式人工回归 |
+| `Practice/Netlist/PracticeConnectionChecker.cs` | 详细注释已完成 | 详细 | Batch C2 | 正确接线；缺失连接；多余连接；无法映射；等价连接行为 |
+| `Practice/Netlist/StandardNetlistBuilder.cs` | 类级注释已完成 | 类级 | Batch C2 | 标准网表元件数；标准网表连接数；多个练习模板 |
+| `Practice/Netlist/StudentNetlistBuilder.cs` | 类级注释已完成 | 类级 | Batch C2 | 活动 Workspace 取数；自由接线后建表；撤销重做后建表；清空后空网表 |
+| `Practice/Netlist/UnionFind.cs` | 类级注释已完成 | 类级 | Batch C2 | 连通分组；重复 Union；多分组隔离；网表连接比较 |

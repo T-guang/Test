@@ -12,10 +12,22 @@ namespace ElectricalSim.Practice.Netlist
         public bool Ambiguous { get; set; }
     }
 
+    /// <summary>
+    /// 在标准网表与学生网表之间建立当前练习模式允许的元件实例映射。
+    /// 以 DefinitionName 分组后枚举同类元件的候选对应，并用两侧已建立的电气连通关系为候选打分；
+    /// 输出仅供网表层连接比对使用，不负责评分、UI 反馈，也不是可处理任意规模图同构的通用求解器。
+    /// 映射不依赖显示名称或画布坐标；修改候选生成、枚举上限、排序或评分时，必须回归多同类元件、映射失败
+    /// 与标准/学生连接比对的练习用例。
+    /// </summary>
     public static class ComponentMappingSolver
     {
         private const int MaxPermutationCount = 720;
 
+        /// <summary>
+        /// 按定义分组组合候选映射，并在全部分组处理完成后依据双方连通关系选出当前实现的最高分候选。
+        /// DefinitionName 的排序、候选组合和后续打分共同决定并列候选的稳定表现，不能为了表面简化而调整顺序。
+        /// 无法建立完整且可靠映射时保守标记为 Ambiguous，由上层将其作为练习反馈的一部分处理。
+        /// </summary>
         public static ComponentMappingResult Solve(PracticeNetlist standard, PracticeNetlist student)
         {
             var result = new ComponentMappingResult();
@@ -100,6 +112,10 @@ namespace ElectricalSim.Practice.Netlist
             return result;
         }
 
+        /// <summary>
+        /// 为同一 DefinitionName 的实例生成映射候选。排列数量超过安全上限时，当前实现退回到输入顺序中的首组映射，
+        /// 以避免练习提交在大量同类元件时无界扩张；这不是全局最优匹配保证。
+        /// </summary>
         private static List<Dictionary<string, string>> BuildMappingOptions(List<PracticeNetlistComponent> standardComponents, List<PracticeNetlistComponent> studentComponents)
         {
             var standardIds = standardComponents.Select(c => c.ComponentId).ToList();
@@ -202,6 +218,7 @@ namespace ElectricalSim.Practice.Netlist
             return result;
         }
 
+        // 递归回溯按 source 当前顺序生成候选；顺序会影响超限降级和同分候选的首项，不可随意改写。
         private static void BuildPermutations(List<string> source, int length, List<string> current, List<List<string>> result)
         {
             if (current.Count == length)
