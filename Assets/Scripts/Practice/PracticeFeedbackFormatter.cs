@@ -5,6 +5,11 @@ using System.Text;
 
 namespace ElectricalSim.Practice
 {
+    /// <summary>
+    /// 将练习检查结果组织为检查助手可显示的文本；当前结构化网表结果直接委托给 Netlist 层 Formatter，
+    /// 另一个重载保留旧评分结果模型的兼容文本。
+    /// 本类不执行连接检查、不修改分数或 Passed，标题和段落顺序属于用户体验与报告回归契约；修改后需回归正确和错误提交报告。
+    /// </summary>
     public static class PracticeFeedbackFormatter
     {
         public static string Format(CircuitTemplateCatalogItemDto templateItem, PracticeConnectionCheckResult connectionResult)

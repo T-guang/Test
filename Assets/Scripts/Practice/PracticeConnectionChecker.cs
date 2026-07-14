@@ -64,8 +64,18 @@ namespace ElectricalSim.Practice
         }
     }
 
+    /// <summary>
+    /// 旧练习流程兼容层的连接检查实现，保留旧结果模型、旧评分入口和既有调用方所需的转换行为。
+    /// 它与 Netlist/PracticeConnectionChecker 同名但职责不同：后者是当前结构化网表比对层；当前练习主提交流程
+    /// 直接调用后者，本类不应被视为重复代码后直接合并或删除。本类不创建 UI，也不维护练习会话生命周期。
+    /// 修改实例映射、连通分组或旧结果转换前，必须回归正确、缺失、多余和错误连接的兼容用例。
+    /// </summary>
     public static class PracticeConnectionChecker
     {
+        /// <summary>
+        /// 按旧结果模型执行元件数量、连通分组和实例映射比较。该入口服务仍使用 ConnectionCheckResult 的兼容调用方，
+        /// 不替代 Netlist 层的结构化 Issue 输出，也不决定练习会话能否开始或结束。
+        /// </summary>
         public static ConnectionCheckResult Check(WorkspaceController workspace, CircuitTemplateDto template)
         {
             var result = new ConnectionCheckResult();
@@ -179,6 +189,7 @@ namespace ElectricalSim.Practice
             return "未知元件";
         }
 
+        // 旧兼容路径按定义分组枚举实例对应；排列规模会随同类元件数量增长，不能把它误当作当前 Netlist 求解器的实现副本。
         private static List<Dictionary<string, string>> GenerateAllMappings(List<TemplateComponentDto> stdComps, List<CircuitComponent> stuComps)
         {
             var defGroups = stdComps.GroupBy(c => c.definitionName).ToList();
@@ -234,6 +245,7 @@ namespace ElectricalSim.Practice
             public List<string> WrongConnections = new List<string>();
         }
 
+        // 在旧 UnionFind 连通组之间做双向映射比较，结果仅回填旧 MissingConnections/WrongConnections 模型。
         private static MappingResult EvaluateMapping(Dictionary<string, string> stdToStuMap, UnionFind<string> stdNodes, UnionFind<string> stuNodes, CircuitTemplateDto template, WorkspaceController workspace)
         {
             var r = new MappingResult();

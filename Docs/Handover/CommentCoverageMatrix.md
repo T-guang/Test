@@ -134,3 +134,13 @@
 | `Practice/Netlist/StandardNetlistBuilder.cs` | 类级注释已完成 | 类级 | Batch C2 | 标准网表元件数；标准网表连接数；多个练习模板 |
 | `Practice/Netlist/StudentNetlistBuilder.cs` | 类级注释已完成 | 类级 | Batch C2 | 活动 Workspace 取数；自由接线后建表；撤销重做后建表；清空后空网表 |
 | `Practice/Netlist/UnionFind.cs` | 类级注释已完成 | 类级 | Batch C2 | 连通分组；重复 Union；多分组隔离；网表连接比较 |
+
+## Batch C3 当前完成状态
+
+| 脚本 | 当前完成状态 | 目标注释等级 | 完成批次 | 修改后必跑测试 |
+|---|---|---|---|---|
+| `Practice/PracticeConnectionChecker.cs` | 详细注释已完成 | 详细 | Batch C3 | 正确、缺失、多余、错误连接与网表映射 |
+| `Practice/PracticeSessionController.cs` | 详细注释已完成 | 详细 | Batch C3 | 进入、提交、退出、重复进入、模板切换和页面切换 |
+| `Practice/PracticeScoreCalculator.cs` | 类级注释已完成 | 类级 | Batch C3 | 正确、部分错误、严重错误和零分边界 |
+| `Practice/PracticeFeedbackFormatter.cs` | 类级注释已完成 | 类级 | Batch C3 | 正确和错误提交报告 |
+| `Practice/Netlist/PracticeConnectionFeedbackFormatter.cs` | 类级注释已完成 | 类级 | Batch C3 | 缺失、多余、接错和无法映射反馈 |

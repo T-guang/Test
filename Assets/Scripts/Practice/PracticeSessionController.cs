@@ -7,6 +7,12 @@ using ElectricalSim.AI;
 
 namespace ElectricalSim.Practice
 {
+    /// <summary>
+    /// 管理当前练习会话的入口、模板上下文、提交和退出生命周期。
+    /// 当前实现加载模板数据后清空活动画布，提交时直接调用 Netlist 层的结构化连接检查并将格式化结果交给检查助手；
+    /// 它不重做元件映射、评分公式或报告 UI 组装。退出时必须同时清理模板上下文和练习状态，避免下一次进入复用旧会话。
+    /// 本类会动态查找页面对象，修改进入/退出顺序或重复进入行为后，必须回归进入、提交、退出、模板切换和页面切换。
+    /// </summary>
     public class PracticeSessionController : MonoBehaviour
     {
         private static PracticeSessionController _instance;
@@ -54,6 +60,7 @@ namespace ElectricalSim.Practice
             EnsureReferences();
         }
 
+        // 运行时页面对象可能晚于会话控制器创建；只补齐缺失引用，避免重复初始化时覆盖仍有效的会话上下文。
         private void EnsureReferences()
         {
             if (workspace == null)
@@ -82,6 +89,10 @@ namespace ElectricalSim.Practice
             StartPractice(templateItem, null);
         }
 
+        /// <summary>
+        /// 从图纸集等入口开始练习。已有活动画布内容时先请求确认；成功进入后才调用回调，
+        /// 以便调用方在模板上下文和练习 UI 已稳定后继续显示参考资料。
+        /// </summary>
         public void StartPractice(CircuitTemplateCatalogItemDto templateItem, System.Action onEntered)
         {
             EnsureReferences();
@@ -104,6 +115,10 @@ namespace ElectricalSim.Practice
             }
         }
 
+        /// <summary>
+        /// 先读取模板数据，读取成功后再清空活动画布并建立当前会话上下文；不能调整为先清空再读取，
+        /// 否则模板路径失效时会破坏用户正在编辑的画布。
+        /// </summary>
         private bool EnterPracticeMode(CircuitTemplateCatalogItemDto templateItem)
         {
             EnsureReferences();
@@ -139,6 +154,7 @@ namespace ElectricalSim.Practice
             return true;
         }
 
+        // 仅清理练习会话和参考面板，不清空画布；EndPractice 才负责执行退出后的画布清理。
         public void ClearPracticeState()
         {
             EnsureReferences();
@@ -155,6 +171,10 @@ namespace ElectricalSim.Practice
             }
         }
 
+        /// <summary>
+        /// 退出练习并清理活动画布。必须先解除会话上下文，再触发画布清理和页面选择，
+        /// 防止普通检查入口读取到上一轮模板、评分或练习状态。
+        /// </summary>
         public void EndPractice()
         {
             ClearPracticeState();
@@ -178,6 +198,10 @@ namespace ElectricalSim.Practice
             }
         }
 
+        /// <summary>
+        /// 仅在当前练习会话存在时提交活动画布。当前主链直接使用 Netlist 层 Checker 的结构化结果，
+        /// 再由 PracticeFeedbackFormatter 格式化后显示给检查助手；Formatter 不反向决定连接正确性或 Passed。
+        /// </summary>
         public void SubmitPractice()
         {
             EnsureReferences();

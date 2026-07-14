@@ -3,6 +3,11 @@ using ElectricalSim.Templates;
 
 namespace ElectricalSim.Practice.Netlist
 {
+    /// <summary>
+    /// 将 Netlist 层的结构化连接 Issue 按既定分类和顺序格式化为练习反馈文本。
+    /// 它不同于外层 PracticeFeedbackFormatter 的兼容入口：本类不建立元件映射、不判断端子连通，也不计算分数或 Passed；
+    /// 分类和顺序完全读取网表检查结果。修改文本结构后，必须回归缺失、多余、接错和无法映射反馈。
+    /// </summary>
     public static class PracticeConnectionFeedbackFormatter
     {
         public static string Format(CircuitTemplateCatalogItemDto templateItem, PracticeConnectionCheckResult result)
