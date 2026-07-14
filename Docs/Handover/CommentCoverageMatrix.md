@@ -62,6 +62,10 @@
 | `Core/Validation/SelfHoldingBranchValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。自锁与点动分支边界。 | 无 | 连续运行、点动、自锁支路人工回归；18 模板基线；Topology Safety |
 | `Core/Validation/ThermalRelayProtectionScopeHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。热继电器保护作用域。 | 无 | Thermal / Timer Bypass Validation Tests；热继保护模板人工回归；Topology Safety |
 | `Core/Validation/TimerControlBypassValidationHelper.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B1。KT 控制旁路证据边界。 | 无 | Thermal / Timer Bypass Validation Tests；两电机顺序启动与星三角人工回归；Topology Safety |
+| `Rules/CircuitRuleChecker.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。教学规则入口、双图证据和误报过滤边界。 | 无 | Inspector 报告模型测试；18 模板架构基线；家庭与普通工业检查人工回归 |
+| `Rules/CircuitRuleCheckTeacherFormatter.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。教学文本分组、严重级别读取和快照顺序约束。 | 无 | Inspector 报告模型测试；报告 Section 顺序和正文快照；正常、Warning、Error 三类报告人工回归 |
+| `AI/IndustrialCircuitRuleAnalyzer.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。工业教学范围、活动工作区证据和类型识别边界。 | 无 | 18 模板基线；正反转、自动往返、两电机顺序启动、星三角人工回归；正常工业模板无新增误报 |
+| `AI/TeachingCheckReportFormatter.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。报告 Section 组装、调试信息边界和结构化 Block 前置契约。 | 无 | Inspector 报告模型测试；18 模板 UI blocks 和 modelBlocks；参数估算、教学说明和开发调试开关人工回归 |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |

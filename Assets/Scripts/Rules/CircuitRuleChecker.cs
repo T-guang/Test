@@ -3,6 +3,13 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.Rules
 {
+    /// <summary>
+    /// 检查助手使用的基础教学规则入口。
+    /// 读取当前 Workspace 中的活动元件与活动导线，生成 <see cref="CircuitCheckResult"/> 和教学问题代码；
+    /// 不替代 <c>CircuitValidationService</c> 产生的生产结构化 Validation Issue，也不负责报告排版或 UI 展示。
+    /// 结果会由检查工作流结合运行态分析后再进行面板误报过滤和格式化，因此不能把该过滤理解为删除生产校验问题。
+    /// 修改本类后必须回归 Inspector 报告模型测试、18 张真实模板基线，以及家庭和普通工业电路的检查流程。
+    /// </summary>
     public sealed class CircuitRuleChecker
     {
         private readonly WorkspaceController workspace;
@@ -28,6 +35,7 @@ namespace ElectricalSim.Rules
                 return result;
             }
 
+            // 以下顺序同时建立静态连通证据和当前触点闭合证据；部分后续规则依赖前面完成的分类与图构建，不能为了合并代码随意调换。
             ClassifyComponents();
             BuildGraphs();
             CheckBasicCompleteness();
@@ -105,6 +113,7 @@ namespace ElectricalSim.Rules
                         AddNode(liveGraph, Node(terminal));
                     }
 
+                    // structuralGraph 描述可接线的结构关系，liveGraph 仅保留当前闭合触点形成的可通电关系；二者不能互相替代。
                     AddInternalEdges(component, structuralGraph, true);
                     AddInternalEdges(component, liveGraph, false);
                 }

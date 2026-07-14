@@ -3,6 +3,11 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.Rules
 {
+    /// <summary>
+    /// 将 <see cref="CircuitRuleChecker"/> 的结构化教学检查结果转换为面向学生的解释文本。
+    /// 本类只读取既有的 CircuitIssue、严重级别和问题代码，不重新判断电路，也不通过中文关键词反向修改 Severity。
+    /// 输出会继续进入检查报告组装链；分组顺序、标题和教学文本受 Inspector 报告快照保护，改动后必须运行模型测试与 18 张模板基线。
+    /// </summary>
     public static class CircuitRuleCheckTeacherFormatter
     {
         public static string FormatForTeaching(CircuitCheckResult result)
@@ -38,6 +43,7 @@ namespace ElectricalSim.Rules
             if (infoCount > 0) builder.AppendLine($"信息：{infoCount} 条");
             builder.AppendLine();
 
+            // 先错误、再提醒、最后说明的顺序是当前检查报告的稳定展示契约，不要仅为文案整理而调整。
             AppendGroup(builder, result, CircuitIssueSeverity.Error, "一、需要优先处理的问题");
             AppendGroup(builder, result, CircuitIssueSeverity.Warning, errorCount > 0 ? "二、提醒" : "一、提醒");
             AppendGroup(builder, result, CircuitIssueSeverity.Info, errorCount > 0 && warningCount > 0 ? "三、说明" : (errorCount > 0 || warningCount > 0 ? "二、说明" : "一、说明"));
@@ -51,6 +57,7 @@ namespace ElectricalSim.Rules
 
         private static void AppendGroup(StringBuilder builder, CircuitCheckResult result, CircuitIssueSeverity severity, string title)
         {
+            // 这里仅按既有严重级别取组并补充教学解释，不承担规则复算或问题级别判定。
             var issues = new List<CircuitIssue>();
             foreach (var issue in result.issues)
             {

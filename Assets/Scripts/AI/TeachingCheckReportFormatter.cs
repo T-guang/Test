@@ -6,6 +6,11 @@ using ElectricalSim.Rules;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 将既有运行态、教学规则结果和可选调试信息组织为检查助手的中文报告文本。
+    /// 本类不执行规则、不推进仿真，也不拥有电气状态；RuleId 与 Severity 的真实来源仍是规则和 Validation 链，最终结构化 Block 由 InspectionReportComposer 生成。
+    /// 报告 Section 的标题、正文和顺序已受到 Inspector 快照保护，修改任何格式化文本后必须运行 Inspector 模型测试与 18 张模板基线。
+    /// </summary>
     public static class TeachingCheckReportFormatter
     {
         public static string Format(
@@ -14,8 +19,7 @@ namespace ElectricalSim.AI
             string debugDetails,
             bool showDeveloperDebugInfo = false)
         {
-            // The teaching summary stays on the static topology result. The existing industrial
-            // analyzer text is preserved below as developer detail because it may include runtime facts.
+            // 教学结论以 Analyzer 的状态结果为准；工业专项分析原文仅作为开发调试详情保留，避免它覆盖当前运行态结论。
             return Build(stateResult, null, null, debugDetails, showDeveloperDebugInfo);
         }
 
@@ -29,6 +33,7 @@ namespace ElectricalSim.AI
             var warnings = new List<string>();
             if (ruleResult != null)
             {
+                // 仅把 CircuitRuleChecker 已给出的错误和提醒汇入报告，不在此处重新判断问题或升级、降低严重级别。
                 for (var i = 0; i < ruleResult.issues.Count; i++)
                 {
                     var issue = ruleResult.issues[i];
@@ -67,6 +72,7 @@ namespace ElectricalSim.AI
                     : fallback;
             }
 
+            // Section 顺序是 Inspector 报告快照的保护对象；新增或移动段落必须先更新相应基线并完成真实模板回归。
             var builder = new StringBuilder();
             builder.AppendLine("【检查结论】");
             builder.AppendLine(BuildConclusion(stateResult, additionalErrors));

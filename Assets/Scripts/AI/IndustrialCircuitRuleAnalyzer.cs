@@ -5,10 +5,18 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 面向当前工业教学模板范围的专项识别与检查器。
+    /// 基于 Workspace 的活动元件、活动导线和端子连线整理工业控制事实，并输出 CircuitAnalysisResult 的电路类型、问题计数和教学提示；
+    /// 不等同于通用 <c>CircuitValidationService</c>，也不负责 CircuitStateAnalyzer 的运行态推导、模板加载或检查报告排版。
+    /// 仅覆盖当前已支持的三相电机、正反转、热继保护、自锁等教学控制范围，不应推断为可识别任意工业系统。
+    /// 修改后必须回归 18 张模板，尤其是正反转、自动往返、两电机顺序启动和星三角相关场景。
+    /// </summary>
     public static class IndustrialCircuitRuleAnalyzer
     {
         public static bool TryAnalyze(WorkspaceController workspace, out CircuitAnalysisResult result)
         {
+            // 先统一提取事实，再按公共主回路、控制回路和教学提示的既有顺序分析；这些结果会被工作流与运行态报告共同使用。
             var facts = BuildFacts(workspace);
             result = new CircuitAnalysisResult
             {
@@ -36,6 +44,7 @@ namespace ElectricalSim.AI
                 return facts;
             }
 
+            // 只能读取活动工作区集合，不能扫描 Demo.unity 的全部对象，否则历史场景对象会污染工业电路识别结果。
             facts.Components = workspace.Components != null ? workspace.Components.Where(c => c != null && c.Definition != null).ToList() : new List<CircuitComponent>();
             facts.Wires = workspace.WireManager != null && workspace.WireManager.Wires != null ? workspace.WireManager.Wires.Where(w => w != null).ToList() : new List<WireView>();
 
@@ -165,6 +174,7 @@ namespace ElectricalSim.AI
 
         private static string ResolveCircuitType(IndustrialCircuitFacts facts)
         {
+            // 这里依据已收集的元件和接线证据给出当前支持范围内的类型；工作流层对模板名称的显示覆盖不属于本类职责。
             if (facts.IsForwardReverseControl && facts.Contactors.Count >= 2 && facts.Motors.Count > 0)
             {
                 return facts.HasMutualInterlock ? "电气互锁正反转控制电路" : "电动机正反转控制电路";
