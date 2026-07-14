@@ -76,6 +76,8 @@
 | `UI/SaveLoadService.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-B。活动画布序列化、SavedBlueprints 边界、预校验恢复与失败边界。 | 无 | 保存、读取、删除用户图纸；历史图纸兼容；外部导入；18 模板基线；保存后重新启动读取 |
 | `UI/SaveBlueprintDialog.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch B3-B。名称输入、覆盖确认和重复监听保护。 | 无 | 空名称；正常名称；重复名称；取消和重复打开 |
 | `UI/ImportBlueprintPanel.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch B3-B。用户列表、平台文件选择与直接导入边界。 | 无 | 文件选择取消；合法 JSON；非法 JSON；无效路径；Windows EXE 文件选择后续验证 |
+| `UI/ExitApplicationDialog.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；功能批次：V2.3.9.4.7。退出确认、Editor/Standalone 平台边界与重复监听保护。 | 无 | Editor 退出；Windows RC1 退出；页面切换重复实例检查 |
+| `UI/TopNavigationController.cs` | 当前完成状态：原注释覆盖计划保持不变；本轮新增全局退出入口并复用顶部右侧按钮。 | Batch D 仍需按计划完成 | 退出入口显示；取消/确认；页面切换重复实例检查 |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |

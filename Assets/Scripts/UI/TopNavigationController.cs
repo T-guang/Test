@@ -17,6 +17,8 @@ namespace ElectricalSim.UI
         [SerializeField] private GameObject emptyPageRoot;
         [SerializeField] private Text emptyPageTitle;
 
+        private Button exitButton;
+
         private void Awake()
         {
             if (pageRouter == null)
@@ -58,6 +60,12 @@ namespace ElectricalSim.UI
 
             ApplyThemeToNavBar();
             SelectTab(0);
+        }
+
+        private void Start()
+        {
+            // 本地用户兼容视图会在 Awake 隐藏旧入口；在全部 Awake 完成后统一将其绑定为全局退出，避免重复创建导航按钮。
+            EnsureExitButton();
         }
 
         private void ApplyThemeToNavBar()
@@ -185,6 +193,102 @@ namespace ElectricalSim.UI
                 textLayout.preferredWidth = 300f;
                 textLayout.preferredHeight = 40f;
             }
+        }
+
+        private void EnsureExitButton()
+        {
+            if (exitButton == null)
+            {
+                var navBar = transform.Find("MainAppRoot/NavBar") as RectTransform;
+                if (navBar == null)
+                {
+                    return;
+                }
+
+                var existingButton = navBar.Find("LogoutButton");
+                exitButton = existingButton != null ? existingButton.GetComponent<Button>() : null;
+                if (exitButton == null)
+                {
+                    exitButton = CreateExitButton(navBar);
+                }
+            }
+
+            exitButton.gameObject.SetActive(true);
+            ConfigureExitButton(exitButton);
+            exitButton.onClick.RemoveListener(ShowExitDialog);
+            exitButton.onClick.AddListener(ShowExitDialog);
+        }
+
+        private static Button CreateExitButton(RectTransform navBar)
+        {
+            var buttonObject = new GameObject("ExitApplicationButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            buttonObject.transform.SetParent(navBar, false);
+
+            var buttonRect = buttonObject.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(1f, 0.5f);
+            buttonRect.anchorMax = new Vector2(1f, 0.5f);
+            buttonRect.pivot = new Vector2(1f, 0.5f);
+            return buttonObject.GetComponent<Button>();
+        }
+
+        private static void ConfigureExitButton(Button button)
+        {
+            var buttonRect = button.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(1f, 0.5f);
+            buttonRect.anchorMax = new Vector2(1f, 0.5f);
+            buttonRect.pivot = new Vector2(1f, 0.5f);
+            buttonRect.anchoredPosition = new Vector2(-24f, 0f);
+            buttonRect.sizeDelta = new Vector2(82f, 36f);
+
+            var image = button.GetComponent<Image>();
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+            image.color = Color.white;
+
+            var outline = button.GetComponent<Outline>() ?? button.gameObject.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.DangerBorder;
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 1f, 1f, 0.92f);
+            colors.pressedColor = new Color(0.86f, 0.92f, 1f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(0.78431374f, 0.78431374f, 0.78431374f, 0.5019608f);
+            colors.colorMultiplier = 1f;
+            button.colors = colors;
+            button.targetGraphic = image;
+
+            var label = button.GetComponentInChildren<Text>(true);
+            if (label == null)
+            {
+                var labelObject = new GameObject("Text", typeof(RectTransform), typeof(Text));
+                labelObject.transform.SetParent(button.transform, false);
+                label = labelObject.GetComponent<Text>();
+            }
+
+            label.text = "退出";
+            label.font = MainUiTheme.UiFont;
+            label.fontSize = 14;
+            label.fontStyle = FontStyle.Normal;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.color = MainUiTheme.DangerRed;
+            label.rectTransform.anchorMin = Vector2.zero;
+            label.rectTransform.anchorMax = Vector2.one;
+            label.rectTransform.offsetMin = new Vector2(28f, 0f);
+            label.rectTransform.offsetMax = new Vector2(-8f, 0f);
+
+            UiIconLibrary.EnsureButtonIcon(
+                button,
+                "ui_exit_practice_20",
+                new Vector2(16f, 16f),
+                new Vector2(16f, 0f),
+                MainUiTheme.DangerRed);
+        }
+
+        private void ShowExitDialog()
+        {
+            ExitApplicationDialog.Show(transform);
         }
 
         public void SelectTab(int index)
