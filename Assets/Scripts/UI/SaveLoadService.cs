@@ -9,11 +9,9 @@ using ElectricalSim.Core;
 namespace ElectricalSim.UI
 {
     /// <summary>
-    /// 当前用户图纸保存、读取与恢复服务：保存目录固定在 Application.persistentDataPath/SavedBlueprints，不负责系统模板 Catalog、Resources 模板写回或弹窗视觉状态。
-    /// 用户图纸保存活动 Workspace 的实例身份、布局、参数和导线端点；与系统模板维护生命周期不完全等价。修改后必须回归保存、读取、删除、外部导入和重新启动读取。
-    /// 通过活动 WorkspaceController 和元件目录序列化、恢复用户图纸。
-    /// 它不是标准模板加载器，必须保持图纸兼容性、实例 ID 和用户数据路径；
-    /// 修改保存加载逻辑后必须覆盖模板与用户图纸回归。
+    /// 负责用户图纸的保存、枚举、删除、读取与恢复：只从活动 Workspace 采集数据，写入 Application.persistentDataPath/SavedBlueprints。
+    /// 保存实例身份、布局、参数和导线端点，并通过元件 catalog 恢复；不负责系统模板 Catalog、Resources 写回或保存/导入界面视觉。
+    /// 必须保持历史兼容、instanceId 与用户数据路径稳定；修改后需回归保存、读取、删除、导入和重新启动读取。
     /// </summary>
     public sealed class SaveLoadService : MonoBehaviour
     {
