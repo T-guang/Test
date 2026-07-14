@@ -66,6 +66,13 @@
 | `Rules/CircuitRuleCheckTeacherFormatter.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。教学文本分组、严重级别读取和快照顺序约束。 | 无 | Inspector 报告模型测试；报告 Section 顺序和正文快照；正常、Warning、Error 三类报告人工回归 |
 | `AI/IndustrialCircuitRuleAnalyzer.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。工业教学范围、活动工作区证据和类型识别边界。 | 无 | 18 模板基线；正反转、自动往返、两电机顺序启动、星三角人工回归；正常工业模板无新增误报 |
 | `AI/TeachingCheckReportFormatter.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B2。报告 Section 组装、调试信息边界和结构化 Block 前置契约。 | 无 | Inspector 报告模型测试；18 模板 UI blocks 和 modelBlocks；参数估算、教学说明和开发调试开关人工回归 |
+| `Templates/CircuitTemplateCatalogLoader.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。目录读取、Resources 路径与 Catalog 契约。 | 无 | Template Integrity；18 模板基线；Resources 路径检查 |
+| `Templates/CircuitTemplateLoader.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。单模板读取、Editor/Resources 读取边界。 | 无 | Template Integrity；18 模板基线；Resources 路径检查 |
+| `Templates/CircuitTemplateSpawnService.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-A。先校验再清空、实例映射和生成失败边界。 | 无 | Template Integrity；18 模板真实生成基线；清空后重新加载家庭和工业模板；模板生成失败边界检查 |
+| `UI/TemplateLoadController.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-A。目录、单模板 Loader 与 SpawnService 的协调边界。 | 无 | 图纸集模板加载；仿真广场模板加载；家庭和工业模板人工回归 |
+| `UI/TemplateSelectionPanel.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。Catalog 卡片、分类选择与重复初始化边界。 | 无 | 家庭/工业分类；模板数量；重复打开关闭；卡片加载动作 |
+| `UI/SystemTemplateLayoutUpdater.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-A。Editor 布局回写、结构校验、备份与字段边界。 | 无 | 更新布局确认流程；不改变元件、导线、参数和 RuleId；18 模板基线 |
+| `UI/UpdateTemplateLayoutController.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。维护入口、确认反馈与 Editor 写回边界。 | 无 | 确认、取消和失败提示；当前模板识别；更新后模板重新加载 |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |

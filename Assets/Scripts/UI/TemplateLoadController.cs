@@ -6,6 +6,11 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 系统模板加载的 UI 协调入口。
+    /// 负责读取目录、响应选择动作、在已有画布时请求确认，并依次调用单模板 Loader 与 SpawnService；不复制 JSON 解析或元件、导线生成算法。
+    /// 系统模板加载会记录 TemplateEditSession，和用户保存图纸的导入入口保持边界。修改后必须回归图纸集、仿真广场以及家庭和工业模板加载。
+    /// </summary>
     public sealed class TemplateLoadController : MonoBehaviour
     {
         [SerializeField] private WorkspaceController workspace;
@@ -28,6 +33,7 @@ namespace ElectricalSim.UI
 
         private static void EnsureController()
         {
+            // 场景未预置该控制器时只补挂一份；重复控制器会造成工具栏按钮和加载监听器重复创建。
             if (FindObjectOfType<WorkspaceController>() == null || FindObjectOfType<TemplateLoadController>() != null)
             {
                 return;
@@ -63,6 +69,7 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // Catalog 只提供可展示、可选择的目录项；单张模板内容在确认选择后才读取。
             if (!CircuitTemplateCatalogLoader.TryLoad(catalogPath, out var catalog, out var error))
             {
                 workspace.SetStatus(error ?? "标准图纸目录读取失败。");
@@ -135,6 +142,7 @@ namespace ElectricalSim.UI
                 return false;
             }
 
+            // 顺序不能调整：先读取 DTO，再由 SpawnService 完整校验并决定何时清空当前画布。
             if (!CircuitTemplateLoader.TryLoad(item.resourcePath, out var template, out var error))
             {
                 workspace.SetStatus(string.IsNullOrWhiteSpace(error) ? "模板读取失败：" + item.templateId : error);
@@ -148,6 +156,7 @@ namespace ElectricalSim.UI
                 return false;
             }
 
+            // 仅成功生成后记录当前系统模板身份，供 Editor 布局更新等维护功能使用。
             TemplateEditSession.RecordTemplate(item.templateId, template.templateName, item.resourcePath);
             workspace.SetStatus("已加载标准图纸：" + template.templateName);
             return true;

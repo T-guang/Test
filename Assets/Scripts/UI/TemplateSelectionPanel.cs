@@ -5,6 +5,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 展示系统模板目录项并向调用方返回用户选择的模板。
+    /// 面板只消费 Catalog 数据完成分类、选中和卡片展示，不扫描 Resources，不读取模板 JSON，也不生成 CircuitComponent 或 WireView。
+    /// 运行时 UI 只在 Create 时构建一次；Show 仅替换目录数据并刷新列表，避免反复打开时重复绑定选择回调。
+    /// 修改后必须检查家庭/工业分类、模板数量、重复打开关闭和卡片加载动作。
+    /// </summary>
     public sealed class TemplateSelectionPanel : MonoBehaviour
     {
         private const string FamilyCategory = "家庭电路";
@@ -29,6 +35,7 @@ namespace ElectricalSim.UI
 
         public static TemplateSelectionPanel Create(RectTransform parent, System.Action<CircuitTemplateCatalogItemDto> selectedCallback)
         {
+            // Controller 负责复用这个面板实例；此处只负责首次创建完整的模态展示层和固定回调。
             var rootObject = new GameObject(
                 "LoadTemplateModalRoot",
                 typeof(RectTransform),
@@ -329,6 +336,7 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // 每次按分类重建的是卡片子项，不重建面板本身；卡片回调统一指向 HandleSelected。
             for (var i = content.childCount - 1; i >= 0; i--)
             {
                 Destroy(content.GetChild(i).gameObject);

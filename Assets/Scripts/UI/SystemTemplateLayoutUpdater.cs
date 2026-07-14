@@ -9,13 +9,19 @@ using UnityEngine;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// Unity Editor 专用的系统模板布局回写工具。
+    /// 在确认当前画布仍与已加载系统模板的元件和导线结构一致后，仅把位置、开关显示状态、导线路由和导线颜色写回源 JSON，并先创建备份。
+    /// 不面向用户保存图纸，不应修改元件类型、端子关系、参数语义、规则定义或运行态判断；正式构建环境不包含本类。
+    /// 修改后必须回归布局更新确认流程、重新加载模板和 18 张真实模板基线。
+    /// </summary>
     public static class SystemTemplateLayoutUpdater
     {
         private const string LogPrefix = "[SystemTemplateLayoutUpdater] ";
 
         public static bool UpdateTemplateLayout(WorkspaceController workspace, out string message)
         {
-
+            // 只有 TemplateEditSession 标记的系统模板才能写回 Resources 源文件，避免把学习者当前画布误写为正式模板。
             if (!TemplateEditSession.HasSystemTemplateLoaded)
             {
                 message = "当前画布不是系统模板，无法更新模板布局。";
@@ -82,6 +88,7 @@ namespace ElectricalSim.UI
                 return false;
             }
 
+            // 先比较结构再备份和写回；布局维护不能借机新增、删除或重接元件与导线。
             if (!ValidateStructure(originalDto, currentComponents, currentWires, out var validationError))
             {
                 message = "当前画布结构已改变，无法更新系统模板布局。\n" + validationError;
@@ -97,6 +104,7 @@ namespace ElectricalSim.UI
                 return false;
             }
 
+            // 备份完成后才更新允许回写的布局字段，随后重新导入该 Assets 资源。
             UpdateLayoutFields(originalDto, currentComponents, currentWires);
 
             var newJson = JsonUtility.ToJson(originalDto, true);
@@ -280,6 +288,7 @@ namespace ElectricalSim.UI
             IReadOnlyList<CircuitComponent> currentComponents,
             IReadOnlyList<WireView> currentWires)
         {
+            // ValidateStructure 已保证 instanceId、definitionName 和导线端点匹配；这里故意不改模板的结构性字段或元件参数。
             foreach (var component in currentComponents)
             {
                 var match = originalDto.components.Find(item => item.instanceId == component.InstanceId);

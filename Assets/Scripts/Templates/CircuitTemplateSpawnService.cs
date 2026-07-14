@@ -5,9 +5,10 @@ using UnityEngine;
 namespace ElectricalSim.Templates
 {
     /// <summary>
-    /// 校验模板 DTO，并使用目录定义将其生成到活动工作区。
-    /// 仅在校验成功后才清空并替换工作区；不把场景内样例对象当作模板数据。
-    /// 真实模板基线依赖这条生产生成路径。
+    /// 校验模板 DTO，并使用元件目录定义将其生成到当前活动工作区。
+    /// 先确认元件定义、instanceId、端子引用、导线颜色和折线路径，再清空并替换工作区；不把场景内样例对象当作模板数据。
+    /// 本类不负责模板选择 UI 或用户图纸导入。生成完成后的 Workspace.Components 与 WireManager.Wires 才是活动电路权威输入。
+    /// 真实模板基线依赖这条生产生成路径，修改后必须回归 18 张模板与 Template Integrity。
     /// </summary>
     public static class CircuitTemplateSpawnService
     {
@@ -37,10 +38,12 @@ namespace ElectricalSim.Templates
                 return false;
             }
 
+            // 校验通过后才允许记录历史并清空旧画布；后续生成失败会返回错误，但当前实现不宣称对已生成对象执行完整事务回滚。
             workspace.RecordHistoryCheckpoint();
             workspace.ClearDrawing(false);
 
             var spawned = new Dictionary<string, CircuitComponent>();
+            // 先按模板 instanceId 生成元件并恢复静态状态与参数，导线只能在端子实例已存在后连接。
             foreach (var item in template.components)
             {
                 var definition = validation.DefinitionsByInstanceId[item.instanceId];
@@ -57,6 +60,7 @@ namespace ElectricalSim.Templates
                 spawned[item.instanceId] = component;
             }
 
+            // 端子引用已在 ValidateTemplate 中对应到定义端子；这里仅把模板端点映射到本次实际生成的元件实例。
             foreach (var item in template.wires)
             {
                 var startComponent = spawned[item.startComponentId];
@@ -102,6 +106,7 @@ namespace ElectricalSim.Templates
             out TemplateValidationResult result,
             out string error)
         {
+            // 该校验只阻止不完整 DTO 进入清空和生成阶段，不负责修复模板，也不替代运行后的 Analyzer 或 Validation 检查。
             result = null;
             error = null;
 

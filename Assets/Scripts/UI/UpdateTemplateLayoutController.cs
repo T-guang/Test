@@ -4,6 +4,11 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 系统模板布局更新的 UI 入口与确认协调器。
+    /// 负责创建维护按钮、检查当前模板会话、展示确认对话框并反馈更新结果；不自行读取、解析或重写模板 JSON。
+    /// 该功能仅服务 Unity Editor 中的系统模板维护，不应作为用户保存图纸的更新入口。修改后需回归确认、取消、失败提示和更新后的模板重载。
+    /// </summary>
     public sealed class UpdateTemplateLayoutController : MonoBehaviour
     {
         private WorkspaceController workspace;
@@ -79,6 +84,7 @@ namespace ElectricalSim.UI
             }
 
 #if UNITY_EDITOR
+            // 具体磁盘写回由 Editor 专用的 SystemTemplateLayoutUpdater 完成，Controller 只保留确认与结果反馈职责。
             UpdateTemplateLayoutConfirmDialog.Show(TemplateEditSession.CurrentTemplateName, ExecuteUpdate);
 #else
             workspace?.SetStatus("当前环境不支持更新系统模板（仅限 Unity Editor）。");
