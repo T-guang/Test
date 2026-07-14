@@ -5,6 +5,11 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 收集用户保存图纸的名称、覆盖确认和界面反馈。
+    /// 本弹窗不遍历 Workspace、不拼装 JSON，真实文件名处理、覆盖判断和写入均由 SaveLoadService 完成；输入框文本不是图纸数据的权威来源。
+    /// Initialize 采用先移除再绑定监听器的方式支持复用，修改后必须回归空名称、正常名称、重名覆盖、取消和重复打开。
+    /// </summary>
     public sealed class SaveBlueprintDialog : MonoBehaviour
     {
         [SerializeField] private SaveLoadService saveLoadService;
@@ -43,6 +48,7 @@ namespace ElectricalSim.UI
         public void Initialize(SaveLoadService service)
         {
             saveLoadService = service;
+            // 弹窗可能被反复创建或重新注入服务，先解除旧监听以避免一次确认触发多次保存。
             if (confirmButton != null)
             {
                 confirmButton.onClick.RemoveListener(Confirm);
@@ -70,6 +76,7 @@ namespace ElectricalSim.UI
 
         public void Show()
         {
+            // 当前实现每次打开都会恢复默认名称并清除错误，不保留上一次未确认输入。
             gameObject.SetActive(true);
             if (nameInput != null)
             {
@@ -104,6 +111,7 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // 名称过滤只服务输入体验；最终目录、扩展名和覆盖语义仍由 SaveLoadService 统一处理。
             if (saveLoadService.SaveAs(documentName, false, out _, out var exists, out var error))
             {
                 Hide();
@@ -135,6 +143,7 @@ namespace ElectricalSim.UI
         
         private void ConfirmOverwrite()
         {
+            // 只有用户确认且仍保留待覆盖名称时才传递 overwrite=true，取消不会改动已存在文件。
             if (string.IsNullOrWhiteSpace(pendingOverwriteName) || saveLoadService == null)
             {
                 CancelOverwrite();

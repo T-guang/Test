@@ -9,6 +9,8 @@ using ElectricalSim.Core;
 namespace ElectricalSim.UI
 {
     /// <summary>
+    /// 当前用户图纸保存、读取与恢复服务：保存目录固定在 Application.persistentDataPath/SavedBlueprints，不负责系统模板 Catalog、Resources 模板写回或弹窗视觉状态。
+    /// 用户图纸保存活动 Workspace 的实例身份、布局、参数和导线端点；与系统模板维护生命周期不完全等价。修改后必须回归保存、读取、删除、外部导入和重新启动读取。
     /// 通过活动 WorkspaceController 和元件目录序列化、恢复用户图纸。
     /// 它不是标准模板加载器，必须保持图纸兼容性、实例 ID 和用户数据路径；
     /// 修改保存加载逻辑后必须覆盖模板与用户图纸回归。
@@ -60,6 +62,7 @@ namespace ElectricalSim.UI
 
             try
             {
+                // 仅创建 persistentDataPath 下的用户图纸目录；保存来源是 Workspace 的活动集合，不能扫描 Demo 场景中的历史对象。
                 EnsureSaveDirectory();
                 var path = CreateUniqueSavePath(safeName);
                 
@@ -70,6 +73,7 @@ namespace ElectricalSim.UI
                     return false;
                 }
 
+                // DTO 保存实例身份、布局、参数和导线端点，供恢复时按 instanceId 重建端子连接。
                 var drawing = CreateDrawingDto();
                 drawing.documentId = Guid.NewGuid().ToString("N");
                 drawing.documentName = safeName;
@@ -170,6 +174,7 @@ namespace ElectricalSim.UI
                 return false;
             }
 
+            // 在清空当前画布前先检查所有元件定义与导线端子引用，避免明显无效的外部 JSON 覆盖学习者当前电路。
             foreach (var item in drawing.components)
             {
                 if (item == null || string.IsNullOrWhiteSpace(item.instanceId) || string.IsNullOrWhiteSpace(item.definitionName))
@@ -229,6 +234,7 @@ namespace ElectricalSim.UI
 
             try
             {
+                // 验证通过后才进入恢复流程；当前实现会报告生成异常，但不宣称对已清空画布执行完整事务回滚。
                 ApplyDrawingDto(drawing);
                 var docName = ResolveDocumentName(drawing, string.IsNullOrWhiteSpace(sourceFilePath) ? "外部导入图纸.json" : sourceFilePath);
                 
@@ -248,6 +254,7 @@ namespace ElectricalSim.UI
 
         public List<SavedBlueprintInfo> ListSavedBlueprints()
         {
+            // 只枚举用户专用 SavedBlueprints 目录中的 JSON；单个文件读取失败只记录警告，不阻断其余用户图纸列表。
             EnsureSaveDirectory();
             var result = new List<SavedBlueprintInfo>();
             foreach (var filePath in Directory.GetFiles(SavedBlueprintDirectory, "*.json"))
@@ -283,6 +290,7 @@ namespace ElectricalSim.UI
             try
             {
                 EnsureSaveDirectory();
+                // 删除前规范化路径并限制在用户图纸目录内，避免 UI 传入任意外部路径。
                 var saveDirectory = Path.GetFullPath(SavedBlueprintDirectory)
                     .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                     + Path.DirectorySeparatorChar;
@@ -337,6 +345,7 @@ namespace ElectricalSim.UI
         {
             var drawing = new DrawingDto();
 
+            // 只读取 Workspace.Components 与 WireManager.Wires 这两个活动画布权威集合。
             foreach (var component in workspace.Components)
             {
                 drawing.components.Add(new ComponentDto
@@ -377,6 +386,7 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // 元件必须先恢复，导线再按保存的 instanceId 与端子 ID 连接；该顺序不能调整。
             workspace.ClearDrawing();
 
             foreach (var item in drawing.components ?? new List<ComponentDto>())
@@ -401,6 +411,7 @@ namespace ElectricalSim.UI
                 var style = WireStyle.Orthogonal;
                 Enum.TryParse(item.style, out style);
                 var wire = workspace.WireManager.CreateWire(start, end, color, style);
+                // 历史图纸缺少手动路由字段时保持 DTO 默认值并使用自动路径；不会在读取阶段改写原文件。
                 if (wire != null && item.hasManualRoute)
                 {
                     if (item.manualRoutePoints != null && item.manualRoutePoints.Count >= 2)
@@ -414,6 +425,7 @@ namespace ElectricalSim.UI
                 }
             }
 
+            // 恢复结束后刷新导线并标记拓扑变化，随后清空历史，避免把导入前画布混入新的撤销记录。
             workspace.WireManager.RefreshAll();
             workspace.MarkTopologyDirty();
             workspace.ClearHistory();
@@ -579,6 +591,7 @@ namespace ElectricalSim.UI
 
         private void EnsureSaveDirectory()
         {
+            // 当前实现仅确保用户保存目录存在，不迁移旧文件，也不执行云备份或缓存清理。
             if (!Directory.Exists(SavedBlueprintDirectory))
             {
                 Directory.CreateDirectory(SavedBlueprintDirectory);

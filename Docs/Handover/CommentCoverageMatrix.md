@@ -73,6 +73,9 @@
 | `UI/TemplateSelectionPanel.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。Catalog 卡片、分类选择与重复初始化边界。 | 无 | 家庭/工业分类；模板数量；重复打开关闭；卡片加载动作 |
 | `UI/SystemTemplateLayoutUpdater.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-A。Editor 布局回写、结构校验、备份与字段边界。 | 无 | 更新布局确认流程；不改变元件、导线、参数和 RuleId；18 模板基线 |
 | `UI/UpdateTemplateLayoutController.cs` | 当前完成状态：详细注释已完成；目标注释等级：类级；完成批次：Batch B3-A。维护入口、确认反馈与 Editor 写回边界。 | 无 | 确认、取消和失败提示；当前模板识别；更新后模板重新加载 |
+| `UI/SaveLoadService.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch B3-B。活动画布序列化、SavedBlueprints 边界、预校验恢复与失败边界。 | 无 | 保存、读取、删除用户图纸；历史图纸兼容；外部导入；18 模板基线；保存后重新启动读取 |
+| `UI/SaveBlueprintDialog.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch B3-B。名称输入、覆盖确认和重复监听保护。 | 无 | 空名称；正常名称；重复名称；取消和重复打开 |
+| `UI/ImportBlueprintPanel.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch B3-B。用户列表、平台文件选择与直接导入边界。 | 无 | 文件选择取消；合法 JSON；非法 JSON；无效路径；Windows EXE 文件选择后续验证 |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |

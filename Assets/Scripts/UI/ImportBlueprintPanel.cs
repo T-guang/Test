@@ -4,6 +4,11 @@ using ElectricalSim.Platform;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 用户图纸列表、删除确认和外部 JSON 导入的 UI 面板。
+    /// 面板通过平台文件选择包装层取得文本后交给 SaveLoadService 解析和恢复；不承担系统模板加载，不重写 JSON 解析，也不把外部文件名当作模板 ID 或有效性证据。
+    /// 外部导入当前直接加载所选内容而不自动复制到 SavedBlueprints。修改后需回归取消选择、合法/非法 JSON、无效路径和 Windows EXE 文件选择。
+    /// </summary>
     public sealed class ImportBlueprintPanel : MonoBehaviour
     {
         [SerializeField] private SaveLoadService saveLoadService;
@@ -41,6 +46,7 @@ namespace ElectricalSim.UI
         public void Initialize(SaveLoadService service)
         {
             saveLoadService = service;
+            // 面板会被复用，重复初始化前移除回调，避免一次关闭或删除操作累计执行。
             if (closeButton != null)
             {
                 closeButton.onClick.RemoveListener(Hide);
@@ -75,6 +81,7 @@ namespace ElectricalSim.UI
 
         private void RefreshList()
         {
+            // 列表来自 SaveLoadService 的用户保存目录，不扫描系统模板或任意外部文件夹。
             ClearList();
             SetError(string.Empty);
 
@@ -261,11 +268,13 @@ namespace ElectricalSim.UI
         private void OnExternalImportClicked()
         {
             SetError(string.Empty);
+            // NativeFileBrowser/WindowsFileDialog/Receiver 仅承担平台文件选择；选中文本仍需由 SaveLoadService 做格式、定义和端子校验。
             NativeFileBrowser.RequestImportBlueprint(
                 json => 
                 {
                     if (saveLoadService != null)
                     {
+                        // 成功后直接关闭面板；当前实现不将外部文件自动复制为 SavedBlueprints 中的用户文件。
                         if (saveLoadService.LoadFromJsonString(json, out var error))
                         {
                             Hide();
