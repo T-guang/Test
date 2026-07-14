@@ -5,6 +5,11 @@ using UnityEngine;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 将当前活动 Workspace 的元件、导线、参数和已知显示状态整理为检查助手可消费的文本摘要。
+    /// 只读取 Workspace.Components 与 WireManager.Wires，不执行规则判断、不推导电气状态，也不负责 UGUI 渲染；摘要文本不能作为真实电气状态的权威来源。
+    /// 当前由非工业解释流程使用。修改后需回归检查助手与 Inspector 报告基线。
+    /// </summary>
     public sealed class CircuitSummaryBuilder
     {
         private const int MaxListedItems = 16;

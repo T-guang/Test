@@ -78,6 +78,10 @@
 | `UI/ImportBlueprintPanel.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch B3-B。用户列表、平台文件选择与直接导入边界。 | 无 | 文件选择取消；合法 JSON；非法 JSON；无效路径；Windows EXE 文件选择后续验证 |
 | `UI/ExitApplicationDialog.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；功能批次：V2.3.9.4.7。退出确认、Editor/Standalone 平台边界与重复监听保护。 | 无 | Editor 退出；Windows RC1 退出；页面切换重复实例检查 |
 | `UI/TopNavigationController.cs` | 当前完成状态：原注释覆盖计划保持不变；本轮新增全局退出入口并复用顶部右侧按钮。 | Batch D 仍需按计划完成 | 退出入口显示；取消/确认；页面切换重复实例检查 |
+| `AI/CircuitSummaryBuilder.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch C1。活动画布摘要、文本边界与检查助手使用范围。 | 无 | Inspector 模型测试；家庭与工业检查 |
+| `AI/IndustrialCircuitExplainer.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch C1。工业教学解释与 IndustrialCircuitRuleAnalyzer 的职责边界。 | 无 | 工业模板解释；18 模板基线 |
+| `Rules/CircuitRuleCheckFormatter.cs` | 当前完成状态：类级注释已完成；目标注释等级：类级；完成批次：Batch C1。基础规则结果文本格式化与报告快照边界。 | 无 | Inspector 模型测试；Warning/Error 报告 |
+| `AI/LocalInspectorPanel.cs` | 当前完成状态：详细注释已完成；目标注释等级：详细；完成批次：Batch C1。已覆盖 Workflow UI 入口、结构化 Report Block 渲染、运行态显示覆写、清空和状态提示、练习与普通检查入口边界、动态 UI 与重复监听器约束。 | 无 | Inspector 模型测试；18 模板基线；页面切换与监听器回归；练习入口人工回归 |
 | `Templates/CircuitTemplateSpawnService.cs` | 先校验后清空的模板生成约束 | Batch B 补生成/回滚方法 | 18 模板 |
 | `UI/SaveLoadService.cs` | 用户图纸兼容与目录边界 | Batch B 补兼容路径 | 保存加载 |
 | `AI/LocalInspectorPanel.cs` | UGUI 宿主与 Workflow 边界 | Batch C 补报告/练习方法 | Inspector、18 模板 |

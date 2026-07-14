@@ -2,6 +2,11 @@ using System.Text;
 
 namespace ElectricalSim.Rules
 {
+    /// <summary>
+    /// 将 CircuitRuleChecker 的 CircuitCheckResult 格式化为基础规则检查文本。
+    /// 不执行规则、不改变问题等级；与 CircuitRuleCheckTeacherFormatter 的教学分组和 TeachingCheckReportFormatter 的最终报告组装职责不同。
+    /// 标题、分组顺序和文本会进入检查报告链，修改后需运行 Inspector 模型测试与报告基线。
+    /// </summary>
     public static class CircuitRuleCheckFormatter
     {
         public static string Format(CircuitCheckResult result)

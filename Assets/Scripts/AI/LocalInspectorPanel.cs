@@ -93,6 +93,7 @@ namespace ElectricalSim.AI
             workspace = workspaceController;
             inspectionWorkflowService = new InspectionWorkflowService(workspace, this, showDeveloperDebugInfo);
 
+            // 面板可能被运行时 UI 重建后复用；绑定前清理旧监听，避免同一次检查或练习操作被重复执行。
             BindButton(explainButton, ExplainCurrentCircuit);
             BindButton(checkButton, CheckCurrentCircuit);
             BindButton(submitPracticeButton, SubmitPracticeCheck);
@@ -387,6 +388,7 @@ namespace ElectricalSim.AI
 
         private void ExplainCurrentCircuit()
         {
+            // 解释编排已归 WorkflowService 所有；面板只处理空画布提示与结构化结果渲染，不能重新混入分析或报告组装。
             ClearReport();
             if (workspace == null)
             {
@@ -406,6 +408,7 @@ namespace ElectricalSim.AI
 
         private void CheckCurrentCircuit()
         {
+            // 检查顺序由 WorkflowService 保持；这里仅负责 UI 生命周期、状态提示和对普通用户安全的异常反馈。
             ClearReport();
 
             if (workspace == null)
@@ -647,6 +650,7 @@ namespace ElectricalSim.AI
 
         private void ApplyRuntimeDisplayOverrides(CircuitStateResult stateResult)
         {
+            // 仅校正检查助手展示所需的运行态字段，不能替代 Analyzer、SimulationEngine 或 RuntimeStateManager 的权威状态更新。
             if (stateResult == null || workspace == null || workspace.Components == null)
             {
                 return;
@@ -2429,6 +2433,7 @@ namespace ElectricalSim.AI
 
         private void ClearReport()
         {
+            // renderedReportData 是基线取证用的渲染镜像；必须与 reportContent 同步清空，不能再从 Text 反向解析恢复模型。
             renderedReportData = new InspectionReportData();
             if (reportContent == null)
             {
@@ -2473,6 +2478,7 @@ namespace ElectricalSim.AI
                 return;
             }
 
+            // 保持 Composer 给出的 Block 顺序，并直接消费 Kind/Severity；报告模型快照依赖此顺序与 UI 一致。
             for (var i = 0; i < report.Blocks.Count; i++)
             {
                 var block = report.Blocks[i];
@@ -2591,6 +2597,7 @@ namespace ElectricalSim.AI
                 return;
             }
 
+            // 动态创建面板可能重复初始化，先清除已有监听器以防按钮一次点击触发多份报告或多次练习动作。
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(action);
         }

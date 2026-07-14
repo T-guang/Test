@@ -3,6 +3,11 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.AI
 {
+    /// <summary>
+    /// 将当前已支持工业教学电路的事实结果组织为教学解释文本。
+    /// 依赖 IndustrialCircuitRuleAnalyzer 提供的事实，不重新判断电路是否合法、不替代工业规则分析器，也不通过中文关键词反向决定状态或 Severity。
+    /// 支持范围限于现有工业教学模板；修改后需回归工业模板的解释正文与报告基线。
+    /// </summary>
     public static class IndustrialCircuitExplainer
     {
         public static bool TryExplain(WorkspaceController workspace, out string explanation)
