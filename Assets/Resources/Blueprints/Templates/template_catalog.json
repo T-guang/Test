@@ -7,7 +7,7 @@
       "difficulty": "初级",
       "description": "基础的220V单开单控照明电路，包含电源、开关和灯泡。",
       "resourcePath": "Blueprints/Templates/single_lamp_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/single_lamp_template",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -18,7 +18,7 @@
       "difficulty": "中级",
       "description": "使用两个单开双控开关控制同一盏灯的楼梯照明电路。",
       "resourcePath": "Blueprints/Templates/double_control_lamp_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/double_control_lamp_template",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -29,7 +29,7 @@
       "difficulty": "初级",
       "description": "带有2P空气开关作为主闸保护的基础照明电路。",
       "resourcePath": "Blueprints/Templates/breaker_lamp_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/breaker_lamp_template",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -40,7 +40,7 @@
       "difficulty": "中级",
       "description": "包含单相电能表进行电量计量的完整家庭进户照明电路。",
       "resourcePath": "Blueprints/Templates/meter_lamp_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/meter_lamp_template",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -51,7 +51,7 @@
       "difficulty": "中级",
       "description": "电灯和风扇并联，由各自的开关独立控制的家用电路。",
       "resourcePath": "Blueprints/Templates/lamp_fan_parallel_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/lamp_fan_parallel_template",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -62,7 +62,7 @@
       "difficulty": "初级",
       "description": "一个单控开关同时控制两盏灯，讲解多个照明负载并联接入同一控制回路的接线方式。",
       "resourcePath": "Blueprints/Templates/double_lamp_single_switch_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/double_lamp_single_switch",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -73,7 +73,7 @@
       "difficulty": "中级",
       "description": "两个单控开关分别控制两盏灯，讲解家庭照明中多支路独立控制的接线方式。",
       "resourcePath": "Blueprints/Templates/two_switch_two_lamp_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/two_switch_two_lamp",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -84,7 +84,7 @@
       "difficulty": "中级",
       "description": "空气开关控制一个灯泡和一个电风扇并联回路，讲解不同负载并联接入家庭电路的方式。",
       "resourcePath": "Blueprints/Templates/breaker_lamp_fan_parallel_template",
-      "thumbnailPath": "Blueprints/Thumbnails/family_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/breaker_lamp_fan_parallel",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -95,7 +95,7 @@
       "difficulty": "初级",
       "description": "三相电源、断路器、熔断器、接触器、停止/启动按钮和三相电机构成的点动控制接线示例。",
       "resourcePath": "Blueprints/Templates/motor_jog_control_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/BClass/motor_jog_control",
       "diagramRiskLevel": "B",
       "referenceDiagramNote": "常见网上点动原理图可能只画一个启动按钮，用于表达“按下运行、松开停止”的基本原理。本系统练习版为便于后续控制回路训练，增加了停止按钮，但没有自锁支路，控制逻辑仍为点动。",
       "practiceVariantNote": "本系统点动电路采用“训练版”双按钮布局。控制回路中串接停止按钮 SB1（常闭）与启动按钮 SB2（常开），未设置 KM 13/14 自锁支路，因此仍属于点动控制。接线时不要连接自锁辅助触点。"
@@ -107,7 +107,7 @@
       "difficulty": "中级",
       "description": "通过启动按钮、停止按钮和接触器 13/14 自锁触点实现三相异步电动机连续运行控制。启动后接触器吸合并通过自锁支路保持，按下停止按钮后控制回路断开，电机停止。",
       "resourcePath": "Blueprints/Templates/motor_self_hold_control_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/motor_self_hold_control",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -118,7 +118,7 @@
       "difficulty": "中级",
       "description": "点动按钮按下时电机运行、松开停止；连续启动按钮启动后通过接触器13/14辅助常开触点自锁保持运行。",
       "resourcePath": "Blueprints/Templates/motor_jog_continuous_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/motor_jog_continuous",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -129,7 +129,7 @@
       "difficulty": "中级",
       "description": "使用热继电器主回路和95/96常闭触点实现三相异步电动机过载保护。正常状态下95/96闭合，接触器可吸合并驱动电机运行；热继跳闸后95/96断开，接触器线圈失电，电机停止。",
       "resourcePath": "Blueprints/Templates/motor_thermal_protection_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/BClass/motor_thermal_protection",
       "diagramRiskLevel": "B",
       "referenceDiagramNote": "网上热继保护图纸中，热继电器辅助触点 95/96 的位置画法可能不同，有的图纸会简化保护元件。练习时请以系统说明为准，确保主回路和控制回路都接入热继保护。",
       "practiceVariantNote": "本系统练习中，热继电器不仅位于主回路，还需要将其辅助常闭触点 95/96 串入控制回路。过载时 95/96 断开，接触器线圈失电，从而实现电机保护。"
@@ -141,7 +141,7 @@
       "difficulty": "中级",
       "description": "两个交流接触器分别控制三相电机正转和反转，通过21/22常闭辅助触点实现互锁，防止KM1和KM2同时吸合。",
       "resourcePath": "Blueprints/Templates/motor_forward_reverse_control_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/BClass/motor_forward_reverse_control",
       "diagramRiskLevel": "B",
       "referenceDiagramNote": "常见网上正反转原理图可能包含自锁、按钮互锁或双重联锁等不同版本。查看本模板时，请以系统练习版说明为准：本模板属于点动型正反转基础训练电路，不是双重联锁正反转电路。",
       "practiceVariantNote": "本系统中的“电动机正反转控制电路”为点动型正反转训练模板。正转按钮和反转按钮分别控制对应接触器线圈，按住按钮时对应方向运行，松开按钮后停止。两个接触器通过 21/22 常闭辅助触点实现电气互锁，防止 KM1 与 KM2 同时吸合。该模板不设置 13/14 自锁支路，也不使用复合按钮互锁。"
@@ -153,18 +153,18 @@
       "difficulty": "中级",
       "description": "使用两个交流接触器控制三相异步电动机正反转，并通过接触器辅助常闭触点 21/22 实现电气互锁，防止正反转接触器同时吸合。",
       "resourcePath": "Blueprints/Templates/motor_forward_reverse_interlock_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/motor_forward_reverse_interlock",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
     {
       "templateId": "motor_forward_reverse_double_interlock",
-      "templateName": "按钮和接触器双重连锁正反转控制电路",
+      "templateName": "按钮和接触器双重联锁正反转控制电路",
       "category": "工业电路",
       "difficulty": "中高级",
       "description": "使用复合按钮的常闭触点和接触器辅助常闭触点共同实现正反转双重连锁，防止正反转接触器同时吸合，提高三相异步电动机正反转控制的安全性。",
       "resourcePath": "Blueprints/Templates/motor_forward_reverse_double_interlock_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/motor_forward_reverse_double_interlock",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -175,7 +175,7 @@
       "difficulty": "中高级",
       "description": "使用左右行程开关、正反转接触器、自锁与互锁实现自动往返控制。用于验证 SQ 限位触发后控制回路切换。",
       "resourcePath": "Blueprints/Templates/motor_auto_reciprocating_control_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/BClass/motor_auto_reciprocating_control",
       "diagramRiskLevel": "B",
       "referenceDiagramNote": "网上自动往返图纸版本较多，有的包含手动正反转按钮，有的只画限位切换。系统练习版以“总启动 + 行程开关自动换向”为准。",
       "practiceVariantNote": "本系统自动往返模板采用“停止按钮 + 总启动按钮 + 左右行程开关”的训练版结构，不设置手动正转/反转按钮。正反向切换由 SQ1、SQ2 的常开/常闭复合触点自动完成。"
@@ -187,7 +187,7 @@
       "difficulty": "中高级",
       "description": "M1 先启动，KT 线圈得电后按延时时间自动计时；计时到达后 15/18 延时常开触点闭合，KM2/M2 自动延时启动。",
       "resourcePath": "Blueprints/Templates/motor_sequential_start_timer_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/AClass/motor_sequential_start_timer",
       "diagramRiskLevel": "A",
       "referenceDiagramNote": "本图为教学用电路原理图，主要用于理解电路结构和控制逻辑。进入练习后，请以系统中的元件端子和接线规则为准完成操作。"
     },
@@ -198,7 +198,7 @@
       "difficulty": "高级",
       "description": "使用主接触器 KM、星形接触器 KMY、三角形接触器 KMD 与通电延时时间继电器 KT 实现三相异步电动机星三角降压启动。启动后先星形启动，KT 计时到达后自动释放星形接触器并吸合三角接触器，电机进入三角运行。",
       "resourcePath": "Blueprints/Templates/motor_star_delta_start_template",
-      "thumbnailPath": "Blueprints/Thumbnails/industrial_placeholder",
+      "thumbnailPath": "Blueprints/Thumbnails/BClass/motor_star_delta_start",
       "diagramRiskLevel": "B",
       "referenceDiagramNote": "网上星三角原理图通常将星形中点直接画成短接线。系统练习版中需要通过专门端子排完成星形封接，学生接线时应以系统练习说明为准。",
       "practiceVariantNote": "本系统星三角启动采用六端子电机。星形启动阶段需要通过星形接触器和 star_point 端子排完成中点封接；三角运行阶段由三角接触器切换绕组连接。接线时需注意 KMY 与 KMD 之间的互锁，避免星三角同时吸合。"

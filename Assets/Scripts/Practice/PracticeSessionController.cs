@@ -191,11 +191,7 @@ namespace ElectricalSim.Practice
                 return;
             }
 
-            var targetText = FindReferenceTitleText(referencePanel);
-            if (targetText != null)
-            {
-                targetText.text = item.templateName;
-            }
+            referencePanel.ShowPracticeReference(item);
         }
 
         /// <summary>
@@ -232,20 +228,6 @@ namespace ElectricalSim.Practice
             var hasComponents = workspace != null && workspace.Components != null && workspace.Components.Count > 0;
             var hasWires = workspace != null && workspace.WireManager != null && workspace.WireManager.Wires != null && workspace.WireManager.Wires.Count > 0;
             return hasComponents || hasWires;
-        }
-
-        private static Text FindReferenceTitleText(BlueprintReferencePanel panel)
-        {
-            var texts = panel.GetComponentsInChildren<Text>(true);
-            foreach (var text in texts)
-            {
-                if (text != null && (text.name.Contains("Title") || text.name.Contains("Recommendation")))
-                {
-                    return text;
-                }
-            }
-
-            return texts.Length > 0 ? texts[0] : null;
         }
 
         private void ShowPracticeConfirm(CircuitTemplateCatalogItemDto item, System.Action onConfirm)
