@@ -18,6 +18,7 @@ namespace ElectricalSim.Core
         private readonly Sprite defaultSprite;
         private readonly Sprite activeSprite;
         private readonly Dictionary<string, RectTransform> terminalAnchors;
+        private readonly Dictionary<string, Vector2> terminalPositionOverrides;
 
         private VisualPrefabInstance(
             VisualPrefabConfig config,
@@ -25,7 +26,8 @@ namespace ElectricalSim.Core
             Image bodyImage,
             Sprite defaultSprite,
             Sprite activeSprite,
-            Dictionary<string, RectTransform> terminalAnchors)
+            Dictionary<string, RectTransform> terminalAnchors,
+            Dictionary<string, Vector2> terminalPositionOverrides)
         {
             this.config = config;
             this.root = root;
@@ -33,6 +35,7 @@ namespace ElectricalSim.Core
             this.defaultSprite = defaultSprite;
             this.activeSprite = activeSprite;
             this.terminalAnchors = terminalAnchors;
+            this.terminalPositionOverrides = terminalPositionOverrides;
         }
 
         public VisualPrefabConfig Config => config;
@@ -48,19 +51,38 @@ namespace ElectricalSim.Core
             Text legacyTitle,
             out VisualPrefabInstance instance)
         {
-            // 仅在 Editor 通过配置路径加载视觉资源。失败时调用方继续使用旧外观，
-            // 不应让缺失的视觉资源改变元件端子、规则或运行态。
+            // 运行时 Catalog 保存序列化引用，避免 Player 依赖 Editor 的 AssetDatabase。
+            // 失败时调用方继续使用旧外观，不应让视觉缺失改变元件端子、规则或运行态。
             instance = null;
             if (config == null || parent == null || string.IsNullOrWhiteSpace(config.PrefabPath))
             {
                 return false;
             }
 
+            var catalog = ComponentVisualRuntimeCatalog.Load();
+            ComponentVisualRuntimeCatalog.Entry runtimeEntry = null;
+            var prefab = catalog != null && catalog.TryGetEntry(config.DefinitionName, out runtimeEntry)
+                ? runtimeEntry.visualPrefab
+                : null;
+            var defaultSprite = runtimeEntry != null ? runtimeEntry.defaultSprite : null;
+            var activeSprite = runtimeEntry != null ? runtimeEntry.activeSprite : null;
+
 #if UNITY_EDITOR
-            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(config.PrefabPath);
             if (prefab == null)
             {
-                Debug.LogWarning("[VisualPrefab] Missing prefab: " + config.DefinitionName + " " + config.PrefabPath);
+                prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(config.PrefabPath);
+                defaultSprite = string.IsNullOrWhiteSpace(config.DefaultSpritePath)
+                    ? null
+                    : UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(config.DefaultSpritePath);
+                activeSprite = string.IsNullOrWhiteSpace(config.ActiveSpritePath)
+                    ? null
+                    : UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(config.ActiveSpritePath);
+            }
+#endif
+
+            if (prefab == null)
+            {
+                Debug.LogWarning("[VisualPrefab] Missing runtime prefab: " + config.DefinitionName);
                 return false;
             }
 
@@ -89,13 +111,6 @@ namespace ElectricalSim.Core
                 visualBodyImage.raycastTarget = false;
             }
 
-            var defaultSprite = string.IsNullOrWhiteSpace(config.DefaultSpritePath)
-                ? null
-                : UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(config.DefaultSpritePath);
-            var activeSprite = string.IsNullOrWhiteSpace(config.ActiveSpritePath)
-                ? null
-                : UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(config.ActiveSpritePath);
-
             if (legacyBody != null)
             {
                 legacyBody.enabled = true;
@@ -114,12 +129,10 @@ namespace ElectricalSim.Core
                 visualBodyImage,
                 defaultSprite,
                 activeSprite,
-                CollectTerminalAnchors(visualObject.transform));
+                CollectTerminalAnchors(visualObject.transform),
+                CollectTerminalPositionOverrides(runtimeEntry, config));
             instance.UpdateBodySprite(false);
             return true;
-#else
-            return false;
-#endif
         }
 
         public bool TryGetTerminalPosition(string terminalId, out Vector2 localPosition)
@@ -129,6 +142,11 @@ namespace ElectricalSim.Core
             if (!IsActive || string.IsNullOrWhiteSpace(terminalId))
             {
                 return false;
+            }
+
+            if (terminalPositionOverrides.TryGetValue(terminalId, out localPosition))
+            {
+                return true;
             }
 
             if (terminalAnchors.TryGetValue(terminalId, out var anchor) &&
@@ -185,6 +203,38 @@ namespace ElectricalSim.Core
             }
 
             return anchors;
+        }
+
+        private static Dictionary<string, Vector2> CollectTerminalPositionOverrides(
+            ComponentVisualRuntimeCatalog.Entry runtimeEntry,
+            VisualPrefabConfig config)
+        {
+            var overrides = new Dictionary<string, Vector2>(System.StringComparer.OrdinalIgnoreCase);
+            var runtimeOverrides = runtimeEntry != null ? runtimeEntry.terminalPositionOverrides : null;
+            if (runtimeOverrides != null)
+            {
+                for (var i = 0; i < runtimeOverrides.Count; i++)
+                {
+                    var candidate = runtimeOverrides[i];
+                    if (candidate != null && !string.IsNullOrWhiteSpace(candidate.terminalId))
+                    {
+                        overrides[candidate.terminalId] = candidate.localPosition;
+                    }
+                }
+            }
+
+            if (overrides.Count == 0 && config != null)
+            {
+                foreach (var candidate in config.TerminalPositionOverrides)
+                {
+                    if (candidate != null && !string.IsNullOrWhiteSpace(candidate.terminalId))
+                    {
+                        overrides[candidate.terminalId] = candidate.localPosition;
+                    }
+                }
+            }
+
+            return overrides;
         }
 
         private static bool TryGetAnchoredPositionRelativeToRoot(

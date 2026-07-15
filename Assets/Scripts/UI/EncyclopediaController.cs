@@ -823,6 +823,12 @@ namespace ElectricalSim.UI
                 return null;
             }
 
+            var catalog = ComponentVisualRuntimeCatalog.Load();
+            if (catalog != null && catalog.TryGetDefaultSprite(definition.name, out var sprite))
+            {
+                return sprite;
+            }
+
 #if UNITY_EDITOR
             if (definition.name.IndexOf("Contactor_KM", StringComparison.OrdinalIgnoreCase) >= 0)
             {
@@ -835,7 +841,7 @@ namespace ElectricalSim.UI
 
             if (VisualPrefabRegistry.TryGetConfig(definition.name, out var config) && config != null)
             {
-                var sprite = LoadSpriteAtPath(config.DefaultSpritePath);
+                sprite = LoadSpriteAtPath(config.DefaultSpritePath);
                 if (sprite != null)
                 {
                     return sprite;

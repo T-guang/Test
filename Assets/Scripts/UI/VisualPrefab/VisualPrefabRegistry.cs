@@ -5,6 +5,24 @@ namespace ElectricalSim.Core
 {
     public static class VisualPrefabRegistry
     {
+        // KM 的原始 Editor 视觉使用此坐标表，而不是 Prefab 内 Terminal_* 节点的位置。
+        // Runtime Catalog Builder 直接序列化同一来源，避免 Editor 与 Player 出现两套端子位置。
+        private static readonly VisualPrefabTerminalPosition[] KmTerminalPositionOverrides =
+        {
+            new VisualPrefabTerminalPosition("L1", new UnityEngine.Vector2(-52.8f, 128.7f)),
+            new VisualPrefabTerminalPosition("L2", new UnityEngine.Vector2(1.2f, 128.7f)),
+            new VisualPrefabTerminalPosition("L3", new UnityEngine.Vector2(54.9f, 128.7f)),
+            new VisualPrefabTerminalPosition("T1", new UnityEngine.Vector2(-53.1f, -131.1f)),
+            new VisualPrefabTerminalPosition("T2", new UnityEngine.Vector2(0.9f, -131.1f)),
+            new VisualPrefabTerminalPosition("T3", new UnityEngine.Vector2(54.6f, -131.1f)),
+            new VisualPrefabTerminalPosition("A1", new UnityEngine.Vector2(-106.2f, 68.4f)),
+            new VisualPrefabTerminalPosition("A2", new UnityEngine.Vector2(105.6f, 68.1f)),
+            new VisualPrefabTerminalPosition("13", new UnityEngine.Vector2(-106.2f, 1.2f)),
+            new VisualPrefabTerminalPosition("14", new UnityEngine.Vector2(105.6f, 1.2f)),
+            new VisualPrefabTerminalPosition("21", new UnityEngine.Vector2(-106.2f, -65.1f)),
+            new VisualPrefabTerminalPosition("22", new UnityEngine.Vector2(105.6f, -65.1f))
+        };
+
         private static readonly Dictionary<string, VisualPrefabConfig> Configs = new Dictionary<string, VisualPrefabConfig>(StringComparer.Ordinal)
         {
             {
@@ -17,6 +35,26 @@ namespace ElectricalSim.Core
                     VisualPrefabStateMode.IsClosed,
                     activeWhenClosed: true,
                     hasOperationHitArea: true)
+            },
+            {
+                "Contactor_KM_220V",
+                new VisualPrefabConfig(
+                    "Contactor_KM_220V",
+                    "Assets/Prefab/Contactor_KM_380V_Visual.prefab",
+                    "Assets/Art/Components/Contactor_KM_380V_Default.png",
+                    "Assets/Art/Components/Contactor_KM_380V_Energized.png",
+                    VisualPrefabStateMode.ContactorEnergized,
+                    terminalPositionOverrides: KmTerminalPositionOverrides)
+            },
+            {
+                "Contactor_KM_380V",
+                new VisualPrefabConfig(
+                    "Contactor_KM_380V",
+                    "Assets/Prefab/Contactor_KM_380V_Visual.prefab",
+                    "Assets/Art/Components/Contactor_KM_380V_Default.png",
+                    "Assets/Art/Components/Contactor_KM_380V_Energized.png",
+                    VisualPrefabStateMode.ContactorEnergized,
+                    terminalPositionOverrides: KmTerminalPositionOverrides)
             },
             {
                 "EmergencyStop_NC",

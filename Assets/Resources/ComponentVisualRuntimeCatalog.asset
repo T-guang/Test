@@ -1,0 +1,420 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c97513f8be3fcbd42a714d1da39ade2e, type: 3}
+  m_Name: ComponentVisualRuntimeCatalog
+  m_EditorClassIdentifier:
+  entries:
+  - definitionName: Contactor_KM_380V
+    defaultSprite: {fileID: 21300000, guid: ee1ce2f5c6b844f0a90581302b081920, type: 3}
+    activeSprite: {fileID: 21300000, guid: 84dd8d507a244be38f8a8fc0211bda58, type: 3}
+    visualPrefab: {fileID: 1000001, guid: b1d84e06269187640b61d28060a4e28d, type: 3}
+    terminalPositionOverrides:
+    - terminalId: L1
+      localPosition: {x: -52.8, y: 128.7}
+    - terminalId: L2
+      localPosition: {x: 1.2, y: 128.7}
+    - terminalId: L3
+      localPosition: {x: 54.9, y: 128.7}
+    - terminalId: T1
+      localPosition: {x: -53.1, y: -131.1}
+    - terminalId: T2
+      localPosition: {x: 0.9, y: -131.1}
+    - terminalId: T3
+      localPosition: {x: 54.6, y: -131.1}
+    - terminalId: A1
+      localPosition: {x: -106.2, y: 68.4}
+    - terminalId: A2
+      localPosition: {x: 105.6, y: 68.1}
+    - terminalId: 13
+      localPosition: {x: -106.2, y: 1.2}
+    - terminalId: 14
+      localPosition: {x: 105.6, y: 1.2}
+    - terminalId: 21
+      localPosition: {x: -106.2, y: -65.1}
+    - terminalId: 22
+      localPosition: {x: 105.6, y: -65.1}
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: KnifeSwitch_QS
+    defaultSprite: {fileID: 21300000, guid: 8c6b246f20da47fd98fe07ac4a9e04fe, type: 3}
+    activeSprite: {fileID: 21300000, guid: fee65709aaed4994a178b710e7c1de31, type: 3}
+    visualPrefab: {fileID: 204454791685350563, guid: 68bf7267a141b2f44802965dea3a0a93, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_3V
+    defaultSprite: {fileID: 21300000, guid: d4063f316380462185ba1253b18b8343, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 587972335521994146, guid: c23f0c5d2c3dee746873129b43cfbef7, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Yellow_380V
+    defaultSprite: {fileID: 21300000, guid: 4f9efe65092d6014593791502e54b52f, type: 3}
+    activeSprite: {fileID: 21300000, guid: 7044db7f70c40b24d9c8358a6e51a354, type: 3}
+    visualPrefab: {fileID: 8316116495101498268, guid: c5c09cee6c8ab9a4ab3a809944d3ca8d, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Timer_OnDelay_220V
+    defaultSprite: {fileID: 21300000, guid: 48af50e2b29d2c84a8ef6276561a9759, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 685343647481211757, guid: 67f643e6eff2fde4aa34c9b97cbac7fe, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: AC_220V_Power
+    defaultSprite: {fileID: 21300000, guid: 4f9a160637a34fb393140511c2750e96, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 105451186217186763, guid: 8e4be996a3c957b41b2c2dfffe14032a, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Red_380V
+    defaultSprite: {fileID: 21300000, guid: fa00f4cbea29dc944b61d9829c975d4f, type: 3}
+    activeSprite: {fileID: 21300000, guid: f76c9faf1cfb5594193377f6a6b9c9b7, type: 3}
+    visualPrefab: {fileID: 5986419919036103742, guid: 2f6d6493c0f4a0844bec749430d3fed6, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Motor_StarDelta_380V
+    defaultSprite: {fileID: 21300000, guid: 283381c365e146e2b08f744e3f9e80d2, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 848105261611447601, guid: 2e3b177e361455c42802d6951901bdef, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Green_220V
+    defaultSprite: {fileID: 21300000, guid: abd9096f599d8ee4e8bdb0c097ae8f43, type: 3}
+    activeSprite: {fileID: 21300000, guid: 26a0e9051b421be4e9e780f5ee36a0a3, type: 3}
+    visualPrefab: {fileID: 3985403912635435375, guid: cac8a9dbb63a1ca4ab792814cd3c94f8, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Lamp_220V
+    defaultSprite: {fileID: 21300000, guid: a197d90eb1d84c7fab5b112896aa712c, type: 3}
+    activeSprite: {fileID: 21300000, guid: 635390a560eb4041a721b135244e46c6, type: 3}
+    visualPrefab: {fileID: 371001263172571858, guid: 7d6cc878cf4650d48a9506e450de2582, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Tool_Multimeter
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_6H
+    defaultSprite: {fileID: 21300000, guid: 993f6137a64344a9875fb19ea167d8ef, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 810714926076694732, guid: f199847db7a76254bae331fb6b0a10c8, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Timer_OnDelay_380V
+    defaultSprite: {fileID: 21300000, guid: 48af50e2b29d2c84a8ef6276561a9759, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 685343647481211757, guid: 67f643e6eff2fde4aa34c9b97cbac7fe, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_2V
+    defaultSprite: {fileID: 21300000, guid: 79316235739f4ef0a7fd7badc1f86cbb, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 571460120144717408, guid: b276e1ee1b7e9544a8a73f1a9293d4f8, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Green_380V
+    defaultSprite: {fileID: 21300000, guid: abd9096f599d8ee4e8bdb0c097ae8f43, type: 3}
+    activeSprite: {fileID: 21300000, guid: 26a0e9051b421be4e9e780f5ee36a0a3, type: 3}
+    visualPrefab: {fileID: 3985403912635435375, guid: cac8a9dbb63a1ca4ab792814cd3c94f8, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_2H
+    defaultSprite: {fileID: 21300000, guid: eaa4e17096824363bb0301704086ea74, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 529047683895250219, guid: 48e72286582bcb14d8050e7a579750f9, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Single_Phase_Meter
+    defaultSprite: {fileID: 21300000, guid: 1b4b92f7504344ccb30e02fb6f9ea0bb, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 246140596719017974, guid: 675aac35f3921f147a70f739f53471d5, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_SelfLock_SB
+    defaultSprite: {fileID: 21300000, guid: 8e7a2ae7e8cf42ff9930051207d66033, type: 3}
+    activeSprite: {fileID: 21300000, guid: 28e58dbf15664f60ab0247ebf4615f83, type: 3}
+    visualPrefab: {fileID: 5000001, guid: 361f399b260b4aa49906c034fd9ca164, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_6V
+    defaultSprite: {fileID: 21300000, guid: a5b0eba739544bf4957ea3b68d3cce92, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 862859016558786052, guid: d548df62a4d356c49a49dd23859febbd, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: SolenoidValve_24V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: Breaker_2P
+    defaultSprite: {fileID: 21300000, guid: c1dea9db5063f4e4dbfb8b554ccc8790, type: 3}
+    activeSprite: {fileID: 21300000, guid: dac3a1210225f14439dd36f2a03b6ef8, type: 3}
+    visualPrefab: {fileID: 480071144415021706, guid: ca003619917c4c04184c1e87596bbdc0, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_Stop_NC
+    defaultSprite: {fileID: 21300000, guid: c223eb342ae34488bf4ac1d327d34168, type: 3}
+    activeSprite: {fileID: 21300000, guid: 6b6baf12c21749c3ae96e224cd2a9112, type: 3}
+    visualPrefab: {fileID: 2000001, guid: 15a4a6b47b04458a8218baf6fdb2d827, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Breaker_4P
+    defaultSprite: {fileID: 21300000, guid: 2f92f354ea6462d448a1bd0e854bd908, type: 3}
+    activeSprite: {fileID: 21300000, guid: a3996a65f29e43849a67b44b37003ad4, type: 3}
+    visualPrefab: {fileID: 253620220742619930, guid: 69f42408ea331e04995013cad763ded4, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Breaker_1P
+    defaultSprite: {fileID: 21300000, guid: 76ccbab338d044548853751f9970ec2d, type: 3}
+    activeSprite: {fileID: 21300000, guid: d9d93a5d92b0c3d4b9777319927127d7, type: 3}
+    visualPrefab: {fileID: 945195464051495162, guid: 3ffb26bed8720d3498402c489226829a, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Red_220V
+    defaultSprite: {fileID: 21300000, guid: fa00f4cbea29dc944b61d9829c975d4f, type: 3}
+    activeSprite: {fileID: 21300000, guid: f76c9faf1cfb5594193377f6a6b9c9b7, type: 3}
+    visualPrefab: {fileID: 5986419919036103742, guid: 2f6d6493c0f4a0844bec749430d3fed6, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: ThermalRelay_FR_380V
+    defaultSprite: {fileID: 21300000, guid: 7fc15c83a9464042895c7671456101d6, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 309298587555656595, guid: 7b5f41dd72ad9ea409ef030c38573cd2, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Contactor_KM_220V
+    defaultSprite: {fileID: 21300000, guid: ee1ce2f5c6b844f0a90581302b081920, type: 3}
+    activeSprite: {fileID: 21300000, guid: 84dd8d507a244be38f8a8fc0211bda58, type: 3}
+    visualPrefab: {fileID: 1000001, guid: b1d84e06269187640b61d28060a4e28d, type: 3}
+    terminalPositionOverrides:
+    - terminalId: L1
+      localPosition: {x: -52.8, y: 128.7}
+    - terminalId: L2
+      localPosition: {x: 1.2, y: 128.7}
+    - terminalId: L3
+      localPosition: {x: 54.9, y: 128.7}
+    - terminalId: T1
+      localPosition: {x: -53.1, y: -131.1}
+    - terminalId: T2
+      localPosition: {x: 0.9, y: -131.1}
+    - terminalId: T3
+      localPosition: {x: 54.6, y: -131.1}
+    - terminalId: A1
+      localPosition: {x: -106.2, y: 68.4}
+    - terminalId: A2
+      localPosition: {x: 105.6, y: 68.1}
+    - terminalId: 13
+      localPosition: {x: -106.2, y: 1.2}
+    - terminalId: 14
+      localPosition: {x: 105.6, y: 1.2}
+    - terminalId: 21
+      localPosition: {x: -106.2, y: -65.1}
+    - terminalId: 22
+      localPosition: {x: 105.6, y: -65.1}
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Fuse_1P
+    defaultSprite: {fileID: 21300000, guid: c1bae0b534ee49dab986c23d57ccbed3, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 5103529, guid: 056b36f71065de947977f2d3937bc017, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_Start_NO
+    defaultSprite: {fileID: 21300000, guid: ed2c8580f49d477e9301a823feb53cf5, type: 3}
+    activeSprite: {fileID: 21300000, guid: 577031c3de9d43c7a9c5b009bbfa5b3b, type: 3}
+    visualPrefab: {fileID: 2000001, guid: 9e3e1c8abfcb4113a5b4d8132e0a6b41, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: LimitSwitch_SelfLock
+    defaultSprite: {fileID: 21300000, guid: a21ba42423d84de6a868cf6da9a96ece, type: 3}
+    activeSprite: {fileID: 21300000, guid: 123e648a0c5a4bbea2e87ed137ba42f3, type: 3}
+    visualPrefab: {fileID: 4883515, guid: 3c384108380542dd8e514bef3c5ae474, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Timer_OffDelay_220V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: Tool_Oscilloscope
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: AC_ThreePhase_Power
+    defaultSprite: {fileID: 21300000, guid: 31a42bc9cf2646eda9e9579f2f2e6a11, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 3000001, guid: 4830ba0ad33c47a5ac623fdbac942adc, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Two_Way_Switch
+    defaultSprite: {fileID: 21300000, guid: f3f8fee2372d8314ea300a2b3875b343, type: 3}
+    activeSprite: {fileID: 21300000, guid: 52eabc717dd36b7408c5b4bbf08269c2, type: 3}
+    visualPrefab: {fileID: 7233154, guid: 63665c15f3d24754a32ac297273cc912, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_SelfLock_Green_SB
+    defaultSprite: {fileID: 21300000, guid: a5809dfcf72943d9947cba01e891d632, type: 3}
+    activeSprite: {fileID: 21300000, guid: 4ea816070489479097aa57e9a9e82fe0, type: 3}
+    visualPrefab: {fileID: 5000001, guid: 533e80eba6ce4ba39b32c87dac6bdc1f, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: LimitSwitch_Compound
+    defaultSprite: {fileID: 21300000, guid: a21ba42423d84de6a868cf6da9a96ece, type: 3}
+    activeSprite: {fileID: 21300000, guid: 123e648a0c5a4bbea2e87ed137ba42f3, type: 3}
+    visualPrefab: {fileID: 4883515, guid: a68043c79f14a9842957d136f8ff94a5, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Motor_ThreePhase_380V
+    defaultSprite: {fileID: 21300000, guid: 38b99cc169da4b81853fb46d5b998bc8, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 930045941548144679, guid: 67c855d0d7d63464783c04e07fe5e3fd, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Indicator_Yellow_220V
+    defaultSprite: {fileID: 21300000, guid: 4f9efe65092d6014593791502e54b52f, type: 3}
+    activeSprite: {fileID: 21300000, guid: 7044db7f70c40b24d9c8358a6e51a354, type: 3}
+    visualPrefab: {fileID: 8316116495101498268, guid: c5c09cee6c8ab9a4ab3a809944d3ca8d, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Breaker_3P
+    defaultSprite: {fileID: 21300000, guid: 68fe1ab3991efc5448fafb0e20089def, type: 3}
+    activeSprite: {fileID: 21300000, guid: b45ad577dc1b7814babe316d5f79005f, type: 3}
+    visualPrefab: {fileID: 204454791685350563, guid: 38a69c9cbfd34ce418ec898a8ec72fbb, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Single_Control_Switch
+    defaultSprite: {fileID: 21300000, guid: f7e5e8fdd14f4fc448833805cd540c15, type: 3}
+    activeSprite: {fileID: 21300000, guid: 335de9f3f9725d348816d839e8b95f7f, type: 3}
+    visualPrefab: {fileID: 7688726, guid: 55351e30792844be93064d13f7e8ca96, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_Compound_Green_SB
+    defaultSprite: {fileID: 21300000, guid: 3a6563eb4a5844648e1c4b071f52afab, type: 3}
+    activeSprite: {fileID: 21300000, guid: ad9204aa6ee6471593490dd5ba815953, type: 3}
+    visualPrefab: {fileID: 4000001, guid: c3d5e1c740ad4af8b262972dfc09ad75, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: SwitchPower_220V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: Fan_220V
+    defaultSprite: {fileID: 21300000, guid: 4f512961d7384454b2f260ff71fb821c, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 268035670902763036, guid: 6533e26b45167474ea21c59cf64e4efb, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: TerminalBlock_3H
+    defaultSprite: {fileID: 21300000, guid: 8f439d6b0147405890fcad5017364319, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 352954540086759940, guid: 753d3af402383ab4eb329db7a3adeb32, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Fuse_3P
+    defaultSprite: {fileID: 21300000, guid: 712169193754497fa07b2ccc204eec76, type: 3}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 5931115, guid: 37496f8788c83d346bdbd439b1e97c44, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Button_Compound_SB
+    defaultSprite: {fileID: 21300000, guid: a60255bdf5e3423f8c157f081bc1492e, type: 3}
+    activeSprite: {fileID: 21300000, guid: 9690683457204cfab1690db1338c0e46, type: 3}
+    visualPrefab: {fileID: 4000001, guid: fc9a22c3dd064f6e80b9115ce091c3bd, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: EmergencyStop_NC
+    defaultSprite: {fileID: 21300000, guid: fe796e3d481b9d248887d583e125585a, type: 3}
+    activeSprite: {fileID: 21300000, guid: 08890a649c4296d43903a394b441b889, type: 3}
+    visualPrefab: {fileID: 7168103130144774566, guid: 51a175fd345d4f14a90b5620758d92f3, type: 3}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 1
+    terminalBindingsComplete: 1
+  - definitionName: Timer_OffDelay_380V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: StepperMotor_24V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: PLC_Output_24V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1
+  - definitionName: StepperDriver_24V
+    defaultSprite: {fileID: 0}
+    activeSprite: {fileID: 0}
+    visualPrefab: {fileID: 0}
+    terminalPositionOverrides: []
+    terminalBindingsValidated: 0
+    terminalBindingsComplete: 1

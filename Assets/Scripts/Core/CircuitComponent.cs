@@ -15,7 +15,7 @@ namespace ElectricalSim.Core
     public sealed class CircuitComponent : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerDownHandler, IPointerUpHandler
     {
         // KM 视觉试点。关闭后恢复默认矩形外观。
-        private const bool useExperimentalKmVisualPrefab = true;
+        private const bool useExperimentalKmVisualPrefab = false;
         private const bool showExperimentalKmTerminalDebugMarkers = false;
         private const string experimentalKmVisualDefinitionName = "Contactor_KM_380V";
         private const string experimentalKmVisualAssetPath = "Assets/Prefab/Contactor_KM_380V_Visual.prefab";
@@ -740,79 +740,9 @@ namespace ElectricalSim.Core
 
         private static bool TryGetExperimentalKmCoordinateTablePosition(string terminalId, out Vector2 localPosition)
         {
-            const float prefabWidth = 240f;
-            const float prefabHeight = 300f;
-            var x = 0f;
-            var y = 0f;
-
-            if (string.Equals(terminalId, "L1", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 224f;
-                y = 71f;
-            }
-            else if (string.Equals(terminalId, "L2", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 404f;
-                y = 71f;
-            }
-            else if (string.Equals(terminalId, "L3", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 583f;
-                y = 71f;
-            }
-            else if (string.Equals(terminalId, "T1", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 223f;
-                y = 937f;
-            }
-            else if (string.Equals(terminalId, "T2", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 403f;
-                y = 937f;
-            }
-            else if (string.Equals(terminalId, "T3", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 582f;
-                y = 937f;
-            }
-            else if (string.Equals(terminalId, "A1", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 46f;
-                y = 272f;
-            }
-            else if (string.Equals(terminalId, "A2", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 752f;
-                y = 273f;
-            }
-            else if (string.Equals(terminalId, "13", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 46f;
-                y = 496f;
-            }
-            else if (string.Equals(terminalId, "14", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 752f;
-                y = 496f;
-            }
-            else if (string.Equals(terminalId, "21", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 46f;
-                y = 717f;
-            }
-            else if (string.Equals(terminalId, "22", System.StringComparison.OrdinalIgnoreCase))
-            {
-                x = 752f;
-                y = 717f;
-            }
-            else
-            {
-                localPosition = Vector2.zero;
-                return false;
-            }
-
-            localPosition = new Vector2((x / 800f - 0.5f) * prefabWidth, (0.5f - y / 1000f) * prefabHeight);
-            return true;
+            localPosition = Vector2.zero;
+            return VisualPrefabRegistry.TryGetConfig(experimentalKmVisualDefinitionName, out var config) &&
+                   config.TryGetTerminalPositionOverride(terminalId, out localPosition);
         }
 
         private void TryApplyExperimentalButtonVisualPrefab()
