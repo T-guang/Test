@@ -31,3 +31,13 @@ Thumbs.db
 
 # 系统模板自动备份文件
 /Assets/Resources/Blueprints/Templates/Backups/
+
+# InternalTest1 本地传输与生成审计输出，不属于 Unity 正式资源。
+/gpt/
+/test/
+/_Incoming/
+/Reports/
+/temp_demo.cs
+/temp_demo_2.cs
+/code_analysis_summary.json
+/current_git_info.txt
