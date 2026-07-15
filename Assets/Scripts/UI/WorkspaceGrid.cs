@@ -26,12 +26,14 @@ namespace ElectricalSim.UI
             ApplyDesignDefaults();
         }
 
+#if UNITY_EDITOR
         protected override void OnValidate()
         {
             base.OnValidate();
             raycastTarget = false;
             ApplyDesignDefaults();
         }
+#endif
 
         private void ApplyDesignDefaults()
         {
