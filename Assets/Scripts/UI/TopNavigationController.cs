@@ -72,7 +72,7 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
-            // 本地用户兼容视图会在 Awake 隐藏旧入口；在全部 Awake 完成后统一将其绑定为全局退出，避免重复创建导航按钮。
+            // 在全部 Awake 完成后统一补建或复用全局退出按钮，避免重复创建导航按钮。
             EnsureExitButton();
         }
 

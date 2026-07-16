@@ -6,8 +6,9 @@ namespace ElectricalSim.Core
 {
     /// <summary>
     /// 保存元件名称到运行时 Sprite 与 Visual Prefab 的序列化引用。
-    /// 该资源位于 Resources 根目录，使 Editor 与 Player 使用相同的视觉来源，
-    /// 而不依赖 AssetDatabase 或 Assets 路径字符串。
+    /// 该资源位于 Resources 根目录，是 Windows Player 的运行时视觉引用来源，
+    /// 也是 Editor 运行态的首选来源；Catalog 缺失或未命中时，
+    /// 部分 Editor 调用方仍保留 AssetDatabase 兼容回退。
     /// </summary>
     public sealed class ComponentVisualRuntimeCatalog : ScriptableObject
     {
