@@ -7,6 +7,18 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 仅在 Unity Editor 中构建 Windows Player 可读取的 ComponentVisualRuntimeCatalog 资产。
+    /// 菜单 <c>Tools/ElectricalSim/Rebuild Runtime Visual Catalog</c> 扫描 <c>Assets/Data</c> 内的 ComponentDefinition；
+    /// 默认 Sprite 优先来自 <c>ComponentDefinition.sprite</c>，VisualPrefabRegistry 提供 Visual Prefab、激活 Sprite、
+    /// 默认 Sprite 兜底路径和端子位置覆盖。Catalog 条目当前以 <c>definition.name</c> 为键，写入或覆盖
+    /// <c>Assets/Resources/ComponentVisualRuntimeCatalog.asset</c> 后调用 SaveAssets 与 Refresh。
+    ///
+    /// Catalog 是 Palette、百科和画布视觉在 Player 中的资源引用目录；Builder 本身不进入 Player。重复 definitionName、
+    /// 缺失 Sprite/Prefab 或不完整端子绑定会写入 Console 警告，但这些情况与 ComponentDefinition 缺失并非同一问题。
+    /// 生成成功不等于视觉已经过运行态验证；修改扫描范围、资源路径、DefinitionName 键或 Registry 映射都可能影响 Player，
+    /// 应退出 Play Mode 后执行，并在执行完成后审查 Catalog 资产差异。该工具不修改当前场景、模板或 Prefab。
+    /// </summary>
     public static class ComponentVisualRuntimeCatalogBuilder
     {
         private const string CatalogAssetPath = "Assets/Resources/ComponentVisualRuntimeCatalog.asset";
@@ -15,6 +27,7 @@ namespace ElectricalSim.EditorTools
         [MenuItem("Tools/ElectricalSim/Rebuild Runtime Visual Catalog")]
         public static void Rebuild()
         {
+            // ReplaceEntries 会整体替换 Catalog 条目；不要把本菜单当作增量、只读检查使用。
             var catalog = LoadOrCreateCatalog();
             var entries = new List<ComponentVisualRuntimeCatalog.Entry>();
             var names = new HashSet<string>(StringComparer.Ordinal);
@@ -114,6 +127,7 @@ namespace ElectricalSim.EditorTools
 
         private static ComponentVisualRuntimeCatalog LoadOrCreateCatalog()
         {
+            // 资产不存在时才创建；既有资产会在 Rebuild 中被新扫描结果覆盖。
             var catalog = AssetDatabase.LoadAssetAtPath<ComponentVisualRuntimeCatalog>(CatalogAssetPath);
             if (catalog != null)
             {

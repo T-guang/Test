@@ -14,6 +14,19 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 仅供 Unity Editor 维护 Demo 场景和初始演示资产的生成工具。
+    /// 菜单 <c>Tools/Electrical Demo/Build Demo Scene</c> 会新建空场景、构建 EventSystem/Camera/Canvas 及其依赖对象，
+    /// 然后保存为 <c>Assets/Scenes/Demo.unity</c>；当前实现还会确保若干 Assets 目录存在、创建或更新 ComponentDefinition、
+    /// 三相电源图片、<c>Assets/Blueprints/BlueprintCatalog.csv</c> 与缺失的图纸占位图片，并保存和刷新 AssetDatabase。
+    ///
+    /// 此入口具有覆盖性和破坏性：它以 Single 模式切换到新场景，并删除固定列表中的旧 Definition 资产；执行前必须确认
+    /// 当前未保存场景和目标资产差异可被替换。它不修改 Build Settings，且不是 Player 运行时数据源；生成完成只表示
+    /// 写入流程结束，仍需人工检查场景引用、页面交互和回归结果。当前代码未在入口显式限制 Play Mode，运行前应人工确认
+    /// 已退出 Play Mode。当前 Builder 仍会创建 LoginController 和登录页面相关对象，与当前已移除登录入口的正式产品状态可能不一致；
+    /// 执行前需重新确认该生成器是否仍适用于当前 Demo 场景。文件系统或 AssetDatabase 操作失败会由 Unity/调用链报告，
+    /// 后续调整前须保持既有路径、对象命名和生成顺序。
+    /// </summary>
     public static class DemoSceneBuilder
     {
         private const string DataFolder = "Assets/Data";
@@ -38,6 +51,7 @@ namespace ElectricalSim.EditorTools
         [MenuItem("Tools/Electrical Demo/Build Demo Scene")]
         public static void BuildDemoScene()
         {
+            // 此菜单会创建并保存实际资产与 Demo.unity，不是可安全重复运行的只读预览。
             EnsureFolders();
             var definitions = BuildDefinitions();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -107,6 +121,7 @@ namespace ElectricalSim.EditorTools
 
         private static void DeleteObsoleteDefinitions()
         {
+            // 固定旧资产清单属于生成契约；变更前须确认不会误删仍被现有模板或场景引用的 Definition。
             var obsoleteAssets = new[] { "Single_Switch", "Fuse", "Push_Button", "Contactor_Coil", "Motor_220V" };
             foreach (var assetName in obsoleteAssets)
             {

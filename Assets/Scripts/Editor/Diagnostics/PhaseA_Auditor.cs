@@ -6,16 +6,28 @@ using UnityEngine;
 using UnityEngine.UI;
 using ElectricalSim.UI.CommonTools;
 
+/// <summary>
+/// 仅在 Unity Editor 中导出 Phase A 常用工具页面视觉组件审计 CSV 的辅助工具。
+/// 两个菜单入口 <c>Electrical/Diagnostics/Phase A Before Audit</c> 与 <c>Electrical/Diagnostics/Phase A Final Audit</c>
+/// 都会查找当前加载场景中的 CommonToolsPageController；缺失时当前实现创建 <c>TestCommonTools</c>、调用 BuildPage 和布局刷新，
+/// 再遍历 Image、Shadow、Outline、Mask 及 RectTransform 信息，写入项目根目录 <c>Reports/UI</c> 下的指定 UTF-8 BOM CSV。
+///
+/// 它不使用 AssetDatabase、不保存场景、不修改模板或 Build Settings，也不是 Windows Player 功能；但创建测试对象和重建页面会
+/// 影响当前内存场景，且该类不负责清理。审计输出是当前 Editor 内存场景中的动态 UI 层级快照，不替代人工回归、Build 或 Player 验证。
+/// 新增常用工具模块、组件类型或审计字段时，需同步审查遍历范围和 CSV Schema；未处理的写入或页面构建异常会中断调用并由 Console 定位。
+/// </summary>
 public static class PhaseA_Auditor
 {
     private static void GenerateAudit(string filename)
     {
+        // 入口共用此生成路径；它会覆盖同名审计 CSV，运行前需确认报告目录中的既有证据是否应保留。
         var controller = Object.FindObjectOfType<CommonToolsPageController>(true);
         if (controller == null)
         {
             var go = new GameObject("TestCommonTools");
             controller = go.AddComponent<CommonToolsPageController>();
-            // Add a mock TopNavigationController or PageRouter if needed, but CommonToolsPageController works standalone mostly
+            // 缺少控制器时仅创建最小测试宿主；本工具不额外注入导航控制器，
+            // 页面构建能力以当前 CommonToolsPageController.BuildPage 实现为准。
         }
 
         controller.gameObject.SetActive(true);

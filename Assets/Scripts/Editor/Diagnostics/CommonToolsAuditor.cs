@@ -6,11 +6,23 @@ using UnityEngine;
 using UnityEngine.UI;
 using ElectricalSim.UI.CommonTools;
 
+/// <summary>
+/// 仅在 Unity Editor 中审计 CommonToolsPageController 动态页面层级的轻量诊断工具。
+/// 菜单 <c>Electrical/Diagnostics/Audit Common Tools Page</c> 查找当前已加载场景中的控制器；若找不到，当前实现会创建
+/// 名为 <c>TestCommonTools</c> 的临时 GameObject 并调用 BuildPage，然后遍历其 Transform、Image、Mask、Shadow 与 Outline
+/// 组件，将结果写入进程当前工作目录下的 <c>CommonToolsAuditResult.txt</c>。
+///
+/// 该工具不使用 AssetDatabase、不保存场景或生成正式 Assets，但并非完全只读：缺少控制器时会改变当前内存场景对象并且不在
+/// 本工具内销毁。没有 Play Mode 限制；执行前应确认当前场景允许该临时对象存在。报告未发现可疑组件或命名，只代表本脚本
+/// 当前遍历范围内未发现对应线索，不代表常用工具页面、交互或 Player 行为已经完整验证。文件写入失败会由调用异常暴露，
+/// 完成信息写入 Console。
+/// </summary>
 public static class CommonToolsAuditor
 {
     [MenuItem("Electrical/Diagnostics/Audit Common Tools Page")]
     public static void RunAudit()
     {
+        // 为获得动态页面层级，当前实现会直接激活并重建控制器；不要在未确认场景状态时运行。
         var controller = Object.FindObjectOfType<CommonToolsPageController>(true);
         if (controller == null)
         {
