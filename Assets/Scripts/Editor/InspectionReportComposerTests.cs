@@ -9,11 +9,20 @@ using UnityEngine;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 仅在 Unity Editor 运行的 InspectionReportComposer 模型契约测试。
+    /// 菜单入口使用内存构造的 Validation Issue 和 Report Block 夹具，验证类型、严重等级、RuleId 排序等
+    /// 格式化边界；不加载场景、不依赖 18 张模板，也不写入快照、资产或报告文件。
+    ///
+    /// 失败会累计后抛出异常并写入 Console。该测试不能替代真实模板基线；修改 Block 类型、Section 语义、
+    /// Severity 或 RuleId 的呈现约束前，仍需同时审查 Inspector 快照工具产生的差异。
+    /// </summary>
     public static class InspectionReportComposerTests
     {
         [MenuItem("Tools/Tests/运行 Inspector 报告模型测试")]
         public static void RunTests()
         {
+            // 这里的测试夹具只覆盖报告模型契约，不把其结果写成新的基线。
             var failures = new List<string>();
             Run("无 Validation Issue 为 Success", TestNoValidationIssues, failures);
             Run("Warning Issue 使用 Warning", TestWarningValidationIssue, failures);

@@ -11,6 +11,16 @@ using UnityEngine;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 仅在 Editor 菜单执行的系统模板结构完整性检查器。
+    /// 它读取模板 Catalog、Resources 下模板 JSON 与 ComponentDefinition，核对 Catalog 路径、实例、端子和导线引用，
+    /// 并把检查事实、警告和错误写入 <c>Assets/Reports/template_integrity_report.md</c>；不会改写模板 JSON、Definition、
+    /// 场景或 Prefab。报告导入由现有 AssetDatabase.ImportAsset 调用完成。
+    ///
+    /// 本工具检查数据引用完整性，不评价电气原理，也不能替代 Play Mode 的 18 模板行为基线。
+    /// 报告属于生成输出，提交前必须审查内容差异而非仅接受时间或元数据变化。已捕获的 Catalog 与模板解析问题会记录在报告结果中，
+    /// 校验摘要会输出到 Console；未被局部处理的文件系统或扫描异常可能中断本次检查，需结合 Console 定位。
+    /// </summary>
     public static class TemplateIntegrityChecker
     {
         private const string TemplateFolder = "Assets/Resources/Blueprints/Templates";
@@ -31,6 +41,7 @@ namespace ElectricalSim.EditorTools
         [MenuItem("Tools/电工仿真/校验图纸模板完整性")]
         public static void CheckTemplates()
         {
+            // 扫描与报告写入是显式菜单动作；不要将其接入模板加载或 Player 初始化流程。
             var definitions = LoadDefinitions();
             var catalogResult = new CheckResult { Name = "template_catalog.json", Path = CatalogPath };
             var catalog = LoadCatalog(catalogResult);

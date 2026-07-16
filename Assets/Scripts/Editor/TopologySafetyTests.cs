@@ -9,11 +9,20 @@ using ElectricalSim.Core.Validation;
 
 namespace ElectricalSim.Editor
 {
+    /// <summary>
+    /// 仅在 Editor 菜单运行的拓扑安全与负向扰动回归夹具。
+    /// 该类用内存测试电路覆盖小型自锁/互锁环路、复杂拓扑上限和若干安全规则边界；
+    /// 不加载 18 张标准模板、不写入基线或报告，也不属于运行时产品功能。
+    ///
+    /// 测试用于发现分析或 Validation 的行为漂移，而不是生成新的期望结果。拓扑规模、超时保护、
+    /// RuleId 和断言约束均需谨慎变更；失败写入 Console，真实模板覆盖仍由独立基线工具负责。
+    /// </summary>
     public static class TopologySafetyTests
     {
         [MenuItem("Tools/Tests/运行拓扑安全与负向扰动测试")]
         public static void RunTests()
         {
+            // 用例在内存中构造；不要把这里的负向扰动当作标准模板接线数据。
             UnityEngine.Debug.Log("==== 开始执行拓扑安全测试 ====");
             int passed = 0;
             int total = 9;

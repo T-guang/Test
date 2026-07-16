@@ -16,6 +16,9 @@ namespace ElectricalSim.EditorTools.Testing
     /// 从当前 ComponentDefinition、Template Catalog、模板 JSON 和 Runtime Visual Catalog 生成测试资料。
     /// 只读取项目资产并写入 Docs/TestManual，不改写模板、Definition、Prefab 或运行时数据。
     /// </summary>
+    // 维护边界：仅在 Editor 菜单读取 Assets/Data、Catalog、模板 JSON 与 Runtime Visual Catalog，写入 Docs/TestManual 的 00/01/02 和模板明细。
+    // 当前实现不依赖打开场景或 Play Mode，不改写模板、Definition、Prefab、Visual Catalog 或运行时状态，完成后仅刷新 AssetDatabase。
+    // 原始配置与依据 terminalId/角色生成的保守推导必须在输出中区分；CSV/Markdown 的稳定排序、列顺序和 UTF-8 编码不能随意调整。
     public static class GenerateTestManualData
     {
         private const string DefinitionFolder = "Assets/Data";
@@ -26,6 +29,7 @@ namespace ElectricalSim.EditorTools.Testing
         [MenuItem("Tools/ElectricalSim/Testing/Generate Terminal And Wiring Documents")]
         public static void Generate()
         {
+            // 不要将此显式文档生成过程接入模板加载、测试夹具或 Windows Player 构建流程。
             try
             {
                 var data = Collect();

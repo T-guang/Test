@@ -18,6 +18,10 @@ namespace ElectricalSim.EditorTools.Testing
     /// 在内存中复制标准模板并搜索最小单步扰动的 Validation 触发方式。
     /// 不调用模板写回、保存服务或场景保存；搜索不到稳定端点时明确输出为不适合人工模板测试。
     /// </summary>
+    // 维护边界：仅在 Editor 中读取真实 Catalog、模板 JSON 与 Definition，在内存 Template DTO 和临时对象上搜索候选；
+    // 不写回模板、保存服务或场景。只有同一候选连续三次稳定产生目标 RuleId 才能进入人工测试资料，否则保留自动测试覆盖。
+    // 实例 ID、DefinitionName、terminalId、W-xxx 与线色必须来自真实项目数据，不能用通用电工知识补全；
+    // 菜单会写入 Docs/TestManual 的确认政策和搜索结果并刷新 AssetDatabase，输出格式与目标规则调整前必须审查差异。
     public static class NegativePerturbationSearchTool
     {
         private const string CatalogPath = "Assets/Resources/Blueprints/Templates/template_catalog.json";
@@ -33,6 +37,7 @@ namespace ElectricalSim.EditorTools.Testing
         [MenuItem("Tools/ElectricalSim/Testing/Search Negative Perturbations")]
         public static void Search()
         {
+            // 候选扰动始终停留在内存副本；此入口只更新测试资料，不修复或接受标准模板数据。
             try
             {
                 var input = LoadInput();

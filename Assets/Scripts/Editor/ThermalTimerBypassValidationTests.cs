@@ -6,11 +6,20 @@ using ElectricalSim.Core.Validation;
 
 namespace ElectricalSim.Editor
 {
+    /// <summary>
+    /// 仅在 Editor 菜单运行的热继主回路与时间继电器控制旁路 Validation 回归夹具。
+    /// 当前实现以 CircuitTestFactory 的内存组件和导线构造目标拓扑，再交给 CircuitValidationService；
+    /// 不依赖已打开场景或 18 张标准模板，也不会写入模板、快照、报告或 Player 资源。
+    ///
+    /// 用例的 RuleId 触发/不触发预期和拓扑边界用于防止规则漂移。当前夹具不验证 Severity；
+    /// 严重等级仍需结合 Validation 规则快照和真实模板基线复核。失败仅写入 Console。
+    /// </summary>
     public static class ThermalTimerBypassValidationTests
     {
         [MenuItem("Tools/Tests/运行热继主回路与时间继电器旁路测试")]
         public static void RunTests()
         {
+            // 每个用例自行创建输入，避免计时或保护状态在用例之间残留。
             Debug.Log("==== 开始执行热继主回路与时间继电器旁路测试 ====");
             var passed = 0;
             var total = 14;

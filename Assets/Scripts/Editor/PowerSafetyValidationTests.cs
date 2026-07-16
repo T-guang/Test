@@ -6,11 +6,20 @@ using ElectricalSim.Core.Validation;
 
 namespace ElectricalSim.Editor
 {
+    /// <summary>
+    /// 仅在 Editor 菜单运行的通用电源安全 Validation 回归夹具。
+    /// 测试通过 CircuitTestFactory 在内存中构造元件和导线，再调用当前 CircuitValidationService；
+    /// 不加载或改写标准模板、不写快照、不保存场景，也不属于 Windows Player 功能。
+    ///
+    /// Console 中逐项 PASS/FAIL 是本组规则夹具的结果，不能替代 18 张真实模板基线。RuleId、Severity、
+    /// 候选拓扑和断言条件是兼容边界；修改规则后应先审查本测试与模板基线的差异。
+    /// </summary>
     public static class PowerSafetyValidationTests
     {
         [MenuItem("Tools/Tests/运行通用电源安全规则测试")]
         public static void RunTests()
         {
+            // 每个用例独立构造内存拓扑，避免测试之间共享 Workspace 或导线状态。
             Debug.Log("==== 开始执行通用电源安全规则测试 ====");
             var passed = 0;
             var total = 20;

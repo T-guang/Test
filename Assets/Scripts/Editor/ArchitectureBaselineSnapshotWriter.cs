@@ -1,4 +1,4 @@
-// Editor-only regression baseline tool. It intentionally uses the production template spawn path.
+// 仅供 Editor 使用的回归基线工具；采集时刻意复用生产模板生成路径，避免用测试夹具替代 18 张真实模板。
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
@@ -19,6 +19,16 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 采集或核对 18 张标准模板的结构、检查报告模型和 Validation 规则基线。
+    /// 菜单生成入口会写入 <c>Assets/EditorTests/Baselines/V2.3.9.1</c> 下的 JSON 并刷新 AssetDatabase；
+    /// 验证入口只读取既有快照并报告差异，不会接受或覆盖新的期望结果。
+    ///
+    /// 当前采集依赖 Play Mode 中的 Workspace、LocalInspectorPanel 与生产模板生成流程，不能以本文件内的
+    /// Inspector 模型契约夹具替代真实模板取证。快照是行为漂移的比较基线，不是运行时数据源；
+    /// Schema、报告 Section/Block 顺序、RuleId、Severity 及模板数量的变动都必须在审查差异后显式接受。
+    /// 失败通过 Console 和异常日志暴露。本工具不修改模板 JSON、规则实现或 Player 功能。
+    /// </summary>
     public static class ArchitectureBaselineSnapshotWriter
     {
         private const string CatalogPath = "Blueprints/Templates/template_catalog";
@@ -88,6 +98,7 @@ namespace ElectricalSim.EditorTools
 
         private static void Run(bool writeBaseline)
         {
+            // 生成与验证共用真实模板采集路径；仅 writeBaseline=true 的明确菜单操作允许写入期望快照。
             if (!EditorApplication.isPlaying)
             {
                 EditorUtility.DisplayDialog("架构重构基线", "请先进入 Play Mode，并等待主界面和默认示例加载完成。", "知道了");

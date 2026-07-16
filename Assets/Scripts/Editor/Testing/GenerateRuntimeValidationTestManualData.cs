@@ -16,6 +16,10 @@ namespace ElectricalSim.EditorTools.Testing
     /// 从 Catalog、模板 JSON、静态/报告快照与当前规则快照生成运行和负向测试资料。
     /// 本工具只读取项目事实并写入 Docs/TestManual；未被快照或代码直接证明的人工操作顺序会明确标为需项目负责人确认。
     /// </summary>
+    // 维护边界：菜单会读取 Catalog、模板与三类既有快照，写入 Docs/TestManual 的 03/04/05 文档并调用 AssetDatabase.Refresh。
+    // 它不要求当前场景或 Play Mode，不改写模板、Definition、快照或 Player 数据。快照只用于既有行为的证据映射，
+    // 不是运行时数据源；无法由代码或快照证实的步骤必须保留为负责人确认，不能按通用电工知识补全端点。
+    // CSV/Markdown 字段顺序与 UTF-8 写入属于测试资料兼容约束，异常由 Console 报告；生成前后应人工审查文档差异。
     public static class GenerateRuntimeValidationTestManualData
     {
         private const string CatalogPath = "Assets/Resources/Blueprints/Templates/template_catalog.json";
@@ -28,6 +32,7 @@ namespace ElectricalSim.EditorTools.Testing
         [MenuItem("Tools/ElectricalSim/Testing/Generate Runtime And Validation Documents")]
         public static void Generate()
         {
+            // 仅显式菜单调用会改写 Docs/TestManual；不会接受或重写任何基线快照。
             try
             {
                 var data = Collect();

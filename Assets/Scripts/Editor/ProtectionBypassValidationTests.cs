@@ -6,11 +6,20 @@ using ElectricalSim.Core.Validation;
 
 namespace ElectricalSim.Editor
 {
+    /// <summary>
+    /// 仅在 Editor 菜单运行的保护旁路、接触器旁路和正反转互锁缺失 Validation 回归夹具。
+    /// 用例使用 CircuitTestFactory 的内存电路调用 CircuitValidationService，不读取 18 张标准模板，
+    /// 不写入资产、快照或报告，也不修改当前场景。
+    ///
+    /// 本工具用于保护相关 RuleId 的稳定触发和误报边界验证；它不能代替真实模板回归。
+    /// 规则标题、Severity、测试端点与断言条件均应保持稳定，失败通过 Console 输出。
+    /// </summary>
     public static class ProtectionBypassValidationTests
     {
         [MenuItem("Tools/Tests/运行保护旁路与正反转互锁缺失测试")]
         public static void RunTests()
         {
+            // 测试夹具彼此隔离；不要把这里构造的实例或端点写回模板数据。
             Debug.Log("==== 开始执行保护旁路与正反转互锁缺失测试 ====");
             var passed = 0;
             var total = 12;

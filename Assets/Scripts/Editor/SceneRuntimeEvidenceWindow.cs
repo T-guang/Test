@@ -1,4 +1,4 @@
-// Editor-only, read-only runtime evidence capture for Demo.unity scene-object provenance.
+// 仅供 Editor 使用的 Demo.unity 运行态取证窗口；读取 Play Mode 对象与报告来源，并按用户操作阶段导出证据 JSON。
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
@@ -16,6 +16,15 @@ using UnityEngine;
 
 namespace ElectricalSim.EditorTools
 {
+    /// <summary>
+    /// 采集 Demo 场景 Play Mode 中对象数量、Workspace 输入、分析/Validation 结果和检查助手报告来源的取证窗口。
+    /// 菜单打开窗口后依赖当前运行场景及人工填写的阶段名；采集本身不保存 Demo.unity、不删除或移动场景对象。
+    /// 导出操作会写入 <c>Assets/EditorTests/Baselines/V2.3.9.1/DemoSceneRuntimeEvidence.json</c> 并调用
+    /// AssetDatabase.Refresh，重新读取操作只加载既有 JSON。
+    ///
+    /// 取证记录是当次运行状态的事实性观察，不是模板基线或 Player 数据源。窗口在启用期间监听 Console
+    /// Error 计数，禁用时解除监听；采集失败通过 Console 异常日志报告。正式回归前应退出 Play Mode 后再修改场景或资产。
+    /// </summary>
     public sealed class SceneRuntimeEvidenceWindow : EditorWindow
     {
         private const string BaselineAssetDirectory = "Assets/EditorTests/Baselines/V2.3.9.1";
@@ -307,6 +316,7 @@ namespace ElectricalSim.EditorTools
 
         private void WriteEvidence()
         {
+            // 只有显式导出才写入取证文件；采集阶段始终保留在内存 bundle 中。
             if (bundle == null || bundle.stages.Count == 0)
             {
                 EditorUtility.DisplayDialog("Demo 场景运行态取证", "请先至少采集一个运行态阶段。", "知道了");
