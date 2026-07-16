@@ -9,9 +9,11 @@ using ElectricalSim.Core;
 namespace ElectricalSim.UI
 {
     /// <summary>
-    /// 负责用户图纸的保存、枚举、删除、读取与恢复：只从活动 Workspace 采集数据，写入 Application.persistentDataPath/SavedBlueprints。
-    /// 保存实例身份、布局、参数和导线端点，并通过元件 catalog 恢复；不负责系统模板 Catalog、Resources 写回或保存/导入界面视觉。
-    /// 必须保持历史兼容、instanceId 与用户数据路径稳定；修改后需回归保存、读取、删除、导入和重新启动读取。
+    /// 用户图纸保存与恢复服务：从当前活动 Workspace 采集元件和活动导线，使用 DrawingDto 作为用户图纸 JSON 根契约，
+    /// 写入 Application.persistentDataPath/SavedBlueprints 对应的应用本地数据目录，并在读取或外部导入时通过 catalog 恢复活动画布。
+    /// 系统模板 JSON、模板目录 DTO、Workspace 撤销/重做 DrawingSnapshot 与 SavedBlueprintInfo 列表元数据均不是同一数据契约；
+    /// 本类不负责系统模板 Catalog、Resources 写回或保存/导入界面的视觉。修改 instanceId、definitionName、端子关联字段或路径前，
+    /// 需同步复核保存、导入、模板和 Workspace 读取端，并回归保存、读取、删除、导入与重新启动读取。
     /// </summary>
     public sealed class SaveLoadService : MonoBehaviour
     {
@@ -42,6 +44,7 @@ namespace ElectricalSim.UI
 
         public bool SaveAs(string documentName, bool overwrite, out SavedBlueprintInfo savedInfo, out bool exists, out string error)
         {
+            // 此入口从活动 Workspace 创建用户图纸 DTO 后直接写入目标文件；当前实现捕获写入异常，但不声明原子写入或事务回滚。
             savedInfo = null;
             error = null;
             exists = false;
@@ -93,6 +96,8 @@ namespace ElectricalSim.UI
 
         public void Load()
         {
+            // 该无参入口只兼容读取 Application.persistentDataPath 下的旧版单文件，
+            // 不负责从 SavedBlueprints 目录选择或枚举图纸。
             if (!File.Exists(LegacySavePath))
             {
                 workspace.SetStatus("未找到旧版保存图纸。请使用导入图纸选择已保存文件。");
@@ -139,6 +144,8 @@ namespace ElectricalSim.UI
 
         public bool LoadFromJsonString(string jsonContent, out string error, string sourceFilePath = null)
         {
+            // 文件和外部导入共用此解析入口。清空画布前先校验 DTO、Definition 与端子引用。
+            // 当前校验会检查必需字段、Definition、元件引用和端子引用；本路径未单独拒绝重复 instanceId，DrawingDto 自身也不保证实例 ID 唯一。
             error = null;
             if (workspace == null)
             {
@@ -232,7 +239,8 @@ namespace ElectricalSim.UI
 
             try
             {
-                // 验证通过后才进入恢复流程；当前实现会报告生成异常，但不宣称对已清空画布执行完整事务回滚。
+                // 验证通过后才进入恢复流程；
+                // 恢复阶段发生异常时，已清空或已部分恢复的画布不会自动回滚。
                 ApplyDrawingDto(drawing);
                 var docName = ResolveDocumentName(drawing, string.IsNullOrWhiteSpace(sourceFilePath) ? "外部导入图纸.json" : sourceFilePath);
                 
@@ -341,6 +349,7 @@ namespace ElectricalSim.UI
 
         private DrawingDto CreateDrawingDto()
         {
+            // 仅把 Workspace 的当前元件和活动导线转换为用户图纸 DTO；运行期计时、运动和保护缓存不在此 JSON 中。
             var drawing = new DrawingDto();
 
             // 只读取 Workspace.Components 与 WireManager.Wires 这两个活动画布权威集合。
@@ -379,6 +388,7 @@ namespace ElectricalSim.UI
 
         private void ApplyDrawingDto(DrawingDto drawing)
         {
+            // 已通过前置校验的 DTO 仍按“先元件、后导线”恢复；此方法会清空当前画布并在结束后清理撤销历史。
             if (drawing == null)
             {
                 return;
@@ -650,6 +660,11 @@ namespace ElectricalSim.UI
             return Path.GetFileNameWithoutExtension(filePath);
         }
 
+        /// <summary>
+        /// 用户图纸 JSON 的根 DTO，当前同时由保存、已保存图纸读取和外部 JSON 导入路径使用。
+        /// documentId/documentName/savedAt 是文件元数据；components 与 wires 保存同一张图内的布局和连接记录。
+        /// 本类型不验证 JSON、Definition、instanceId 唯一性或端子存在性，也不等同于系统模板 DTO 或 Workspace 撤销快照。
+        /// </summary>
         [Serializable]
         private sealed class DrawingDto
         {
@@ -660,6 +675,12 @@ namespace ElectricalSim.UI
             public List<WireDto> wires = new List<WireDto>();
         }
 
+        /// <summary>
+        /// 用户图纸中的单个元件记录。definitionName 供恢复时在 catalog 中查找 ComponentDefinition，
+        /// instanceId 供同一 DrawingDto 内的导线端点关联；位置、闭合状态和参数列表属于用户图纸状态。
+        /// 保存路径通过 CircuitComponent.CloneParameters 填充参数列表；读取和外部导入路径则从用户图纸 JSON 反序列化这些参数。
+        /// 当前 DTO 自身不验证键、重复 instanceId 或 Definition 是否存在。
+        /// </summary>
         [Serializable]
         private sealed class ComponentDto
         {
@@ -671,6 +692,11 @@ namespace ElectricalSim.UI
             public List<ComponentParameter> parameters = new List<ComponentParameter>();
         }
 
+        /// <summary>
+        /// 用户图纸中的一条导线记录。端点 componentId/terminalId 在同一 DrawingDto 内关联元件与逻辑端子，
+        /// color、style 与手工路由字段保存画布视觉布局；空或旧字段的实际兼容处理由加载路径承担。
+        /// 本类型不创建导线、不验证端子存在，也不改变 WireStyle 或逻辑端子语义。
+        /// </summary>
         [Serializable]
         private sealed class WireDto
         {

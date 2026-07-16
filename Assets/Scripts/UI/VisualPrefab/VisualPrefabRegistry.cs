@@ -3,10 +3,22 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// 代码内的元件视觉配置映射表，以 ComponentDefinition.name 作为精确键保存 VisualPrefabConfig；
+    /// 它不是 ScriptableObject Catalog 资产，也不直接写入 Resources。ComponentVisualRuntimeCatalogBuilder 会读取本表并生成或更新
+    /// ComponentVisualRuntimeCatalog.asset；Windows Player 的主要视觉引用来自生成后的 Runtime Catalog；
+    /// 部分 Editor 运行态兼容路径当前仍会直接查询 Registry。
+    /// 配置中的 PrefabPath、DefaultSpritePath 与 ActiveSpritePath 是 Editor 资产路径而非 Resources 相对路径；
+    /// 当前 Builder 优先采用 ComponentDefinition.sprite，DefaultSpritePath 只提供默认视觉的兜底候选；
+    /// ActiveSpritePath 由 Editor Builder 解析为 Catalog 中的 activeSprite 引用，再由运行时视觉状态切换逻辑消费生成资产中的引用。
+    /// TerminalPositionOverrides 仅覆盖视觉端子局部坐标，不创建 TerminalDefinition 或改变 terminalId 的电气语义。
+    /// 修改映射、大小写或路径后需重建 Runtime Catalog，并复核 Player 中的视觉、端子位置与状态切换；Builder 成功不等于已完成运行态验证。
+    /// </summary>
     public static class VisualPrefabRegistry
     {
-        // KM 的原始 Editor 视觉使用此坐标表，而不是 Prefab 内 Terminal_* 节点的位置。
-        // Runtime Catalog Builder 直接序列化同一来源，避免 Editor 与 Player 出现两套端子位置。
+        // 当前 KM 配置通过此覆盖表提供端子视觉局部坐标；
+        // Runtime Catalog Builder 会把相同覆盖值写入 Catalog，
+        // 使 Editor 兼容路径与 Player Catalog 路径共享同一组配置数据。
         private static readonly VisualPrefabTerminalPosition[] KmTerminalPositionOverrides =
         {
             new VisualPrefabTerminalPosition("L1", new UnityEngine.Vector2(-52.8f, 128.7f)),
@@ -23,6 +35,8 @@ namespace ElectricalSim.Core
             new VisualPrefabTerminalPosition("22", new UnityEngine.Vector2(105.6f, -65.1f))
         };
 
+        // 配置表使用 StringComparer.Ordinal，definitionName 大小写敏感。重复键会在类型初始化时失败而非自动合并；
+        // 表项顺序不参与 TryGetConfig 查找。删除表项不等于删除 ComponentDefinition，Catalog 缺项也不等于元件定义不存在。
         private static readonly Dictionary<string, VisualPrefabConfig> Configs = new Dictionary<string, VisualPrefabConfig>(StringComparer.Ordinal)
         {
             {
@@ -488,6 +502,7 @@ namespace ElectricalSim.Core
 
         public static bool TryGetConfig(string definitionName, out VisualPrefabConfig config)
         {
+            // 空键或未命中均返回 false 并保持 config 为 null；本查找不验证 Prefab、Sprite 路径或端子覆盖能否在实际资源中解析。
             if (string.IsNullOrWhiteSpace(definitionName))
             {
                 config = null;
