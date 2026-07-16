@@ -5,6 +5,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// “系统信息”页的本地数据展示控制器：运行时创建只读信息卡片，显示 persistentDataPath/SavedBlueprints 的统计，
+    /// 并提供打开明确本地目录的入口。它不读取或修改图纸 JSON 内容、不承担保存导入逻辑，也不管理用户身份认证。
+    /// Awake 建立布局，OnEnable 与尺寸变化时刷新统计和卡片网格；页面不依赖 Editor API，Windows Player 使用同一持久化路径边界。
+    /// 后续若替换为预制体 UI，需保持目录操作只作用于 Application.persistentDataPath 对应的应用本地数据目录。
+    /// </summary>
     public sealed class LocalProfilePageController : MonoBehaviour
     {
         private const string VersionText = "V1.0 本地版";
@@ -20,6 +26,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 布局只创建一次；数据统计在 Awake 与 OnEnable 分别刷新，适应从其他页面返回后的保存文件变化。
             BuildLayout();
             RefreshInfo();
             RefreshCardGrid();
@@ -38,6 +45,7 @@ namespace ElectricalSim.UI
 
         private void BuildLayout()
         {
+            // 本页所有卡片均运行时创建并挂在自身 ScrollView 下，不改写 Demo 场景其他对象。
             var root = transform as RectTransform;
             if (root == null)
             {
@@ -219,6 +227,7 @@ namespace ElectricalSim.UI
 
         private void RefreshInfo()
         {
+            // 只统计明确的 SavedBlueprints 目录；不扫描模板 Resources 或任意用户磁盘路径。
             if (drawingInfoText != null)
             {
                 var count = CountSavedBlueprints();
@@ -279,6 +288,7 @@ namespace ElectricalSim.UI
 
         private static void OpenFolder(string path)
         {
+            // 平台相关打开目录入口保持现有保护逻辑；失败不应影响当前页面或保存数据。
             if (string.IsNullOrWhiteSpace(path))
             {
                 Debug.LogWarning("目录路径为空，无法打开。");

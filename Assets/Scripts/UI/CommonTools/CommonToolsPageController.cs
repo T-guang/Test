@@ -6,6 +6,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI.CommonTools
 {
+    /// <summary>
+    /// 常用工具页面的运行时 UI 组装器：首次启用时从 CommonToolsSeedData 读取电阻色环、公式与文章数据，
+    /// 动态建立标签页和内容面板。它不参与电路仿真、模板加载、保存导入或元件定义管理。
+    /// 当前页面不依赖 Editor API，动态创建节点由 BuildPage/ClearChildren 在同一根节点下维护；
+    /// 未来若预制体化，应先确认 built 标记、按钮监听器与运行时创建 Sprite 缓存的释放边界。
+    /// </summary>
     public sealed class CommonToolsPageController : MonoBehaviour
     {
         private enum ToolTab
@@ -95,6 +101,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void OnEnable()
         {
+            // 只在首次显示时创建页面，避免页面切换时重复累加工具卡与监听器。
             if (!built)
             {
                 BuildPage();
@@ -104,6 +111,7 @@ namespace ElectricalSim.UI.CommonTools
 
         public void BuildPage()
         {
+            // 供当前运行时页面初始化调用：清理本页旧节点后以种子数据重建，不修改任何外部页面或项目资源。
             ClearChildren();
             resistorColors = CommonToolsSeedData.GetResistorColors();
             formulas = CommonToolsSeedData.GetFormulas();
@@ -127,6 +135,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ClearChildren()
         {
+            // 仅销毁本控制器根节点下动态创建的 UI；不要把它用于清理场景其他页面。
             foreach (Transform child in transform)
             {
                 Destroy(child.gameObject);
@@ -315,6 +324,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void SelectTool(ToolTab tab)
         {
+            // 标签选择只切换本页面板可见性和按钮状态，不保存为全局应用状态。
             resistorPanel.gameObject.SetActive(tab == ToolTab.Resistor);
             calculatorPanel.gameObject.SetActive(tab == ToolTab.Calculator);
             formulaPanel.gameObject.SetActive(tab == ToolTab.Formula);

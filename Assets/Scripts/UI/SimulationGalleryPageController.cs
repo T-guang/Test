@@ -7,6 +7,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 仿真广场的运行时页面控制器：从模板 Catalog 读取条目，动态创建列表卡片、筛选/搜索/排序控件和详情视图，
+    /// 并在用户选择时调用既有模板加载入口。它不解析模板 JSON、不生成电路对象，也不维护图纸集或练习会话状态。
+    /// 卡片与详情图片均由 Catalog 的 thumbnailPath 经 Resources.Load 获取，Editor 与 Windows Player 使用相同资源路径。
+    /// 页面在 Awake 建立容器、OnEnable 刷新内容；动态节点由本页根节点统一清理，后续改为预制体时需复核卡片监听器生命周期。
+    /// </summary>
     public sealed class SimulationGalleryPageController : MonoBehaviour
     {
         private const string CatalogPath = "Blueprints/Templates/template_catalog";
@@ -38,6 +44,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 首次创建页面骨架；Catalog 条目在后续 LoadEntries 中读取，避免把模板数据写入场景对象。
             EnsureRootRect();
             BuildPage();
             LoadEntries();
@@ -46,6 +53,7 @@ namespace ElectricalSim.UI
 
         private void OnEnable()
         {
+            // 页面重新显示时刷新筛选后的卡片，不改变当前 Workspace 或已加载模板。
             if (listRoot != null && detailRoot != null)
             {
                 listRoot.SetActive(true);
@@ -249,6 +257,7 @@ namespace ElectricalSim.UI
 
         private void LoadEntries()
         {
+            // 数据来源限定为 CircuitTemplateCatalogLoader；不要通过扫描 Resources 目录推断卡片集合。
             entries.Clear();
             if (!CircuitTemplateCatalogLoader.TryLoad(CatalogPath, out var catalog, out var error))
             {
@@ -295,6 +304,7 @@ namespace ElectricalSim.UI
 
         private void RefreshCards()
         {
+            // 仅销毁并重建本页动态卡片，详情根节点和模板加载流程不在此处重置。
             if (gridContent == null)
             {
                 return;
@@ -593,6 +603,7 @@ namespace ElectricalSim.UI
 
         private void ShowDetail(GalleryEntry entry)
         {
+            // 详情页是展示层；进入模板的实际动作继续交由 LoadEntry 的既有控制器调用。
             listRoot.SetActive(false);
             detailRoot.SetActive(true);
             ClearChildren(detailRoot.transform);
@@ -950,6 +961,7 @@ namespace ElectricalSim.UI
 
         private Sprite LoadThumbnail(string path)
         {
+            // Catalog 路径按 Resources 规则传入且不带扩展名；Player 不应依赖 AssetDatabase。
             if (string.IsNullOrWhiteSpace(path))
             {
                 return null;

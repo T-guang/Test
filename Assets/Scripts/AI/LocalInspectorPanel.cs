@@ -11,9 +11,12 @@ using UnityEngine.UI;
 namespace ElectricalSim.AI
 {
     /// <summary>
-    /// 检查助手的 UGUI 宿主：按钮、报告 Block 渲染、练习控制和面板状态。
-    /// Check/Explain 流程已委托给 InspectionWorkflowService；本类在后续重构前仍提供窄运行态显示适配。
-    /// 渲染结构化数据时不得改变报告顺序。
+    /// 检查助手的 UGUI 宿主，负责动态面板、按钮入口、检查工作流结果展示、练习入口以及运行态显示补充。
+    /// InspectionWorkflowService 负责外层检查与解释流程编排；本类作为 IInspectionWorkflowRuntimeAdapter，当前仍直接调用
+    /// CircuitStateAnalyzer 和 CircuitValidationService，并向报告生成流程提供运行态数据及必要的兼容加工。
+    /// 本类不定义验证规则本身，不得改变 RuleId、Severity、Report Block 类型或 Section 顺序。
+    /// Create 会复用或新建一个面板并重建其子节点，Initialize 在每次重建前清理按钮监听器。Editor 与 Windows Player 共用运行时路径，
+    /// 不依赖 Editor API；运行态覆写仅用于显示，不能反向改变电路状态、评分或规则严重等级。
     /// </summary>
     public sealed class LocalInspectorPanel : MonoBehaviour, IInspectionWorkflowRuntimeAdapter
     {
@@ -45,6 +48,7 @@ namespace ElectricalSim.AI
 
         public static LocalInspectorPanel Create(RectTransform parent, WorkspaceController workspace)
         {
+            // 由 DemoUIController 等场景入口调用。会复用同名宿主或创建一个，并只销毁本面板此前生成的子节点。
             if (parent == null)
             {
                 return null;
@@ -90,6 +94,7 @@ namespace ElectricalSim.AI
 
         public void Initialize(WorkspaceController workspaceController)
         {
+            // 每次运行时 UI 重建后重新注入 Workspace 与 WorkflowService；绑定前必须清理旧监听器。
             workspace = workspaceController;
             inspectionWorkflowService = new InspectionWorkflowService(workspace, this, showDeveloperDebugInfo);
 
@@ -388,6 +393,7 @@ namespace ElectricalSim.AI
 
         private void ExplainCurrentCircuit()
         {
+            // “解释”入口请求工作流生成说明性报告；它不自行判定规则，也不改变当前画布。
             // 解释编排已归 WorkflowService 所有；面板只处理空画布提示与结构化结果渲染，不能重新混入分析或报告组装。
             ClearReport();
             if (workspace == null)
@@ -408,6 +414,7 @@ namespace ElectricalSim.AI
 
         private void CheckCurrentCircuit()
         {
+            // “检查”入口消费工作流的结构化结果；Section 和 Block 的排序由报告模型保护，不能在 UI 层重新排序。
             // 检查顺序由 WorkflowService 保持；这里仅负责 UI 生命周期、状态提示和对普通用户安全的异常反馈。
             ClearReport();
 
@@ -650,6 +657,7 @@ namespace ElectricalSim.AI
 
         private void ApplyRuntimeDisplayOverrides(CircuitStateResult stateResult)
         {
+            // 仅为教学显示补充 KT、星三角和运动状态；不得把这些覆写写回 ComponentDefinition 或仿真状态。
             // 仅校正检查助手展示所需的运行态字段，不能替代 Analyzer、SimulationEngine 或 RuntimeStateManager 的权威状态更新。
             if (stateResult == null || workspace == null || workspace.Components == null)
             {
@@ -2397,6 +2405,7 @@ namespace ElectricalSim.AI
         }
         private void SubmitPracticeCheck()
         {
+            // 练习提交与普通检查共用面板展示但不应共享上一轮报告状态；会话、评分与反馈仍由 PracticeSessionController 链路负责。
             var practiceController = ElectricalSim.Practice.PracticeSessionController.Instance;
             if (practiceController != null && practiceController.IsPracticeActive)
             {
@@ -2410,6 +2419,7 @@ namespace ElectricalSim.AI
 
         private void ExitPractice()
         {
+            // 只委托既有练习退出流程并刷新显示；不要在 UI 层清空 Workspace、模板或保存数据。
             var practiceController = ElectricalSim.Practice.PracticeSessionController.Instance;
             if (practiceController != null && practiceController.IsPracticeActive)
             {
@@ -2433,6 +2443,7 @@ namespace ElectricalSim.AI
 
         private void ClearReport()
         {
+            // 清空的对象仅为报告 UI 与其诊断镜像，不影响当前电路、检查规则或练习会话。
             // renderedReportData 是基线取证用的渲染镜像；必须与 reportContent 同步清空，不能再从 Text 反向解析恢复模型。
             renderedReportData = new InspectionReportData();
             if (reportContent == null)
@@ -2473,6 +2484,7 @@ namespace ElectricalSim.AI
 
         private void AddReportBlocks(InspectionReportData report)
         {
+            // Report Block 已是 Composer 组织后的结构化显示顺序；面板只渲染，不能根据中文文本推断 Severity 或 RuleId。
             if (reportContent == null || report == null)
             {
                 return;

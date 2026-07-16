@@ -6,6 +6,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 元器件百科的运行时展示控制器：从 ComponentDefinition 构造百科条目，并动态生成列表、搜索分类和详情内容。
+    /// 它不定义元件语义、不生成 Workspace 元件、不参与接线或仿真；定义数据仍来自现有定义加载链。
+    /// 图像优先通过 ComponentVisualRuntimeCatalog 取得序列化 Sprite，从而让 Editor 与 Windows Player 共享同一视觉资源来源；
+    /// Catalog 缺项时保持现有 Editor 兼容回退与 Player 占位图。页面节点由 BuildPage 重建，后续调整需避免累计按钮监听器。
+    /// </summary>
     public sealed class EncyclopediaController : MonoBehaviour
     {
         private const string CategoryAll = "全部";
@@ -51,11 +57,13 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
+            // 当前场景在页面激活后一次性构建百科；定义列表是只读输入，不写回 Catalog 或 ScriptableObject。
             BuildPage();
         }
 
         private void BuildPage()
         {
+            // 重建仅限本控制器创建的页面节点；不要把此方法用于修改全局主题或画布元件。
             ClearExistingChildren();
             entries.Clear();
             entries.AddRange(ComponentEncyclopediaDatabase.Build(LoadDefinitions()));
@@ -69,6 +77,7 @@ namespace ElectricalSim.UI
 
         private List<ComponentDefinition> LoadDefinitions()
         {
+            // 百科按现有定义来源取数，而非扫描 Prefab 或视觉资源目录；隐藏定义的展示规则由现有条目构建逻辑决定。
             var definitions = new List<ComponentDefinition>();
             var saveLoadService = FindObjectOfType<SaveLoadService>();
             if (saveLoadService != null && saveLoadService.Catalog != null)
@@ -434,6 +443,7 @@ namespace ElectricalSim.UI
 
         private void ShowDetail(ComponentEncyclopediaEntry entry)
         {
+            // 详情内容是定义数据的说明性投影，不可反向作为端子、规则或运行状态的权威来源。
             if (entry == null)
             {
                 return;
@@ -818,6 +828,7 @@ namespace ElectricalSim.UI
 
         private Sprite ResolveIcon(ComponentDefinition definition)
         {
+            // 与 PaletteController 使用同一 Runtime Catalog 优先级，防止 Editor 与 Player 出现不同的图片链路。
             if (definition == null)
             {
                 return null;

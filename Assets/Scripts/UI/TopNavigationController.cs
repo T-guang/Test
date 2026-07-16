@@ -5,6 +5,13 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 顶部导航的场景绑定控制器：在 Awake 配置 PageRouter、导航页根节点与标签点击事件，
+    /// 在 Start 补齐全局退出入口。它只切换页面和维护导航视觉，不负责各页面的内容构建、
+    /// 模板加载或退出前保存；这些职责分别留在页面 Controller、TemplateLoadController 与 ExitApplicationDialog。
+    /// 当前实现依赖 Demo 场景中序列化的页根节点和按钮列表，运行时仅补建缺失的 PageRouter/退出按钮。
+    /// Editor 与 Windows Player 共用此路径；后续若改为预制体化导航，需重新确认重复监听器和单实例退出按钮约束。
+    /// </summary>
     public sealed class TopNavigationController : MonoBehaviour
     {
         [SerializeField] private PageRouter pageRouter;
@@ -21,6 +28,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 路由器必须在任何标签点击前完成配置；这里的空引用兜底仅服务当前场景兼容，不应扩展为页面创建入口。
             if (pageRouter == null)
             {
                 pageRouter = FindObjectOfType<PageRouter>();
@@ -197,6 +205,7 @@ namespace ElectricalSim.UI
 
         private void EnsureExitButton()
         {
+            // 退出按钮由导航栏统一持有；重复进入页面时复用已有实例，避免生成多个确认弹窗入口。
             if (exitButton == null)
             {
                 var navBar = transform.Find("MainAppRoot/NavBar") as RectTransform;
@@ -293,6 +302,7 @@ namespace ElectricalSim.UI
 
         public void SelectTab(int index)
         {
+            // 由导航按钮监听器调用。PageRouter 是页面可见性的唯一协调者，标签索引与 PageId 的映射不可随意改序。
             var page = ToPageId(index);
             if (pageRouter != null)
             {

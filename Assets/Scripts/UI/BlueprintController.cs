@@ -5,6 +5,12 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 图纸集页面控制器：基于模板 Catalog 构建和刷新卡片，维护筛选、分页、选中项和参考预览状态。
+    /// 进入练习时优先委托 PracticeSessionController；兼容回退路径只切换到模拟页面并展示参考面板。
+    /// 本类不解析模板 JSON，也不直接生成 Workspace 元件。
+    /// 本控制器内的卡片和预览图片来自 Catalog 的 thumbnailPath；练习会话内部资源由 PracticeSessionController 管理。
+    /// </summary>
     public sealed class BlueprintController : MonoBehaviour
     {
         private const float PageMargin = 28f;
@@ -487,6 +493,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 初始化先读取/整理 Catalog 与卡片，再绑定筛选和预览按钮；页面状态只在本控制器内维护。
 
             // Scene-authored cards are legacy gallery placeholders. Keep one as
             // the clone template, but exclude every static card from filtering
@@ -623,6 +630,7 @@ namespace ElectricalSim.UI
 
         private void OpenPreview(int index)
         {
+            // 预览只消费当前 Catalog 项的展示资源，不加载模板、不改写 Workspace，也不改变练习评分状态。
             selectedIndex = index;
             if (previewModal != null)
             {
@@ -642,6 +650,7 @@ namespace ElectricalSim.UI
 
         private void EnterConfiguration()
         {
+            // 此入口保留图纸集到练习/配置的既有调用顺序；不要在这里复制 TemplateLoadController 的生成算法。
             var templateItem = ResolveSelectedTemplateItem();
             if (templateItem != null)
             {
@@ -802,6 +811,7 @@ namespace ElectricalSim.UI
 
         private void EnterConfigurationInternal()
         {
+            // 非 PracticeSessionController 的兼容回退路径；仍按当前 selectedIndex 调用既有页面加载逻辑。
             ClosePreview();
             navigation?.SelectTab(0);
 

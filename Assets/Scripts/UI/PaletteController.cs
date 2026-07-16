@@ -5,6 +5,14 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// 左侧元件池的显示控制器：从已加载的 ComponentDefinition 与现有场景项补齐卡片，提供搜索、分类过滤、
+    /// 收起状态以及元件池相关的 ActionLog 布局对齐。它不创建 CircuitComponent、不决定元件定义或接线规则，
+    /// 拖入画布后的真实生成仍由 Workspace 负责。
+    /// 图标优先从 ComponentVisualRuntimeCatalog 获取，使 Editor 与 Windows Player 使用同一运行时资源链；
+    /// Catalog 缺项时仅在 Editor 保留原有 AssetDatabase 兼容回退，Player 才使用占位图。
+    /// 卡片可由 Awake 动态补建，ActionLog 在 Start 对齐；后续重构前需保留过滤监听器和 actionLogLayoutApplied 的一次性布局边界。
+    /// </summary>
     public sealed class PaletteController : MonoBehaviour
     {
         [SerializeField] private InputField searchInput;
@@ -67,6 +75,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 过滤监听器在补齐卡片前建立，保证运行时新增卡片进入同一搜索与分类状态。
             EnsureCardPaletteShell();
             searchInput?.onValueChanged.AddListener(_ => ApplyFilter());
             allFilterButton?.onClick.AddListener(() => SetFilter(PaletteFilter.All));
@@ -79,6 +88,7 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
+            // Workspace 与 ActionLog 可能由其他场景控制器稍后准备，因此布局对齐放在 Start。
             if (workspace == null)
             {
                 workspace = FindObjectOfType<WorkspaceController>();
@@ -514,6 +524,7 @@ namespace ElectricalSim.UI
 
         private void EnsureActionLogLayout()
         {
+            // ActionLog 不是元件池数据的一部分；这里只调整其与左侧面板共存时的宿主布局。
             if (workspace == null)
             {
                 workspace = FindObjectOfType<WorkspaceController>();
@@ -792,6 +803,7 @@ namespace ElectricalSim.UI
 
         private void AddMissingCatalogItems()
         {
+            // 仅为当前 Catalog 中可见且场景未预置的定义创建展示卡，不修改 ComponentDefinition 或 Workspace。
             if (content == null)
             {
                 return;
@@ -846,6 +858,8 @@ namespace ElectricalSim.UI
 
         private void CreateRuntimePaletteItem(ComponentDefinition definition)
         {
+            // 动态卡片只承载展示和交互入口；元件定义由 SaveLoadService.Catalog 提供，
+            // 实际拖入画布和元件生成继续由 PaletteItem 与 Workspace 的既有流程负责。
             var itemObject = new GameObject("Palette_" + definition.name, typeof(RectTransform), typeof(Image), typeof(PaletteItem));
             itemObject.transform.SetParent(content, false);
 
@@ -989,6 +1003,7 @@ namespace ElectricalSim.UI
 
         private static Sprite ResolvePaletteIcon(ComponentDefinition definition)
         {
+            // Player 必须先走 Runtime Catalog 的序列化 Sprite 引用，不能依赖 Assets 路径或 AssetDatabase。
             if (definition == null)
             {
                 return null;
@@ -1175,6 +1190,7 @@ namespace ElectricalSim.UI
 
         private void ApplyFilter()
         {
+            // 搜索和分类只改变卡片可见性，不重建 Catalog、不改变定义排序，也不影响已在画布上的元件。
             var query = searchInput != null ? searchInput.text.Trim() : string.Empty;
             var y = -14f;
             UpdateFilterButtonState();

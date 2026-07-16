@@ -7,6 +7,14 @@ using ElectricalSim.AI;
 
 namespace ElectricalSim.UI
 {
+    /// <summary>
+    /// Demo 主场景工具栏与运行时页面辅助控制器。Awake 先整理主框架、工具栏和必需的图纸/检查面板，
+    /// 再绑定现有按钮到 Workspace、保存导入和模拟操作；Start 在首帧后完成右侧操作组布局。
+    /// 它不拥有 Workspace、保存数据或检查规则，也不应复制各页面 Controller 的内容生成逻辑。
+    /// 当前实现直接依赖 Demo 场景序列化的按钮、Workspace 与对话框引用，并会按兼容需要动态补建局部 UI。
+    /// Editor 与 Windows Player 共用主体初始化路径；更新布局等开发入口仅在 Editor 或 Development Build 中显示。
+    /// 后续拆分工具栏时需保留 RemoveAllListeners 后再绑定的单次监听器约束。
+    /// </summary>
     public sealed class DemoUIController : MonoBehaviour
     {
         [SerializeField] private WorkspaceController workspace;
@@ -39,6 +47,7 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 顺序是当前场景兼容契约：先保证容器存在，再绑定会访问这些容器或 Workspace 的操作入口。
             ApplyMainFrameLayout();
             EnsureToolbarLayout();
             EnsureMainLogo();
@@ -101,6 +110,7 @@ namespace ElectricalSim.UI
 
         private void BindButton(Button button, UnityEngine.Events.UnityAction action)
         {
+            // 运行时 UI 可能复用场景按钮；先清理旧监听器以避免页面重建后一次点击重复执行。
             if (button == null || action == null)
             {
                 return;
@@ -112,6 +122,7 @@ namespace ElectricalSim.UI
 
         private void EnsureToolbarLayout()
         {
+            // 仅整理已有工具栏及其兼容补件；不要把页面级布局迁移到这里。
             var toolbar = startButton != null ? startButton.transform.parent as RectTransform : null;
             if (toolbar == null)
             {
@@ -1084,6 +1095,7 @@ namespace ElectricalSim.UI
 
         private void EnsureLocalInspectorPanel()
         {
+            // 检查助手由 LocalInspectorPanel 自行建立内部 UI；此处只确保主场景存在一个宿主实例。
             if (workspace == null)
             {
                 return;
@@ -1104,6 +1116,7 @@ namespace ElectricalSim.UI
         }
         private void EnsureBlueprintPanels()
         {
+            // 图纸预览与练习参考面板的实际内容由各自 Controller 管理，此处不参与模板或图片加载。
             var canvas = GetComponentInParent<Canvas>();
             if (canvas == null)
             {
