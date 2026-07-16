@@ -28,6 +28,10 @@ namespace ElectricalSim.EditorTools
         private const string ReportFolder = "Assets/Reports";
         private const string ReportPath = ReportFolder + "/template_integrity_report.md";
 
+        /// <summary>
+        /// 单个 Catalog 或模板检查的内存结果，累计错误和警告后由 WriteReport 写入 template_integrity_report.md。
+        /// Passed 只表示本脚本当前检查项未记录错误或警告，不替代运行态、规则或 Player 回归；该类型自身不解析模板或写文件。
+        /// </summary>
         private sealed class CheckResult
         {
             public string Name;

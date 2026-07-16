@@ -22,8 +22,9 @@ namespace ElectricalSim.EditorTools
     /// 导出操作会写入 <c>Assets/EditorTests/Baselines/V2.3.9.1/DemoSceneRuntimeEvidence.json</c> 并调用
     /// AssetDatabase.Refresh，重新读取操作只加载既有 JSON。
     ///
-    /// 取证记录是当次运行状态的事实性观察，不是模板基线或 Player 数据源。窗口在启用期间监听 Console
-    /// Error 计数，禁用时解除监听；采集失败通过 Console 异常日志报告。正式回归前应退出 Play Mode 后再修改场景或资产。
+    /// 取证记录包含当次运行状态的直接观测值与工具推导摘要，不是模板基线或 Player 数据源。
+    /// 场景和 Workspace 数量属于直接计数，Analyzer、Validation 和报告摘要来自当次工具调用；pageRootCount 是按对象名称匹配得到的启发式计数。
+    /// 一次取证不能推广到所有场景或 Player。窗口在启用期间监听 Console Error 计数，禁用时解除监听；采集失败通过 Console 异常日志报告。正式回归前应退出 Play Mode 后再修改场景或资产。
     /// </summary>
     public sealed class SceneRuntimeEvidenceWindow : EditorWindow
     {
@@ -339,13 +340,21 @@ namespace ElectricalSim.EditorTools
             bundle.schemaVersion = EvidenceSchemaVersion;
         }
 
+        /// <summary>DemoSceneRuntimeEvidence.json 的 Editor 取证根 DTO。schemaVersion 由窗口写入；LoadExisting 不拒绝旧版本、没有迁移逻辑，并会在读取后将内存 bundle.schemaVersion 设为当前 EvidenceSchemaVersion。</summary>
         [Serializable] private sealed class SceneEvidenceBundle { public int schemaVersion; public List<RuntimeStageEvidence> stages = new List<RuntimeStageEvidence>(); public LifecycleEvidence lifecycle; }
+        /// <summary>一次 Play Mode 场景阶段采集，包含直接场景/Workspace 计数、Analyzer/Validation 结果、报告来源与归一化摘要以及 Console 计数。时间戳只标识采集时刻，不能代替内容比较或证明其他场景状态。</summary>
         [Serializable] private sealed class RuntimeStageEvidence { public string stageName; public string capturedAtUtc; public string sceneName; public int sceneCircuitComponentCount; public int sceneTerminalViewCount; public int sceneWireViewCount; public int rootObjectCount; public int workspaceComponentCount; public int workspaceWireCount; public int componentLayerChildCount; public int wireLayerChildCount; public int rootCircuitObjectCount; public int analyzerComponentInputCount; public int analyzerWireInputCount; public int validationComponentInputCount; public int validationWireInputCount; public bool analyzerReturned; public int validationIssueCount; public List<RuntimeRuleEvidence> validationRules = new List<RuntimeRuleEvidence>(); public RuntimeAnalyzerEvidence analyzerSummary; public RuntimeInspectorEvidence checkReport; public RuntimeInspectorEvidence explainReport; public int consoleErrorsSinceCapture; }
+        /// <summary>本次取证中从 Validation 输出提取的 RuleId 与 Severity；不执行规则，也不覆盖完整 Validation 报告。</summary>
         [Serializable] private sealed class RuntimeRuleEvidence { public string ruleId; public string severity; }
+        /// <summary>当前 Analyzer 返回对象的采集摘要。components 为按生成器排序的观测记录，不是模板 JSON 或运行时数据源。</summary>
         [Serializable] private sealed class RuntimeAnalyzerEvidence { public bool available; public bool hasShortCircuit; public bool hasPowerConflict; public bool hasInterlockConflict; public bool hasTimerRelays; public bool hasLimitSwitches; public bool hasStarDeltaMotors; public bool hasThreePhaseCircuit; public List<RuntimeComponentEvidence> components = new List<RuntimeComponentEvidence>(); }
+        /// <summary>单个 Analyzer 元件状态的取证字段。definitionId/state 等来自当前运行场景采集，不能单独推导模板长期正确性。</summary>
         [Serializable] private sealed class RuntimeComponentEvidence { public string definitionId; public string state; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool timerCoilEnergized; public bool timerDelayElapsed; public string timerStatus; public bool limitSwitchTriggered; public string motorMode; }
+        /// <summary>检查或解释报告的取证摘要，仅保存入口、来源与归一化标题/短语；不等同于结构化 InspectionReportData。</summary>
         [Serializable] private sealed class RuntimeInspectorEvidence { public string entryPoint; public bool available; public RuntimeInspectorSourceEvidence source; public List<string> sectionTitles = new List<string>(); public List<string> keyPhrases = new List<string>(); }
+        /// <summary>报告来源链路的直接计数与 RuleId 摘要。空列表或缺失来源的解释由窗口采集逻辑决定。</summary>
         [Serializable] private sealed class RuntimeInspectorSourceEvidence { public string checkPipeline; public int pipelineErrorCount; public int pipelineWarningCount; public List<string> pipelineIssueCodes = new List<string>(); public int analyzerErrorCount; public int analyzerWarningCount; public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
+        /// <summary>当前 Editor 内存场景的控制器与根对象计数快照。pageRootCount 按对象名称包含 Page 或 AppRoot 计算，不是全部页面对象的结构性证明；它不清理场景，Console Error 为 0 也不表示程序无缺陷。</summary>
         [Serializable] private sealed class LifecycleEvidence { public string note; public string capturedAtUtc; public int localInspectorPanelCount; public int simulationGalleryControllerCount; public int localProfileControllerCount; public int commonToolsControllerCount; public int templateLoadControllerCount; public int eventSystemCount; public int canvasCount; public int pageRootCount; }
     }
 }

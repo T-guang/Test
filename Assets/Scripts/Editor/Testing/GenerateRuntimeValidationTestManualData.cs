@@ -506,6 +506,7 @@ namespace ElectricalSim.EditorTools.Testing
             catch { return ""; }
         }
 
+        // 本次生成的内存集合，Collect 填充、各 Write*Documents 方法消费；不是模板、快照或运行时业务数据源。
         private sealed class DataSet
         {
             public string Branch;
@@ -519,22 +520,36 @@ namespace ElectricalSim.EditorTools.Testing
             public readonly List<string> OwnerConfirmations = new List<string>();
         }
 
+        /// <summary>把 Catalog 项、模板 JSON 和三个已提交 Snapshot 的同 templateId 记录汇合的内存模型；Collect 负责关联，类型自身不验证完整性。</summary>
         private sealed class TemplateModel { public CircuitTemplateCatalogItemDto Item; public CircuitTemplateDto Template; public StaticTemplateSnapshot Snapshot; public InspectorTemplateSnapshot Inspector; public string JsonPath; }
+        /// <summary>运行测试资料的一行推导结果。字段由模板、快照和现有代码路径组合而来，NeedsOwner 标识当前资料无法直接证明的内容。</summary>
         private sealed class RuntimeRow { public string Id; public TemplateModel Template; public string Step; public string ObjectId; public string DefinitionName; public string Operation; public float WaitSeconds; public string ExpectedKm; public string ExpectedKt; public string ExpectedSq; public string ExpectedMotor; public string ExpectedLoad; public string ExpectedMotion; public string ExpectedParameters; public string ExpectedCheck; public string Evidence; public bool NeedsOwner; }
+        /// <summary>负向规则测试资料的一行推导结果。Rule 指向 Validation Snapshot 记录，不执行扰动、评分或规则校验。</summary>
         private sealed class NegativeRow { public string Id; public RuleSnapshot Rule; public string TemplateId; public string Modification; public string Steps; public string Evidence; public bool NeedsOwner; public string StopsNormalRun; public string StopsParameters; public string AllowsAdditionalIssues; }
+        /// <summary>从静态组件快照归纳的运行期望文本片段；仅用于资料写出，不是 RuntimeState 或参数估算模型。</summary>
         private sealed class Baseline { public string Km; public string Kt; public string Sq; public string Motor; public string Load; public string Motion; public string Parameters; public string Check; }
 
         // 这些字段仅由 JsonUtility 从固定快照文件填充；不要改成属性或构造赋值，否则会改变快照读取行为。
 #pragma warning disable CS0649
+        /// <summary>TemplateStaticSnapshots.json 的最小 JsonUtility 读取 DTO。当前类型没有 schemaVersion 字段，Collect/ReadJson 不校验快照 Schema；未知字段会被 JsonUtility 忽略，读取仍依赖所需字段兼容。</summary>
         [Serializable] private sealed class StaticSnapshotRoot { public List<StaticTemplateSnapshot> templates = new List<StaticTemplateSnapshot>(); }
+        /// <summary>单张模板的静态状态摘要。errorCount、warningCount 和 components 是已提交快照事实，比较语义不由本类型定义。</summary>
         [Serializable] private sealed class StaticTemplateSnapshot { public string templateId; public int errorCount; public int warningCount; public List<StaticComponentSnapshot> components = new List<StaticComponentSnapshot>(); }
+        /// <summary>静态 Snapshot 中一个元件语义记录。definitionId/ordinal 的关联规则来自快照生成器，类型自身不验证模板实例。</summary>
         [Serializable] private sealed class StaticComponentSnapshot { public string definitionId; public int ordinal; public string state; public bool isContactor; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool isTimerRelay; public bool timerDelayElapsed; public string timerDelayStatus; public bool isLimitSwitch; public bool limitSwitchTriggered; public bool isMotor; public string starDeltaMode; }
+        /// <summary>InspectorReportSnapshots.json 的最小 JsonUtility 读取 DTO，仅用于资料生成时关联报告基线，不是 InspectionReportData。当前类型没有 schemaVersion 字段，Collect/ReadJson 不校验快照 Schema；未知字段会被 JsonUtility 忽略，读取仍依赖所需字段兼容。</summary>
         [Serializable] private sealed class InspectorSnapshotRoot { public List<InspectorTemplateSnapshot> templates = new List<InspectorTemplateSnapshot>(); }
+        /// <summary>按 templateId 保存的检查报告快照；当前资料生成器仅读取 check 字段，类型本身不格式化报告。</summary>
         [Serializable] private sealed class InspectorTemplateSnapshot { public string templateId; public InspectorCheckSnapshot check; }
+        /// <summary>检查报告资料生成所需的最小结构摘要，blocks 是否含参数段落是生成器读取的推导标记。</summary>
         [Serializable] private sealed class InspectorCheckSnapshot { public InspectorSourcesSnapshot sources; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); }
+        /// <summary>Validation 来源计数与 RuleId 列表，来自 Inspector 报告快照而非实时执行规则。</summary>
         [Serializable] private sealed class InspectorSourcesSnapshot { public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
+        /// <summary>报告 Block 的当前最小读取字段；不表示完整 Block Schema，也不定义 Section 顺序。</summary>
         [Serializable] private sealed class InspectorBlockSnapshot { public bool containsParameterParagraph; }
+        /// <summary>ValidationRuleSnapshots.json 的最小 JsonUtility 读取 DTO。当前类型没有 schemaVersion 字段，Collect/ReadJson 不校验快照 Schema；未知字段会被 JsonUtility 忽略，读取仍依赖所需字段兼容。</summary>
         [Serializable] private sealed class ValidationSnapshotRoot { public List<RuleSnapshot> rules = new List<RuleSnapshot>(); }
+        /// <summary>单条规则的 Snapshot 记录。RuleId 用于资料关联，Severity/Category/sourceLocations 是已生成基线信息，不执行规则判断。</summary>
         [Serializable] private sealed class RuleSnapshot { public string ruleId; public List<string> severities = new List<string>(); public List<string> categories = new List<string>(); public List<string> sourceLocations = new List<string>(); }
 #pragma warning restore CS0649
     }

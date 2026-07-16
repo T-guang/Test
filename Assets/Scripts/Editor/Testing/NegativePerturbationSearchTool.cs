@@ -15,7 +15,7 @@ using UnityEngine;
 namespace ElectricalSim.EditorTools.Testing
 {
     /// <summary>
-    /// 在内存中复制标准模板并搜索最小单步扰动的 Validation 触发方式。
+    /// 读取标准模板 DTO，并在每次评估中构造临时 CircuitComponent、TerminalView 和 WireView；候选扰动应用于临时构建过程，不会原地修改模板 DTO 或写回模板 JSON。
     /// 不调用模板写回、保存服务或场景保存；搜索不到稳定端点时明确输出为不适合人工模板测试。
     /// </summary>
     // 维护边界：仅在 Editor 中读取真实 Catalog、模板 JSON 与 Definition，在内存 Template DTO 和临时对象上搜索候选；
@@ -349,11 +349,17 @@ namespace ElectricalSim.EditorTools.Testing
         }
         private static void WriteUtf8(string path, string text) => File.WriteAllText(path, text, new UTF8Encoding(true));
 
+        /// <summary>搜索运行输入集合。LoadInput 会填充可变集合，搜索阶段将其作为输入使用；类型自身不阻止后续修改集合，但不会写回项目模板文件。</summary>
         private sealed class Input { public readonly Dictionary<string, ComponentDefinition> Definitions = new Dictionary<string, ComponentDefinition>(StringComparer.OrdinalIgnoreCase); public readonly List<TemplateData> Templates = new List<TemplateData>(); }
+        /// <summary>一张标准模板的目录项、已反序列化 DTO 与 JSON 路径。它只提供搜索上下文，不代表活动 Workspace。</summary>
         private sealed class TemplateData { public CircuitTemplateCatalogItemDto Item; public CircuitTemplateDto Template; public string JsonPath; }
+        /// <summary>模板原始导线及其稳定列表索引，用于候选删除操作；Index 仅在当前 TemplateData.wires 顺序内有效。</summary>
         private sealed class IndexedWire { public TemplateWireDto Wire; public int Index; }
+        /// <summary>重复执行同一候选后的 RuleId 结果。Stable 要求目标 RuleId 三次均出现，且三次排序后的完整 RuleId 列表完全一致；只说明当前代码、模板与候选下的重复执行结果稳定。</summary>
         private sealed class Evaluation { public bool Stable; public List<string> RuleIds = new List<string>(); }
+        /// <summary>单个目标 RuleId 的搜索输出。Suitable 与 Reason 由 SearchAll 赋值，供结果文档判断是否适合人工模板测试。</summary>
         private sealed class SearchResult { public string TargetRule; public bool Suitable; public string Reason; public TemplateData Template; public Candidate Candidate; public List<string> RuleIds; }
+        /// <summary>只保存删除导线索引或新增导线 DTO 的候选描述。它不直接修改 TemplateData.Template；EvaluateOnce 根据 Candidate 构造临时运行对象，不修改 JSON 文件、Definition 或活动画布。</summary>
         private sealed class Candidate
         {
             public int RemovedWireIndex = -1; public TemplateWireDto AddedWire; public string Note;

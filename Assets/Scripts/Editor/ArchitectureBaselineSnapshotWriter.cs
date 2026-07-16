@@ -837,19 +837,33 @@ namespace ElectricalSim.EditorTools
             return string.IsNullOrWhiteSpace(value) ? string.Empty : Regex.Replace(value, "\\s+", " ").Trim();
         }
 
+        /// <summary>TemplateStaticSnapshots.json 的根基线。schemaVersion 随文件写出，但当前 VerifyAgainstBaseline 未显式拒绝旧 TemplateStatic schemaVersion；generatedAtUtc 与 unityVersion 当前不是差异比较项。</summary>
         [Serializable] private sealed class BaselineBundle { public int schemaVersion; public string generatedAtUtc; public string unityVersion; public int templateCount; public List<TemplateSnapshot> templates = new List<TemplateSnapshot>(); }
+        /// <summary>单张模板的静态快照，组合模板事实、Analyzer/Validation 采集结果与报告快照；不是运行时 Workspace 或模板 JSON。</summary>
         [Serializable] private sealed class TemplateSnapshot { public string templateId; public string templateDisplayName; public string category; public int componentCount; public int wireCount; public bool analyzerReturned; public bool hasComplexLoop; public int errorCount; public int warningCount; public List<NameCount> definitionCounts = new List<NameCount>(); public List<SemanticComponentSnapshot> components = new List<SemanticComponentSnapshot>(); public AnalysisSnapshot analysis; public List<RuleIssueSnapshot> validationIssues = new List<RuleIssueSnapshot>(); public InspectorReportSnapshot checkReport; public InspectorReportSnapshot explainReport; }
+        /// <summary>按 ComponentDefinition.name 归一化后的数量记录，供静态基线比较；name 的关联含义由 CaptureTemplate 与比较器共同约定。</summary>
         [Serializable] private sealed class NameCount { public string name; public int count; }
+        /// <summary>由 CircuitStateResult 归一化得到的元件语义记录。definitionId 与 ordinal 仅用于本次快照内区分同类元件，不是模板实例 ID。</summary>
         [Serializable] private sealed class SemanticComponentSnapshot { public string definitionId; public int ordinal; public string state; public string judgement; public bool isBreaker; public bool breakerInputHasSupply; public bool breakerOutputHasSupply; public bool isContactor; public bool contactorCoilEnergized; public bool contactorMainClosed; public bool isTimerRelay; public bool timerCoilEnergized; public bool timerDelayElapsed; public bool timerNoClosed; public bool timerNcClosed; public string timerDelayStatus; public bool isLimitSwitch; public bool limitSwitchTriggered; public bool isMotor; public bool isStarDeltaMotor; public string starDeltaMode; public string motorFeederContactors; }
+        /// <summary>CircuitStateAnalyzer 的摘要采集值，用于漂移检测；本类型不重新分析电路，也不证明模板电气正确性。</summary>
         [Serializable] private sealed class AnalysisSnapshot { public bool available; public bool hasShortCircuit; public bool hasPowerConflict; public bool hasContactorInterlockConflict; public bool hasLimitSwitches; public bool hasTimerRelays; public bool hasStarDeltaMotors; public bool hasThreePhaseCircuit; public bool unsupportedThreePhaseTopology; public int analyzerErrorCount; public int analyzerWarningCount; }
+        /// <summary>从 Validation 报告采集并序列化的 RuleId、Severity 与 Category。当前 CompareTemplate 只比较 ruleId + severity；category 保留为诊断字段，模型自身不执行规则。</summary>
         [Serializable] private sealed class RuleIssueSnapshot { public string ruleId; public string severity; public string category; }
+        /// <summary>检查或解释入口的报告快照，同时保存 UI Block 摘要与结构化 modelBlocks；不是 InspectionReportData，也不生成报告。</summary>
         [Serializable] private sealed class InspectorReportSnapshot { public string entryPoint; public bool available; public InspectorReportSourceSnapshot sources; public List<InspectorBlockSnapshot> blocks = new List<InspectorBlockSnapshot>(); public List<InspectorModelBlockSnapshot> modelBlocks; }
+        /// <summary>报告来源链路的计数与 RuleId 摘要。这些字段会写入报告来源快照，当前主要用于取证和诊断；现有 CompareInspectorReportModel 未将 sources 纳入基线差异比较。</summary>
         [Serializable] private sealed class InspectorReportSourceSnapshot { public string checkPipeline; public int pipelineErrorCount; public int pipelineWarningCount; public List<string> pipelineIssueCodes = new List<string>(); public int analyzerErrorCount; public int analyzerWarningCount; public int validationErrorCount; public int validationWarningCount; public List<string> validationRuleIds = new List<string>(); }
+        /// <summary>格式化 UI Block 的采集字段，保存标题、类型、Severity、RuleId、关键短语和运行态/参数段落标记。当前基线只比较 title + blockType 及其顺序，其余字段为诊断字段。</summary>
         [Serializable] private sealed class InspectorBlockSnapshot { public string title; public string blockType; public string severity; public List<string> ruleIds = new List<string>(); public List<string> keyPhrases = new List<string>(); public bool containsRuntimeParagraph; public bool containsParameterParagraph; }
+        /// <summary>结构化报告 Block 的最小快照。当前模型 Block 比较会比较 sectionTitle、kind、severity、ruleIds，且列表顺序参与比较；本类型不参与 UI 渲染。</summary>
         [Serializable] private sealed class InspectorModelBlockSnapshot { public string sectionTitle; public string kind; public string severity; public List<string> ruleIds = new List<string>(); }
+        /// <summary>InspectorReportSnapshots.json 的根 DTO。当前读取端明确要求 schemaVersion >= 2，并对 templates、check/explain 与 modelBlocks 提供缺失保护；修改前需同步复核已提交基线。</summary>
         [Serializable] private sealed class InspectorBundle { public int schemaVersion; public List<InspectorTemplateSnapshot> templates; }
+        /// <summary>按 templateId 关联一张模板的检查与解释报告快照；templateId 由生成路径提供，类型自身不验证存在性。</summary>
         [Serializable] private sealed class InspectorTemplateSnapshot { public string templateId; public InspectorReportSnapshot check; public InspectorReportSnapshot explain; }
+        /// <summary>ValidationRuleSnapshots.json 的根 DTO，schemaVersion 随文件写出。当前验证路径未显式检查 RuleCatalogSnapshot.schemaVersion；规则比较检查 RuleId、Severity 与 Category，sourceLocations 不参与规则契约比较。</summary>
         [Serializable] private sealed class RuleCatalogSnapshot { public int schemaVersion; public List<RuleSeveritySnapshot> rules = new List<RuleSeveritySnapshot>(); }
+        /// <summary>单条规则的扫描摘要。sourceLocations 是生成器推导的诊断信息；RuleId、Severity 与 Category 的变更仍需结合真实规则与基线复核。</summary>
         [Serializable] private sealed class RuleSeveritySnapshot { public string ruleId; public List<string> severities = new List<string>(); public List<string> categories = new List<string>(); public List<string> sourceLocations = new List<string>(); }
     }
 }
