@@ -2,6 +2,9 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.Core
 {
+    /// <summary>
+    /// KT 计时缓存的当前内存阶段，不进入模板或用户图纸 JSON。
+    /// </summary>
     public enum TimerRuntimePhase
     {
         Reset,
@@ -9,6 +12,9 @@ namespace ElectricalSim.Core
         Elapsed
     }
 
+    /// <summary>
+    /// 运动运行态的当前方向，不代表模板中的持久化运动配置。
+    /// </summary>
     public enum MotionDirection
     {
         Stopped,
@@ -16,6 +22,10 @@ namespace ElectricalSim.Core
         Reverse
     }
 
+    /// <summary>
+    /// 单个元件实例的计时运行态缓存，由 RuntimeStateManager 按 componentId 创建、仿真路径更新并在生命周期边界重置。
+    /// 该状态仅存在内存，不进入模板或用户图纸 JSON；DelaySeconds/ElapsedSeconds 的单位由当前仿真调用方按秒使用。
+    /// </summary>
     public sealed class TimerRuntimeState
     {
         public float DelaySeconds;
@@ -25,12 +35,16 @@ namespace ElectricalSim.Core
 
         public void Reset()
         {
+            // 原地恢复计时字段的当前默认状态，不移除 Manager 中的字典条目。
             ElapsedSeconds = 0f;
             Phase = TimerRuntimePhase.Reset;
             IsCoilEnergized = false;
         }
     }
 
+    /// <summary>
+    /// 自动往返等元件实例的位置、速度、方向与限位缓存。它由 RuntimeStateManager 管理，不持久化到模板或保存图纸。
+    /// </summary>
     public sealed class MotionRuntimeState
     {
         public const float MinPosition = 0f;
@@ -105,6 +119,9 @@ namespace ElectricalSim.Core
         }
     }
 
+    /// <summary>
+    /// 单个元件实例的保护脱扣与过载计时缓存。它只承载运行态数据，不定义热继或保护规则，也不进入持久化图纸。
+    /// </summary>
     public sealed class ProtectionRuntimeState
     {
         public bool IsTripped;
@@ -119,7 +136,7 @@ namespace ElectricalSim.Core
     }
 
     /// <summary>
-    /// 按元件实例 ID 持有仅运行期的时间、运动和保护状态。
+    /// 按当前活动电路的 componentId 持有仅运行期的时间、运动和保护状态。
     /// 不创建元件、不持久化图纸；工作区和仿真代码会在生命周期边界重置它，
     /// 避免旧 KT、自动往返和热继状态泄漏到另一张电路图。
     /// </summary>
@@ -144,7 +161,9 @@ namespace ElectricalSim.Core
                 return null;
             }
 
-            // 运行态以稳定的实例 ID 隔离；模板静态参数和 UI 显示都不能成为这里的权威来源。
+            // 运行态以当前活动电路的 componentId 作为字典键隔离；
+            // 该键的生命周期由 CircuitComponent 与 Workspace 管理，
+            // 本类不验证其全局唯一性或跨图纸持久化稳定性。
             if (!timerStates.TryGetValue(componentId, out var state))
             {
                 state = new TimerRuntimeState();

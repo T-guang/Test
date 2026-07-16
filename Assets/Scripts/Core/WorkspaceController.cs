@@ -1327,12 +1327,14 @@ namespace ElectricalSim.Core
 
         private sealed class DrawingSnapshot
         {
+            // 撤销/重做的内存快照容器；CreateSnapshot 填充，RestoreSnapshot 消费，不是用户图纸 JSON 契约。
             public readonly List<ComponentSnapshot> Components = new List<ComponentSnapshot>();
             public readonly List<WireSnapshot> Wires = new List<WireSnapshot>();
         }
 
         private sealed class ComponentSnapshot
         {
+            // Definition 保留 Unity 资产引用，InstanceId 用于同一快照内导线关联；Parameters 由 CloneParameters 生成独立列表。
             public ComponentDefinition Definition;
             public string InstanceId;
             public Vector2 Position;
@@ -1342,6 +1344,7 @@ namespace ElectricalSim.Core
 
         private sealed class WireSnapshot
         {
+            // 端点实例/端子 ID 用于 RestoreSnapshot 重建导线；手动路径字段仅保存当前画布布局状态。
             public string StartComponentId;
             public string StartTerminalId;
             public string EndComponentId;

@@ -10,7 +10,7 @@ namespace ElectricalSim.Practice
     /// <summary>
     /// 管理当前练习会话的入口、模板上下文、提交和退出生命周期。
     /// 当前实现加载模板数据后清空活动画布，提交时直接调用 Netlist 层的结构化连接检查并将格式化结果交给检查助手；
-    /// 它不重做元件映射、评分公式或报告 UI 组装。退出时必须同时清理模板上下文和练习状态，避免下一次进入复用旧会话。
+    /// 它不重做元件映射、连接通过判定或报告 UI 组装。退出时必须同时清理模板上下文和练习状态，避免下一次进入复用旧会话。
     /// 本类会动态查找页面对象，修改进入/退出顺序或重复进入行为后，必须回归进入、提交、退出、模板切换和页面切换。
     /// </summary>
     public class PracticeSessionController : MonoBehaviour
@@ -34,8 +34,11 @@ namespace ElectricalSim.Practice
             }
         }
 
+        // 当前会话是否已建立；由进入/清理路径维护，不是持久化数据或练习检查结果。
         public bool IsPracticeActive { get; private set; }
+        // 图纸集目录元数据，仅在当前练习会话中用于展示、参考图和反馈关联。
         public CircuitTemplateCatalogItemDto CurrentTemplateItem { get; private set; }
+        // 已读取的模板 DTO，供当前练习检查使用；退出或清理练习时按现有生命周期置空。
         public CircuitTemplateDto CurrentTemplateData { get; private set; }
 
         private WorkspaceController workspace;
@@ -91,7 +94,7 @@ namespace ElectricalSim.Practice
 
         /// <summary>
         /// 从图纸集等入口开始练习。已有活动画布内容时先请求确认；成功进入后才调用回调，
-        /// 以便调用方在模板上下文和练习 UI 已稳定后继续显示参考资料。
+        /// 使调用方在模板数据已加载、会话上下文已建立且练习状态刷新方法已执行后继续后续操作。
         /// </summary>
         public void StartPractice(CircuitTemplateCatalogItemDto templateItem, System.Action onEntered)
         {
@@ -173,7 +176,7 @@ namespace ElectricalSim.Practice
 
         /// <summary>
         /// 退出练习并清理活动画布。必须先解除会话上下文，再触发画布清理和页面选择，
-        /// 防止普通检查入口读取到上一轮模板、评分或练习状态。
+        /// 防止普通检查入口读取到上一轮模板或练习状态。
         /// </summary>
         public void EndPractice()
         {
