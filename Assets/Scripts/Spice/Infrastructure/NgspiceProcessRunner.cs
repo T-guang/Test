@@ -20,6 +20,21 @@ namespace ElectricalSim.Spice.Infrastructure
             RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
         private readonly SemaphoreSlim runGate = new SemaphoreSlim(1, 1);
+        private readonly string executablePath;
+        private readonly string temporaryCachePath;
+        private readonly string persistentDataPath;
+
+        public NgspiceProcessRunner()
+        {
+            executablePath = Path.GetFullPath(Path.Combine(
+                Application.streamingAssetsPath,
+                "ThirdParty",
+                "ngspice",
+                "win-x64",
+                "ngspice_con.exe"));
+            temporaryCachePath = Application.temporaryCachePath;
+            persistentDataPath = Application.persistentDataPath;
+        }
 
         public Task<NgspiceRunResult> RunFixedDcAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -28,26 +43,36 @@ namespace ElectricalSim.Spice.Infrastructure
 
         public async Task<NgspiceRunResult> RunAsync(string netlist, TimeSpan timeout, CancellationToken cancellationToken = default(CancellationToken))
         {
+            return await RunInternalAsync(netlist, timeout, "SpiceT1", "spice_t1_fixed_dc.cir", true, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<NgspiceRunResult> RunRawNetlistAsync(string netlist, TimeSpan timeout, string diagnosticScope, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var scope = string.IsNullOrWhiteSpace(diagnosticScope) ? "Spice" : diagnosticScope.Trim();
+            return await RunInternalAsync(netlist, timeout, scope, "spice_run.cir", false, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<NgspiceRunResult> RunInternalAsync(
+            string netlist,
+            TimeSpan timeout,
+            string diagnosticScope,
+            string netlistFileName,
+            bool parseT1Output,
+            CancellationToken cancellationToken)
+        {
+            var workingDirectory = Path.Combine(
+                temporaryCachePath,
+                diagnosticScope,
+                Guid.NewGuid().ToString("N"));
+            var persistentDiagnosticDirectory = Path.Combine(
+                persistentDataPath,
+                diagnosticScope,
+                "last_run");
             await runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var executablePath = Path.GetFullPath(Path.Combine(
-                    Application.streamingAssetsPath,
-                    "ThirdParty",
-                    "ngspice",
-                    "win-x64",
-                    "ngspice_con.exe"));
-                var workingDirectory = Path.Combine(
-                    Application.temporaryCachePath,
-                    "SpiceT1",
-                    Guid.NewGuid().ToString("N"));
-                var persistentDiagnosticDirectory = Path.Combine(
-                    Application.persistentDataPath,
-                    "SpiceT1",
-                    "last_run");
-
                 return await Task.Run(
-                    () => Execute(netlist, timeout, executablePath, workingDirectory, persistentDiagnosticDirectory, cancellationToken),
+                    () => Execute(netlist, timeout, executablePath, workingDirectory, persistentDiagnosticDirectory, netlistFileName, parseT1Output, cancellationToken),
                     CancellationToken.None).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -70,6 +95,8 @@ namespace ElectricalSim.Spice.Infrastructure
             string executablePath,
             string workingDirectory,
             string persistentDiagnosticDirectory,
+            string netlistFileName,
+            bool parseT1Output,
             CancellationToken cancellationToken)
         {
             var result = new NgspiceRunResult
@@ -100,7 +127,7 @@ namespace ElectricalSim.Spice.Infrastructure
                 }
 
                 Directory.CreateDirectory(workingDirectory);
-                var netlistPath = Path.Combine(workingDirectory, "spice_t1_fixed_dc.cir");
+                var netlistPath = Path.Combine(workingDirectory, netlistFileName);
                 File.WriteAllText(netlistPath, netlist, new UTF8Encoding(false));
 
                 var startInfo = new ProcessStartInfo
@@ -185,7 +212,10 @@ namespace ElectricalSim.Spice.Infrastructure
                     return result;
                 }
 
-                ParseMarkedOutput(result);
+                if (parseT1Output)
+                {
+                    ParseMarkedOutput(result);
+                }
                 result.Success = result.FailureCode == NgspiceFailureCode.None;
                 return result;
             }
@@ -203,16 +233,16 @@ namespace ElectricalSim.Spice.Infrastructure
             {
                 stopwatch.Stop();
                 result.Duration = stopwatch.Elapsed;
-                PersistDiagnostics(netlist, result, persistentDiagnosticDirectory);
+                PersistDiagnostics(netlist, result, persistentDiagnosticDirectory, netlistFileName);
             }
         }
 
-        private static void PersistDiagnostics(string netlist, NgspiceRunResult result, string diagnosticDirectory)
+        private static void PersistDiagnostics(string netlist, NgspiceRunResult result, string diagnosticDirectory, string netlistFileName)
         {
             try
             {
                 Directory.CreateDirectory(diagnosticDirectory);
-                File.WriteAllText(Path.Combine(diagnosticDirectory, "spice_t1_fixed_dc.cir"), netlist ?? string.Empty, new UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(diagnosticDirectory, netlistFileName), netlist ?? string.Empty, new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(diagnosticDirectory, "stdout.txt"), result.StandardOutput ?? string.Empty, new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(diagnosticDirectory, "stderr.txt"), result.StandardError ?? string.Empty, new UTF8Encoding(false));
                 File.WriteAllText(

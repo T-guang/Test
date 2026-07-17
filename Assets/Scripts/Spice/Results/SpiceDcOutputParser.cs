@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using ElectricalSim.Spice.Netlist;
+
+namespace ElectricalSim.Spice.Results
+{
+    public static class SpiceDcOutputParser
+    {
+        private static readonly Regex ValuePattern = new Regex(@"^\s*(?<kind>[vi])\s*\(\s*(?<id>[^)]+)\s*\)\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        public static bool TryParse(string standardOutput, out Dictionary<string, double> nodeVoltages, out Dictionary<string, double> branchCurrents, out string failure)
+        {
+            nodeVoltages = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            branchCurrents = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            failure = null;
+            var begin = (standardOutput ?? string.Empty).IndexOf(SpiceNetlistBuilder.BeginMarker, StringComparison.OrdinalIgnoreCase);
+            var end = begin < 0 ? -1 : standardOutput.IndexOf(SpiceNetlistBuilder.EndMarker, begin + SpiceNetlistBuilder.BeginMarker.Length, StringComparison.OrdinalIgnoreCase);
+            if (begin < 0 || end <= begin) { failure = "T2 output markers were not found."; return false; }
+            var marked = standardOutput.Substring(begin + SpiceNetlistBuilder.BeginMarker.Length, end - begin - SpiceNetlistBuilder.BeginMarker.Length);
+            foreach (Match match in ValuePattern.Matches(marked))
+            {
+                var number = match.Groups["value"].Value.Replace('D', 'E').Replace('d', 'e');
+                if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) { failure = "Unable to parse ngspice value '" + match.Groups["value"].Value + "'."; return false; }
+                var id = match.Groups["id"].Value.Trim();
+                if (string.Equals(match.Groups["kind"].Value, "v", StringComparison.OrdinalIgnoreCase)) nodeVoltages[id] = value;
+                else branchCurrents[id] = value;
+            }
+            return true;
+        }
+    }
+}
