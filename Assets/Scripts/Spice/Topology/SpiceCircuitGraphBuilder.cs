@@ -100,15 +100,26 @@ namespace ElectricalSim.Spice.Topology
             }
             if (!graph.IsValid) return graph;
 
-            var groundedRoot = grounds.Count > 0 ? unionFind.Find(indexByTerminal[new SpiceTerminalRef(grounds[0].InstanceId, SpiceComponentModel.GroundTerminalId)]) : -1;
+            var groundedRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(grounds[0].InstanceId, SpiceComponentModel.GroundTerminalId)]);
             var roots = terminals.Select((terminal, index) => new { terminal, root = unionFind.Find(index) })
-                .GroupBy(item => item.root).OrderBy(group => group.Key).ToList();
+                .GroupBy(item => item.root)
+                .Select(group => new NodeGroup(
+                    group.Key,
+                    group.Select(item => item.terminal)
+                        .OrderBy(terminal => terminal.ComponentInstanceId, StringComparer.Ordinal)
+                        .ThenBy(terminal => terminal.TerminalId, StringComparer.Ordinal)
+                        .ToList()))
+                .OrderBy(group => group.CanonicalTerminal.ComponentInstanceId, StringComparer.Ordinal)
+                .ThenBy(group => group.CanonicalTerminal.TerminalId, StringComparer.Ordinal)
+                .ToList();
+            ValidateGroundReachability(components, indexByTerminal, unionFind, roots, groundedRoot, graph);
+            if (!graph.IsValid) return graph;
             var nodeIndex = 1;
             // 端子和分量均按稳定顺序遍历，因此同一结构重复生成时节点名称保持确定。
             foreach (var root in roots)
             {
-                var node = root.Key == groundedRoot ? "0" : "n" + nodeIndex++.ToString("D3");
-                foreach (var item in root) graph.NodeByTerminal[item.terminal] = node;
+                var node = root.Root == groundedRoot ? "0" : "n" + nodeIndex++.ToString("D3");
+                foreach (var terminal in root.Terminals) graph.NodeByTerminal[terminal] = node;
             }
 
             // 内部 SPICE 名称与用户 instanceId 分离，以避免中文、空格或特殊字符进入网表。
@@ -139,16 +150,64 @@ namespace ElectricalSim.Spice.Topology
                 graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_MISSING", SpiceDiagnosticSeverity.Error, "The circuit contains no DC voltage source."));
             }
 
-            foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground && component.Kind != SpiceComponentKind.DcVoltageSource))
+            return graph;
+        }
+
+        private static void ValidateGroundReachability(
+            Dictionary<string, SpiceComponentModel> components,
+            Dictionary<SpiceTerminalRef, int> indexByTerminal,
+            UnionFind unionFind,
+            IReadOnlyList<NodeGroup> roots,
+            int groundedRoot,
+            SpiceCircuitGraph graph)
+        {
+            // Union-Find represents wire-only electrical nodes. Components are node-graph edges,
+            // so traversal from the ground root can reject a complete but ungrounded subcircuit.
+            var neighbors = roots.ToDictionary(group => group.Root, group => new HashSet<int>());
+            var componentIdsByRoot = roots.ToDictionary(group => group.Root, group => new HashSet<string>(StringComparer.Ordinal));
+            foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground))
             {
-                var a = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
-                var b = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
-                if (a != "0" && b != "0" && a == b)
+                var positiveRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)]);
+                var negativeRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)]);
+                neighbors[positiveRoot].Add(negativeRoot);
+                neighbors[negativeRoot].Add(positiveRoot);
+                componentIdsByRoot[positiveRoot].Add(component.InstanceId);
+                componentIdsByRoot[negativeRoot].Add(component.InstanceId);
+            }
+
+            var reachable = Traverse(groundedRoot, neighbors, new HashSet<int>());
+            var inspected = new HashSet<int>(reachable);
+            foreach (var root in roots)
+            {
+                if (inspected.Contains(root.Root)) continue;
+                var floatingRegion = Traverse(root.Root, neighbors, new HashSet<int>());
+                inspected.UnionWith(floatingRegion);
+                var representativeComponentId = floatingRegion
+                    .SelectMany(regionRoot => componentIdsByRoot[regionRoot])
+                    .OrderBy(componentId => componentId, StringComparer.Ordinal)
+                    .First();
+                graph.Diagnostics.Add(new SpiceDiagnostic(
+                    "SPICE_FLOATING_SUBCIRCUIT",
+                    SpiceDiagnosticSeverity.Error,
+                    "Circuit subnetwork has no path to the ground reference.",
+                    representativeComponentId));
+            }
+        }
+
+        private static HashSet<int> Traverse(int start, Dictionary<int, HashSet<int>> neighbors, HashSet<int> visited)
+        {
+            var pending = new Queue<int>();
+            pending.Enqueue(start);
+            visited.Add(start);
+            while (pending.Count > 0)
+            {
+                var current = pending.Dequeue();
+                foreach (var neighbor in neighbors[current])
                 {
-                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_FLOATING_COMPONENT", SpiceDiagnosticSeverity.Error, "Component has no path to the ground reference.", component.InstanceId));
+                    if (visited.Add(neighbor)) pending.Enqueue(neighbor);
                 }
             }
-            return graph;
+            return visited;
         }
 
         private static bool TryResolveTerminal(Dictionary<string, SpiceComponentModel> components, Dictionary<SpiceTerminalRef, int> indexes, SpiceTerminalRef terminal, SpiceCircuitGraph graph)
@@ -192,6 +251,19 @@ namespace ElectricalSim.Spice.Topology
                 case SpiceComponentKind.Inductor: return "L";
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
+        }
+
+        private sealed class NodeGroup
+        {
+            public NodeGroup(int root, List<SpiceTerminalRef> terminals)
+            {
+                Root = root;
+                Terminals = terminals;
+            }
+
+            public int Root { get; }
+            public List<SpiceTerminalRef> Terminals { get; }
+            public SpiceTerminalRef CanonicalTerminal => Terminals[0];
         }
 
         private sealed class UnionFind

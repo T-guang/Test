@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Infrastructure;
+using ElectricalSim.Spice.Netlist;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
 
@@ -17,6 +18,11 @@ namespace ElectricalSim.Spice.T2
         {
             ExpectInvalidParameter();
             ExpectDeterministicGraph();
+            ExpectFloatingClosedLoop();
+            ExpectGroundedCircuitDoesNotMaskFloatingSubcircuit();
+            ExpectWireOrderDoesNotAffectNodeNames();
+            ExpectWireDirectionDoesNotAffectNodeNames();
+            ExpectMultipleGroundsMapToZero();
         }
 
         public static async System.Threading.Tasks.Task<List<SpiceSimulationResult>> RunIntegrationChecksAsync()
@@ -31,6 +37,8 @@ namespace ElectricalSim.Spice.T2
             results.Add(await VerifyCapacitor(service).ConfigureAwait(false));
             results.Add(await VerifyInductor(service).ConfigureAwait(false));
             await VerifyDeletedWireBlocksSimulationAsync(service).ConfigureAwait(false);
+            await VerifyFloatingSubcircuitsBlockSimulationAsync(service).ConfigureAwait(false);
+            await VerifyMultipleGroundSimulationAsync(service).ConfigureAwait(false);
             return results;
         }
 
@@ -101,6 +109,54 @@ namespace ElectricalSim.Spice.T2
             if (firstNodes != secondNodes) throw new InvalidOperationException("Node assignment is not deterministic.");
         }
 
+        private static void ExpectFloatingClosedLoop()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.FloatingClosedLoop());
+            ExpectInvalidFloatingGraph(graph, "complete floating loop");
+            if (graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_TERMINAL")) throw new InvalidOperationException("Complete floating loop was mistaken for disconnected terminals.");
+        }
+
+        private static void ExpectGroundedCircuitDoesNotMaskFloatingSubcircuit()
+        {
+            ExpectInvalidFloatingGraph(SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.GroundedAndFloatingCircuits()), "grounded circuit plus floating loop");
+        }
+
+        private static void ExpectWireOrderDoesNotAffectNodeNames()
+        {
+            var first = SpiceT2Fixtures.Divider();
+            var reordered = SpiceT2Fixtures.Divider();
+            var wires = reordered.Wires.AsEnumerable().Reverse().ToList();
+            reordered.Wires.Clear();
+            reordered.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reordered, "Wire order");
+        }
+
+        private static void ExpectWireDirectionDoesNotAffectNodeNames()
+        {
+            var first = SpiceT2Fixtures.Divider();
+            var reversedEndpoints = SpiceT2Fixtures.Divider();
+            var wires = reversedEndpoints.Wires.Select(wire => new SpiceWireModel(wire.End, wire.Start)).ToList();
+            reversedEndpoints.Wires.Clear();
+            reversedEndpoints.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reversedEndpoints, "Wire direction");
+        }
+
+        private static void ExpectMultipleGroundsMapToZero()
+        {
+            var baseline = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.Divider());
+            var multipleGrounds = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.DividerWithMultipleGrounds());
+            if (!multipleGrounds.IsValid) throw new InvalidOperationException("Multiple ground symbols should form a valid grounded circuit.");
+            if (multipleGrounds.NodeByTerminal[new SpiceTerminalRef("ground", SpiceComponentModel.GroundTerminalId)] != "0" ||
+                multipleGrounds.NodeByTerminal[new SpiceTerminalRef("ground2", SpiceComponentModel.GroundTerminalId)] != "0")
+            {
+                throw new InvalidOperationException("All ground terminals must map to SPICE node 0.");
+            }
+
+            var baselineNodes = DescribeNodes(baseline, includeGrounds: false);
+            var multipleGroundNodes = DescribeNodes(multipleGrounds, includeGrounds: false);
+            if (baselineNodes != multipleGroundNodes) throw new InvalidOperationException("Additional ground symbols changed non-ground node names.");
+        }
+
         private static async System.Threading.Tasks.Task VerifyDeletedWireBlocksSimulationAsync(SpiceDcSimulationService service)
         {
             var circuit = SpiceT2Fixtures.Divider();
@@ -109,6 +165,64 @@ namespace ElectricalSim.Spice.T2
             if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_TERMINAL")) throw new InvalidOperationException("Deleting the divider wire did not invalidate the rebuilt topology.");
             var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
             if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Deleted-wire topology reached ngspice instead of being rejected before execution.");
+        }
+
+        private static async System.Threading.Tasks.Task VerifyFloatingSubcircuitsBlockSimulationAsync(SpiceDcSimulationService service)
+        {
+            await ExpectFloatingSubcircuitBlockedAsync(service, SpiceT2Fixtures.FloatingClosedLoop(), "complete floating loop").ConfigureAwait(false);
+            await ExpectFloatingSubcircuitBlockedAsync(service, SpiceT2Fixtures.GroundedAndFloatingCircuits(), "grounded circuit plus floating loop").ConfigureAwait(false);
+        }
+
+        private static async System.Threading.Tasks.Task ExpectFloatingSubcircuitBlockedAsync(SpiceDcSimulationService service, SpiceCircuitModel circuit, string name)
+        {
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null || result.NodeVoltages.Count != 0 || result.ComponentResults.Count != 0 ||
+                !result.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT"))
+            {
+                throw new InvalidOperationException("Floating subcircuit was not rejected before ngspice: " + name + ".");
+            }
+        }
+
+        private static async System.Threading.Tasks.Task VerifyMultipleGroundSimulationAsync(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.DividerWithMultipleGrounds()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            ExpectNear(GetMiddleNode(result), 5d, VoltageTolerance, "multiple-ground divider middle voltage");
+        }
+
+        private static void ExpectInvalidFloatingGraph(SpiceCircuitGraph graph, string name)
+        {
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT"))
+            {
+                throw new InvalidOperationException("Topology was expected to contain a floating subcircuit: " + name + ".");
+            }
+        }
+
+        private static void ExpectEquivalentGraphAndNetlist(SpiceCircuitModel firstCircuit, SpiceCircuitModel secondCircuit, string difference)
+        {
+            var first = SpiceCircuitGraphBuilder.Build(firstCircuit);
+            var second = SpiceCircuitGraphBuilder.Build(secondCircuit);
+            if (!first.IsValid || !second.IsValid) throw new InvalidOperationException(difference + " regression fixture is invalid.");
+            if (DescribeNodes(first, includeGrounds: true) != DescribeNodes(second, includeGrounds: true) ||
+                DescribeSpiceNames(first) != DescribeSpiceNames(second) ||
+                SpiceNetlistBuilder.BuildDcOperatingPoint(firstCircuit, first).Content != SpiceNetlistBuilder.BuildDcOperatingPoint(secondCircuit, second).Content)
+            {
+                throw new InvalidOperationException(difference + " changed deterministic node or netlist output.");
+            }
+        }
+
+        private static string DescribeNodes(SpiceCircuitGraph graph, bool includeGrounds)
+        {
+            return string.Join(";", graph.NodeByTerminal
+                .Where(pair => includeGrounds || pair.Key.TerminalId != SpiceComponentModel.GroundTerminalId)
+                .OrderBy(pair => pair.Key.ComponentInstanceId, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.TerminalId, StringComparer.Ordinal)
+                .Select(pair => pair.Key + "=" + pair.Value));
+        }
+
+        private static string DescribeSpiceNames(SpiceCircuitGraph graph)
+        {
+            return string.Join(";", graph.SpiceNameByComponentId.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Key + "=" + pair.Value));
         }
 
         private static void ExpectSuccess(SpiceSimulationResult result)
