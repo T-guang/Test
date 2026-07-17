@@ -1,12 +1,14 @@
 using UnityEditor;
 using UnityEngine;
-using System.IO;
+using System;
 
 public class ImportUIAssets : AssetPostprocessor
 {
+    private const string UiAssetsRoot = "Assets/Resources/UIAssets/";
+
     void OnPreprocessTexture()
     {
-        if (assetPath.Contains("UIAssets"))
+        if (assetPath.StartsWith(UiAssetsRoot, StringComparison.Ordinal))
         {
             ApplyUiSpriteSettings((TextureImporter)assetImporter);
         }
@@ -23,20 +25,45 @@ public class ImportUIAssets : AssetPostprocessor
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer != null)
             {
-                ApplyUiSpriteSettings(importer);
-                importer.SaveAndReimport();
+                if (ApplyUiSpriteSettings(importer))
+                {
+                    importer.SaveAndReimport();
+                }
             }
         }
-        Debug.Log("Forced UIAssets import as Sprite.");
+        Debug.Log("Applied UIAssets Sprite settings where required.");
     }
 
-    private static void ApplyUiSpriteSettings(TextureImporter importer)
+    // UIAssets contains both small icons and page-scale art. Compression remains an
+    // asset-level decision; this shared importer only enforces common Sprite settings.
+    private static bool ApplyUiSpriteSettings(TextureImporter importer)
     {
-        importer.textureType = TextureImporterType.Sprite;
-        importer.spriteImportMode = SpriteImportMode.Single;
-        importer.alphaIsTransparency = true;
-        importer.mipmapEnabled = false;
-        importer.filterMode = FilterMode.Bilinear;
-        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        var changed = false;
+        if (importer.textureType != TextureImporterType.Sprite)
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            changed = true;
+        }
+        if (importer.spriteImportMode != SpriteImportMode.Single)
+        {
+            importer.spriteImportMode = SpriteImportMode.Single;
+            changed = true;
+        }
+        if (!importer.alphaIsTransparency)
+        {
+            importer.alphaIsTransparency = true;
+            changed = true;
+        }
+        if (importer.mipmapEnabled)
+        {
+            importer.mipmapEnabled = false;
+            changed = true;
+        }
+        if (importer.filterMode != FilterMode.Bilinear)
+        {
+            importer.filterMode = FilterMode.Bilinear;
+            changed = true;
+        }
+        return changed;
     }
 }
