@@ -11,6 +11,9 @@ using UnityEngine.SceneManagement;
 
 namespace ElectricalSim.EditorTools.SpiceT2
 {
+    /// <summary>
+    /// 仅 Editor 使用的 T2 验证入口。Player Build 显式传入测试场景，不读取或修改正式 Build Settings。
+    /// </summary>
     public static class SpiceT2ValidationTools
     {
         private const string ValidationScenePath = "Assets/Tests/SpiceT2/SpiceT2PlayerValidation.unity";
@@ -46,6 +49,7 @@ namespace ElectricalSim.EditorTools.SpiceT2
 
         private static void EnsureValidationScene()
         {
+            // 此测试场景独立于 Demo.unity，只承载自动退出的最小 Harness。
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             new GameObject("SpiceT2PlayerValidationHarness").AddComponent<SpiceT2PlayerValidationHarness>();
             if (!EditorSceneManager.SaveScene(scene, ValidationScenePath)) throw new InvalidOperationException("Unable to save the Spice T2 validation scene.");
@@ -67,7 +71,7 @@ namespace ElectricalSim.EditorTools.SpiceT2
             using (var player = Process.Start(info))
             {
                 if (player == null) throw new InvalidOperationException("Unable to start the Spice T2 player validation executable.");
-                if (!player.WaitForExit(60000)) { try { player.Kill(); } catch { } throw new TimeoutException("Spice T2 player validation did not exit within 60 seconds."); }
+                if (!player.WaitForExit(60000)) { try { player.Kill(); } catch { /* Timeout remains the primary diagnostic. */ } throw new TimeoutException("Spice T2 player validation did not exit within 60 seconds."); }
                 if (player.ExitCode != 0) throw new InvalidOperationException("Spice T2 player validation exited with code " + player.ExitCode + ". Log: " + logPath);
             }
             if (!File.Exists(resultPath)) throw new FileNotFoundException("The Spice T2 player did not write its result file.", resultPath);

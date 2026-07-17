@@ -10,6 +10,10 @@ using UnityEngine;
 
 namespace ElectricalSim.Spice.Infrastructure
 {
+    /// <summary>
+    /// Windows 本地 ngspice 进程边界。构造时在 Unity 主线程捕获 StreamingAssets、临时目录和
+    /// 应用本地数据目录，实际进程和 stdout/stderr 读取在后台执行；同一 Runner 串行化运行。
+    /// </summary>
     public sealed class NgspiceProcessRunner
     {
         private const string BeginMarker = "__SPICE_T1_BEGIN__";
@@ -68,6 +72,7 @@ namespace ElectricalSim.Spice.Infrastructure
                 persistentDataPath,
                 diagnosticScope,
                 "last_run");
+            // 同一 Runner 不允许重叠启动两个外部求解器，避免诊断目录和进程生命周期交叉。
             await runGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -221,6 +226,7 @@ namespace ElectricalSim.Spice.Infrastructure
             }
             catch (Exception exception)
             {
+                // 文件、进程和编码属于外部边界；保留异常详情而非以成功或数值默认值掩盖失败。
                 if (result.FailureCode == NgspiceFailureCode.None)
                 {
                     result.FailureCode = NgspiceFailureCode.StartFailed;

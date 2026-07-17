@@ -8,6 +8,9 @@ using ElectricalSim.Spice.Topology;
 
 namespace ElectricalSim.Spice.Netlist
 {
+    /// <summary>
+    /// 已生成网表及其明确要求 ngspice 输出的向量列表。该列表也是结果解析的完整性契约。
+    /// </summary>
     public sealed class SpiceNetlistDocument
     {
         public string Content { get; set; }
@@ -15,6 +18,9 @@ namespace ElectricalSim.Spice.Netlist
         public IReadOnlyList<string> PrintedBranchNames { get; set; }
     }
 
+    /// <summary>
+    /// 将已校验的 T2 图转换为确定性 DC 工作点网表；不从用户 instanceId 直接生成 SPICE 名称。
+    /// </summary>
     public static class SpiceNetlistBuilder
     {
         public const string BeginMarker = "__SPICE_T2_BEGIN__";
@@ -40,6 +46,7 @@ namespace ElectricalSim.Spice.Netlist
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();
             var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.Inductor)
                 .Select(pair => pair.Value).ToList();
+            // 只打印后续结果层需要的向量，并用唯一标记隔离 ngspice 自身日志。
             builder.AppendLine().AppendLine(".control").AppendLine("set noaskquit").AppendLine("op").AppendLine("echo " + BeginMarker);
             foreach (var node in nodes) builder.AppendLine("print v(" + node + ")");
             foreach (var branch in branches) builder.AppendLine("print i(" + branch + ")");
@@ -51,10 +58,10 @@ namespace ElectricalSim.Spice.Netlist
         {
             switch (component.Kind)
             {
-                case SpiceComponentKind.DcVoltageSource: component.TryGetParameter(SpiceParameterKey.DcVoltage, out var volts); return volts;
-                case SpiceComponentKind.Resistor: component.TryGetParameter(SpiceParameterKey.Resistance, out var ohms); return ohms;
-                case SpiceComponentKind.Capacitor: component.TryGetParameter(SpiceParameterKey.Capacitance, out var farads); return farads;
-                case SpiceComponentKind.Inductor: component.TryGetParameter(SpiceParameterKey.Inductance, out var henries); return henries;
+                case SpiceComponentKind.DcVoltageSource: return component.GetRequiredParameter(SpiceParameterKey.DcVoltage);
+                case SpiceComponentKind.Resistor: return component.GetRequiredParameter(SpiceParameterKey.Resistance);
+                case SpiceComponentKind.Capacitor: return component.GetRequiredParameter(SpiceParameterKey.Capacitance);
+                case SpiceComponentKind.Inductor: return component.GetRequiredParameter(SpiceParameterKey.Inductance);
                 default: throw new InvalidOperationException("Ground has no SPICE element line.");
             }
         }

@@ -6,6 +6,9 @@ using UnityEngine;
 
 namespace ElectricalSim.Spice.T2
 {
+    /// <summary>
+    /// Player 测试报告，只用于独立 T2 验证包；不是正式保存格式或产品结果模型。
+    /// </summary>
     [Serializable]
     public sealed class SpiceT2PlayerValidationReport
     {
@@ -35,6 +38,7 @@ namespace ElectricalSim.Spice.T2
             }
             catch (Exception exception)
             {
+                // 结果文件是 Player 自动化的外部交接点；写入失败必须令进程以失败码退出。
                 report.success = false;
                 report.failure = exception.ToString();
                 Debug.LogError("[SpiceT2] " + report.failure);
@@ -63,6 +67,7 @@ namespace ElectricalSim.Spice.T2
             }
             catch (Exception exception)
             {
+                // Harness 保留完整异常文本给结果文件，避免 Player 验证静默成功。
                 return new SpiceT2PlayerValidationReport { success = false, failure = exception.ToString() };
             }
         }

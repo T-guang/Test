@@ -5,6 +5,10 @@ using ElectricalSim.Spice.Core;
 
 namespace ElectricalSim.Spice.Topology
 {
+    /// <summary>
+    /// 每次计算都从当前 Wire 集合建立新的连通分量，避免删除导线后复用陈旧 nodeId。
+    /// 所有 Ground 端子在图内合并到 SPICE 节点 0。
+    /// </summary>
     public static class SpiceCircuitGraphBuilder
     {
         public static SpiceCircuitGraph Build(SpiceCircuitModel circuit)
@@ -51,6 +55,7 @@ namespace ElectricalSim.Spice.Topology
 
             var indexByTerminal = new Dictionary<SpiceTerminalRef, int>();
             for (var i = 0; i < terminals.Count; i++) indexByTerminal[terminals[i]] = i;
+            // Union-Find 只描述本次构图的端子连通关系，不向元件模型写入节点状态。
             var unionFind = new UnionFind(terminals.Count);
             var connectionCount = terminals.ToDictionary(terminal => terminal, terminal => 0);
 
@@ -99,12 +104,14 @@ namespace ElectricalSim.Spice.Topology
             var roots = terminals.Select((terminal, index) => new { terminal, root = unionFind.Find(index) })
                 .GroupBy(item => item.root).OrderBy(group => group.Key).ToList();
             var nodeIndex = 1;
+            // 端子和分量均按稳定顺序遍历，因此同一结构重复生成时节点名称保持确定。
             foreach (var root in roots)
             {
                 var node = root.Key == groundedRoot ? "0" : "n" + nodeIndex++.ToString("D3");
                 foreach (var item in root) graph.NodeByTerminal[item.terminal] = node;
             }
 
+            // 内部 SPICE 名称与用户 instanceId 分离，以避免中文、空格或特殊字符进入网表。
             foreach (var component in components.Values.OrderBy(component => component.Kind).ThenBy(component => component.InstanceId, StringComparer.Ordinal))
             {
                 if (component.Kind == SpiceComponentKind.Ground) continue;

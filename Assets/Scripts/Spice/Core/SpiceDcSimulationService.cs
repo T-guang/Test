@@ -10,6 +10,10 @@ using ElectricalSim.Spice.Topology;
 
 namespace ElectricalSim.Spice.Core
 {
+    /// <summary>
+    /// T2 DC 闭环编排：从当前纯数据模型重建图、生成网表、执行 ngspice 并映射回原 instanceId。
+    /// 不保存拓扑或复用上一次节点结果。
+    /// </summary>
     public sealed class SpiceDcSimulationService
     {
         private readonly NgspiceProcessRunner processRunner;
@@ -43,6 +47,12 @@ namespace ElectricalSim.Spice.Core
                 return result;
             }
 
+            if (!ContainsAll(voltages, document.PrintedNodes) || !ContainsAll(currents, document.PrintedBranchNames))
+            {
+                result.Diagnostics.Add(new SpiceDiagnostic("SPICE_OUTPUT_INCOMPLETE", SpiceDiagnosticSeverity.Error, "ngspice did not return every vector requested by the generated netlist."));
+                return result;
+            }
+
             foreach (var voltage in voltages) result.NodeVoltages[voltage.Key] = voltage.Value;
             BuildComponentResults(circuit, graph, result, currents);
             result.Success = true;
@@ -69,8 +79,7 @@ namespace ElectricalSim.Spice.Core
 
                 if (component.Kind == SpiceComponentKind.Resistor)
                 {
-                    component.TryGetParameter(SpiceParameterKey.Resistance, out var resistance);
-                    componentResult.Current = voltage / resistance;
+                    componentResult.Current = voltage / component.GetRequiredParameter(SpiceParameterKey.Resistance);
                 }
                 else if (component.Kind == SpiceComponentKind.Capacitor)
                 {
@@ -81,12 +90,7 @@ namespace ElectricalSim.Spice.Core
                 else
                 {
                     var spiceName = graph.SpiceNameByComponentId[component.InstanceId];
-                    if (currents.TryGetValue(spiceName, out var current)) componentResult.Current = current;
-                    else
-                    {
-                        componentResult.ResultStatus = SpiceResultStatus.NotAvailable;
-                        componentResult.Notes = "ngspice did not return the requested branch current.";
-                    }
+                    componentResult.Current = currents[spiceName];
                 }
 
                 result.ComponentResults[component.InstanceId] = componentResult;
@@ -95,7 +99,12 @@ namespace ElectricalSim.Spice.Core
 
         private static double GetNodeVoltage(Dictionary<string, double> voltages, string node)
         {
-            return node == "0" ? 0d : voltages.TryGetValue(node, out var voltage) ? voltage : 0d;
+            return node == "0" ? 0d : voltages[node];
+        }
+
+        private static bool ContainsAll(Dictionary<string, double> actual, IReadOnlyList<string> expected)
+        {
+            return expected.All(actual.ContainsKey);
         }
     }
 }

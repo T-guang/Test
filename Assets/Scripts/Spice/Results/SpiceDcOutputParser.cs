@@ -6,6 +6,9 @@ using ElectricalSim.Spice.Netlist;
 
 namespace ElectricalSim.Spice.Results
 {
+    /// <summary>
+    /// 只解析 T2 标记之间的明确 print 输出，避免将 ngspice 普通日志误当作电路数值。
+    /// </summary>
     public static class SpiceDcOutputParser
     {
         private static readonly Regex ValuePattern = new Regex(@"^\s*(?<kind>[vi])\s*\(\s*(?<id>[^)]+)\s*\)\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
