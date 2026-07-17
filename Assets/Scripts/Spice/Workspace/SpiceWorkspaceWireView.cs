@@ -5,7 +5,8 @@ using UnityEngine.UI;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// 最小正交导线视图。导线端点保存在 SpiceWorkspaceModel，视图仅根据端子位置重绘。
+    /// 正式 Wire 的最小正交视图。端点事实只保存在 SpiceWorkspaceModel，
+    /// 本类按当前元件位置重绘，不承担临时接线预览的生命周期。
     /// </summary>
     public sealed class SpiceWorkspaceWireView
     {
@@ -31,10 +32,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void Refresh()
         {
-            var startPosition = start.GetTerminalPosition(data.StartTerminalId);
-            var endPosition = end.GetTerminalPosition(data.EndTerminalId);
-            SetHorizontal(horizontal.rectTransform, startPosition, new Vector2(endPosition.x, startPosition.y));
-            SetVertical(vertical.rectTransform, new Vector2(endPosition.x, startPosition.y), endPosition);
+            SetPath(horizontal.rectTransform, vertical.rectTransform, start.GetTerminalPosition(data.StartTerminalId), end.GetTerminalPosition(data.EndTerminalId));
         }
 
         public void SetSelected(bool selected)
@@ -48,6 +46,13 @@ namespace ElectricalSim.Spice.Workspace
         {
             Object.Destroy(horizontal.gameObject);
             Object.Destroy(vertical.gameObject);
+        }
+
+        internal static void SetPath(RectTransform horizontal, RectTransform vertical, Vector2 from, Vector2 to)
+        {
+            var elbow = new Vector2(to.x, from.y);
+            SetHorizontal(horizontal, from, elbow);
+            SetVertical(vertical, elbow, to);
         }
 
         private Image CreateSegment(string name)
@@ -68,6 +73,34 @@ namespace ElectricalSim.Spice.Workspace
         {
             rect.anchoredPosition = (from + to) * 0.5f;
             rect.sizeDelta = new Vector2(5f, Mathf.Abs(to.y - from.y));
+        }
+    }
+
+    /// <summary>
+    /// 接线过程中的瞬时视觉，不对应模型中的导线；取消或完成接线后必须销毁。
+    /// </summary>
+    internal sealed class SpiceWorkspaceWirePreview
+    {
+        private readonly Image horizontal;
+        private readonly Image vertical;
+
+        public SpiceWorkspaceWirePreview(SpiceWorkspaceController owner)
+        {
+            horizontal = SpiceWorkspaceUi.CreateImage(owner.WireLayer, "WirePreviewHorizontal", new Color(0.15f, 0.45f, 0.85f, 0.42f));
+            vertical = SpiceWorkspaceUi.CreateImage(owner.WireLayer, "WirePreviewVertical", new Color(0.15f, 0.45f, 0.85f, 0.42f));
+            horizontal.raycastTarget = false;
+            vertical.raycastTarget = false;
+        }
+
+        public void Refresh(Vector2 from, Vector2 to)
+        {
+            SpiceWorkspaceWireView.SetPath(horizontal.rectTransform, vertical.rectTransform, from, to);
+        }
+
+        public void Destroy()
+        {
+            Object.Destroy(horizontal.gameObject);
+            Object.Destroy(vertical.gameObject);
         }
     }
 

@@ -20,7 +20,7 @@ namespace ElectricalSim.EditorTools.SpiceT3
     {
         private const string PrototypeScenePath = "Assets/Tests/SpiceT3/SpiceT3WorkspacePrototype.unity";
         private const string ValidationScenePath = "Assets/Tests/SpiceT3/SpiceT3PlayerValidation.unity";
-        private const string BuildRoot = "E:/Builds/ElectricalSimulation2D/SpiceT3-Prototype";
+        private const string BuildRoot = "E:/Builds/ElectricalSimulation2D/SpiceT31-Interaction";
 
         [MenuItem("Tools/Spice/T3/Open Workspace Prototype")]
         public static void OpenPrototype()
@@ -71,6 +71,10 @@ namespace ElectricalSim.EditorTools.SpiceT3
         private static void CreateScene(string path, bool includeHarness)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var camera = new GameObject("SpiceT3PrototypeCamera", typeof(Camera)).GetComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.96f, 0.98f, 1f, 1f);
+            camera.orthographic = true;
             var root = new GameObject(includeHarness ? "SpiceT3PlayerValidation" : "SpiceT3WorkspacePrototype", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
             root.AddComponent<SpiceWorkspaceController>();
             if (includeHarness) root.AddComponent<SpiceT3PlayerValidationHarness>();
