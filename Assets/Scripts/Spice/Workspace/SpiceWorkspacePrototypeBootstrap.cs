@@ -20,14 +20,14 @@ namespace ElectricalSim.Spice.Workspace
             var canvas = GetComponent<Canvas>() ?? gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             scaler = GetComponent<CanvasScaler>();
-            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();
 
-            // CanvasScaler 依赖同一对象上的 Canvas；延后到 Start 配置，避免动态添加组件时的 Awake 顺序竞争。
+            // UGUI 附属组件依赖同一对象上的 Canvas；延后到 Start 配置，避免动态添加组件时的 Awake 顺序竞争。
         }
 
         private void Start()
         {
             scaler = scaler ?? gameObject.AddComponent<CanvasScaler>();
+            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
