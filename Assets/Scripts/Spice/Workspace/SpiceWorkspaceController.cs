@@ -29,6 +29,8 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceWorkspaceWireView selectedWire;
         private SpiceWorkspaceComponentView pendingComponent;
         private string pendingTerminalId;
+        private readonly List<Vector2> pendingWaypoints = new List<Vector2>();
+        private bool pendingNextSegmentHorizontal;
         private SpiceWorkspaceComponentView highlightedComponent;
         private string highlightedTerminalId;
         private SpiceWorkspaceWirePreview wirePreview;
@@ -77,10 +79,7 @@ namespace ElectricalSim.Spice.Workspace
                 CancelPaletteDrag();
             }
             if (Input.GetKeyDown(KeyCode.R)) RotateSelectedComponent();
-            if (pendingComponent != null && TryScreenToWorkspace(Input.mousePosition, null, out var pointer))
-            {
-                wirePreview.Refresh(pendingComponent.GetTerminalPosition(pendingTerminalId), pointer);
-            }
+            RefreshWirePreview();
         }
 
         /// <summary>保留给验证 Harness 的固定位置创建入口；元件池交互改由拖放入口使用。</summary>
@@ -142,10 +141,10 @@ namespace ElectricalSim.Spice.Workspace
             return RectTransformUtility.ScreenPointToLocalPointInRectangle(WorkspaceRect, screenPosition, eventCamera, out localPosition);
         }
 
-        public bool Connect(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        public bool Connect(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState = null)
         {
             EnsureInitialized();
-            if (!Model.AddWire(startComponentId, startTerminalId, endComponentId, endTerminalId)) return false;
+            if (!Model.AddWire(startComponentId, startTerminalId, endComponentId, endTerminalId, visualState)) return false;
             var wire = Model.Wires[Model.Wires.Count - 1];
             wireViews.Add(new SpiceWorkspaceWireView(this, wire, componentViews[startComponentId], componentViews[endComponentId]));
             return true;
@@ -202,6 +201,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void SelectComponent(SpiceWorkspaceComponentView component)
         {
+            if (pendingComponent != null && pendingComponent != component) CancelPendingWire();
             if (selectedComponent != null) selectedComponent.SetSelected(false);
             if (selectedWire != null) selectedWire.SetSelected(false);
             selectedWire = null;
@@ -216,6 +216,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void SelectWire(SpiceWorkspaceWireView wire)
         {
+            if (pendingComponent != null) CancelPendingWire();
             if (selectedComponent != null) selectedComponent.SetSelected(false);
             if (selectedWire != null) selectedWire.SetSelected(false);
             selectedComponent = null;
@@ -241,15 +242,25 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (pendingComponent == null)
             {
+                if (ResultState == SpiceWorkspaceResultState.Running) return;
                 pendingComponent = component;
                 pendingTerminalId = terminalId;
+                pendingNextSegmentHorizontal = SpiceWorkspaceOrthogonalRoute.IsHorizontal(component.GetTerminalDirection(terminalId));
                 wirePreview = new SpiceWorkspaceWirePreview(this);
                 statusText.text = "请选择第二个端子，Esc 或点击空白取消";
                 return;
             }
-            if (pendingComponent == component && pendingTerminalId == terminalId) return;
-            var connected = Connect(pendingComponent.InstanceId, pendingTerminalId, component.InstanceId, terminalId);
-            if (!connected) statusText.text = "无法建立该导线";
+            if (!IsPendingTargetValid(component, terminalId))
+            {
+                statusText.text = "该端子不能与起始元件直接连接";
+                return;
+            }
+            var route = pendingWaypoints.Count == 0 ? SpiceWireVisualState.Auto() : SpiceWireVisualState.Manual(pendingWaypoints);
+            if (!Connect(pendingComponent.InstanceId, pendingTerminalId, component.InstanceId, terminalId, route))
+            {
+                statusText.text = "无法建立该导线";
+                return;
+            }
             CancelPendingWire();
         }
 
@@ -257,14 +268,35 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (highlightedComponent != null)
             {
-                highlightedComponent.SetTerminalHighlighted(highlightedTerminalId, false);
+                highlightedComponent.SetTerminalHighlighted(highlightedTerminalId, SpiceTerminalHighlightState.None);
                 highlightedComponent = null;
                 highlightedTerminalId = null;
             }
-            if (!entered || pendingComponent == null || (pendingComponent == component && pendingTerminalId == terminalId)) return;
+            if (!entered || pendingComponent == null) return;
             highlightedComponent = component;
             highlightedTerminalId = terminalId;
-            component.SetTerminalHighlighted(terminalId, true);
+            component.SetTerminalHighlighted(terminalId, IsPendingTargetValid(component, terminalId) ? SpiceTerminalHighlightState.Valid : SpiceTerminalHighlightState.Invalid);
+        }
+
+        public void HandleWorkspacePointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Right)
+            {
+                UndoPendingWaypoint();
+                return;
+            }
+            if (eventData.button != PointerEventData.InputButton.Left) return;
+            if (pendingComponent == null)
+            {
+                ClearSelection();
+                return;
+            }
+            if (!TryScreenToWorkspace(eventData.position, eventData.pressEventCamera, out var pointer))
+            {
+                CancelPendingWire();
+                return;
+            }
+            AddPendingWaypoint(pointer);
         }
 
         public void MoveComponent(string instanceId, Vector2 position)
@@ -322,11 +354,12 @@ namespace ElectricalSim.Spice.Workspace
 
         public void CancelPendingWire()
         {
-            if (highlightedComponent != null) highlightedComponent.SetTerminalHighlighted(highlightedTerminalId, false);
+            if (highlightedComponent != null) highlightedComponent.SetTerminalHighlighted(highlightedTerminalId, SpiceTerminalHighlightState.None);
             highlightedComponent = null;
             highlightedTerminalId = null;
             pendingComponent = null;
             pendingTerminalId = null;
+            pendingWaypoints.Clear();
             if (wirePreview != null)
             {
                 wirePreview.Destroy();
@@ -345,8 +378,46 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (pendingComponent != null && wirePreview != null && TryScreenToWorkspace(Input.mousePosition, null, out var pointer))
             {
-                wirePreview.Refresh(pendingComponent.GetTerminalPosition(pendingTerminalId), pointer);
+                var visualState = pendingWaypoints.Count == 0 ? SpiceWireVisualState.Auto() : SpiceWireVisualState.Manual(pendingWaypoints);
+                wirePreview.Refresh(SpiceWorkspaceOrthogonalRoute.Build(
+                    pendingComponent.GetTerminalPosition(pendingTerminalId),
+                    pointer,
+                    pendingComponent.GetTerminalDirection(pendingTerminalId),
+                    visualState));
             }
+        }
+
+        private bool IsPendingTargetValid(SpiceWorkspaceComponentView component, string terminalId)
+        {
+            return ResultState != SpiceWorkspaceResultState.Running &&
+                pendingComponent != null &&
+                component != null &&
+                component.Data.HasTerminal(terminalId) &&
+                !string.Equals(pendingComponent.InstanceId, component.InstanceId, StringComparison.Ordinal);
+        }
+
+        private void AddPendingWaypoint(Vector2 pointer)
+        {
+            var anchor = pendingWaypoints.Count == 0 ? pendingComponent.GetTerminalPosition(pendingTerminalId) : pendingWaypoints[pendingWaypoints.Count - 1];
+            var waypoint = SpiceWorkspaceOrthogonalRoute.ConstrainToAxis(anchor, pointer, pendingNextSegmentHorizontal);
+            if ((waypoint - anchor).sqrMagnitude <= 0.0001f) return;
+            pendingWaypoints.Add(waypoint);
+            pendingNextSegmentHorizontal = !pendingNextSegmentHorizontal;
+            RefreshWirePreview();
+        }
+
+        private void UndoPendingWaypoint()
+        {
+            if (pendingComponent == null) return;
+            if (pendingWaypoints.Count == 0)
+            {
+                CancelPendingWire();
+                return;
+            }
+            pendingWaypoints.RemoveAt(pendingWaypoints.Count - 1);
+            pendingNextSegmentHorizontal = SpiceWorkspaceOrthogonalRoute.IsHorizontal(pendingComponent.GetTerminalDirection(pendingTerminalId));
+            if (pendingWaypoints.Count % 2 != 0) pendingNextSegmentHorizontal = !pendingNextSegmentHorizontal;
+            RefreshWirePreview();
         }
 
         private void UpdateRotateAvailability()
@@ -567,6 +638,7 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "存在悬空端子" :
                 diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT" ? "存在未接地子电路" :
                 diagnostic.Code == "SPICE_INVALID_PARAMETER" ? "元件参数无效" :
+                diagnostic.Code == "SPICE_SAME_COMPONENT_CONNECTION" ? "同一元件端子不能直接连接" :
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "缺少直流电压源" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "电压源两端短接" :
                 diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "元件两端短接" : "SPICE 计算诊断";
@@ -574,6 +646,7 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "该端子尚未通过导线连接。" :
                 diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT" ? "该子电路无法通过元件与导线到达 GND。" :
                 diagnostic.Code == "SPICE_INVALID_PARAMETER" ? "请检查数值是否为支持范围内的 SI 参数。" :
+                diagnostic.Code == "SPICE_SAME_COMPONENT_CONNECTION" ? "请改为连接不同元件的端子。" :
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "当前直流工作点计算需要一个直流电压源。" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "请断开电压源两端的直接短接。" :
                 diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "请检查该元件两端是否被同一电气节点直接连接。" : diagnostic.Message;
@@ -586,11 +659,7 @@ namespace ElectricalSim.Spice.Workspace
     {
         private SpiceWorkspaceController owner;
         public void Initialize(SpiceWorkspaceController workspace) { owner = workspace; }
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            owner.CancelPendingWire();
-            owner.ClearSelection();
-        }
+        public void OnPointerClick(PointerEventData eventData) => owner.HandleWorkspacePointerClick(eventData);
     }
 
     internal static class SpiceWorkspaceUi

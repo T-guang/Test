@@ -84,6 +84,12 @@ namespace ElectricalSim.Spice.Topology
                     continue;
                 }
 
+                if (string.Equals(wire.Start.ComponentInstanceId, wire.End.ComponentInstanceId, StringComparison.Ordinal))
+                {
+                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SAME_COMPONENT_CONNECTION", SpiceDiagnosticSeverity.Error, "A wire cannot directly connect two terminals of the same component.", wire.Start.ComponentInstanceId, wire.Start.TerminalId));
+                    continue;
+                }
+
                 if (!TryResolveTerminal(components, indexByTerminal, wire.Start, graph) || !TryResolveTerminal(components, indexByTerminal, wire.End, graph)) continue;
                 unionFind.Union(indexByTerminal[wire.Start], indexByTerminal[wire.End]);
                 connectionCount[wire.Start]++;

@@ -41,13 +41,13 @@ namespace ElectricalSim.Spice.Workspace
             return true;
         }
 
-        public bool AddWire(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        public bool AddWire(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState = null)
         {
-            if (string.Equals(startComponentId, endComponentId, StringComparison.Ordinal) && string.Equals(startTerminalId, endTerminalId, StringComparison.Ordinal)) return false;
+            if (string.Equals(startComponentId, endComponentId, StringComparison.Ordinal)) return false;
             var start = FindComponent(startComponentId);
             var end = FindComponent(endComponentId);
             if (start == null || end == null || !start.HasTerminal(startTerminalId) || !end.HasTerminal(endTerminalId)) return false;
-            wires.Add(new SpiceWorkspaceWireData(startComponentId, startTerminalId, endComponentId, endTerminalId));
+            wires.Add(new SpiceWorkspaceWireData(startComponentId, startTerminalId, endComponentId, endTerminalId, visualState ?? SpiceWireVisualState.Auto()));
             Changed?.Invoke(SpiceWorkspaceChange.Topology);
             return true;
         }
@@ -161,20 +161,52 @@ namespace ElectricalSim.Spice.Workspace
         }
     }
 
+    /// <summary>
+    /// SPICE 原型中一条正式导线的电气端点与视图路由状态。
+    /// 只有端点会映射到 SpiceWireModel；折点始终是工作区局部坐标，不参与拓扑或网表。
+    /// </summary>
     public sealed class SpiceWorkspaceWireData
     {
-        public SpiceWorkspaceWireData(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        public SpiceWorkspaceWireData(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState)
         {
             StartComponentId = startComponentId;
             StartTerminalId = startTerminalId;
             EndComponentId = endComponentId;
             EndTerminalId = endTerminalId;
+            VisualState = visualState;
         }
 
         public string StartComponentId { get; }
         public string StartTerminalId { get; }
         public string EndComponentId { get; }
         public string EndTerminalId { get; }
+        public SpiceWireVisualState VisualState { get; }
+    }
+
+    public enum SpiceWireRouteMode { Auto, Manual }
+
+    /// <summary>
+    /// 工作区视觉路由数据。Manual 模式只保存用户确认的中间折点；
+    /// 元件移动或旋转时，视图可临时补折点以保持正交，但不会改写这里的用户数据。
+    /// </summary>
+    public sealed class SpiceWireVisualState
+    {
+        private SpiceWireVisualState(SpiceWireRouteMode routeMode, IReadOnlyList<Vector2> waypoints)
+        {
+            RouteMode = routeMode;
+            Waypoints = waypoints;
+        }
+
+        public SpiceWireRouteMode RouteMode { get; }
+        public IReadOnlyList<Vector2> Waypoints { get; }
+
+        public static SpiceWireVisualState Auto() => new SpiceWireVisualState(SpiceWireRouteMode.Auto, Array.Empty<Vector2>());
+
+        public static SpiceWireVisualState Manual(IReadOnlyList<Vector2> waypoints)
+        {
+            if (waypoints == null || waypoints.Count == 0) throw new ArgumentException("Manual wire routing requires at least one waypoint.", nameof(waypoints));
+            return new SpiceWireVisualState(SpiceWireRouteMode.Manual, waypoints.ToArray());
+        }
     }
 
     public static class SpiceParameterUnits

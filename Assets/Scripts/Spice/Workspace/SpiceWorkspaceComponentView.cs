@@ -60,16 +60,22 @@ namespace ElectricalSim.Spice.Workspace
             return owner.WorkspaceRect.InverseTransformPoint(world);
         }
 
+        public Vector2 GetTerminalDirection(string terminalId)
+        {
+            var local = terminalRects[terminalId].localPosition;
+            return symbolRoot.TransformDirection(local.normalized);
+        }
+
         public void SetSelected(bool selected)
         {
             selectionOutline.effectColor = selected ? MainUiTheme.PrimaryBlue : MainUiTheme.Divider;
         }
 
-        public void SetTerminalHighlighted(string terminalId, bool highlighted)
+        public void SetTerminalHighlighted(string terminalId, SpiceTerminalHighlightState state)
         {
             if (!terminalImages.TryGetValue(terminalId, out var terminal)) return;
-            terminal.color = highlighted ? MainUiTheme.SuccessGreen : MainUiTheme.PrimaryBlue;
-            terminal.rectTransform.sizeDelta = highlighted ? new Vector2(22f, 22f) : new Vector2(16f, 16f);
+            terminal.color = state == SpiceTerminalHighlightState.Valid ? MainUiTheme.SuccessGreen : state == SpiceTerminalHighlightState.Invalid ? MainUiTheme.DangerRed : MainUiTheme.PrimaryBlue;
+            terminal.rectTransform.sizeDelta = state == SpiceTerminalHighlightState.None ? new Vector2(16f, 16f) : new Vector2(22f, 22f);
         }
 
         public void RefreshAnnotation()
@@ -126,7 +132,7 @@ namespace ElectricalSim.Spice.Workspace
 
             if (data.Kind == SpiceComponentKind.Ground)
             {
-                CreateTerminal(SpiceComponentModel.GroundTerminalId, new Vector2(0f, -45f));
+                CreateTerminal(SpiceComponentModel.GroundTerminalId, new Vector2(0f, 42f));
             }
             else
             {
@@ -153,9 +159,15 @@ namespace ElectricalSim.Spice.Workspace
         private void ApplyRotation()
         {
             symbolRoot.localRotation = Quaternion.Euler(0f, 0f, -90f * rotationQuarterTurns);
-            var vertical = rotationQuarterTurns % 2 != 0;
             var label = annotationRoot.Find("Designator").GetComponent<RectTransform>();
             var summary = summaryText.rectTransform;
+            if (data.Kind == SpiceComponentKind.Ground)
+            {
+                label.anchoredPosition = rotationQuarterTurns == 0 ? new Vector2(0f, 70f) : rotationQuarterTurns == 1 ? new Vector2(70f, 16f) : rotationQuarterTurns == 2 ? new Vector2(0f, -70f) : new Vector2(-70f, 16f);
+                summary.anchoredPosition = rotationQuarterTurns == 0 ? new Vector2(0f, -58f) : rotationQuarterTurns == 1 ? new Vector2(70f, -12f) : rotationQuarterTurns == 2 ? new Vector2(0f, 58f) : new Vector2(-70f, -12f);
+                return;
+            }
+            var vertical = rotationQuarterTurns % 2 != 0;
             label.anchoredPosition = vertical ? new Vector2(56f, 16f) : new Vector2(0f, 56f);
             summary.anchoredPosition = vertical ? new Vector2(56f, -12f) : new Vector2(0f, -56f);
         }
@@ -190,9 +202,10 @@ namespace ElectricalSim.Spice.Workspace
                     for (var i = 0; i < 4; i++) CreateCircle(symbol.transform, 9f, new Vector2(-27f + i * 18f, 0f));
                     break;
                 case SpiceComponentKind.Ground:
-                    CreateLine(symbol.transform, new Vector2(-28f, 8f), new Vector2(28f, 8f), 3f);
-                    CreateLine(symbol.transform, new Vector2(-18f, 0f), new Vector2(18f, 0f), 3f);
-                    CreateLine(symbol.transform, new Vector2(-8f, -8f), new Vector2(8f, -8f), 3f);
+                    CreateLine(symbol.transform, new Vector2(0f, 34f), new Vector2(0f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-28f, 0f), new Vector2(28f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-18f, -8f), new Vector2(18f, -8f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-8f, -16f), new Vector2(8f, -16f), 3f);
                     break;
             }
         }
@@ -261,6 +274,8 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string Format(double value) => value.ToString("G4", CultureInfo.InvariantCulture);
     }
+
+    public enum SpiceTerminalHighlightState { None, Valid, Invalid }
 
     public sealed class SpiceWorkspaceTerminalClick : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
