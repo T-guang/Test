@@ -13,15 +13,24 @@ namespace ElectricalSim.Spice.Workspace
     {
         public SpiceWorkspaceController Controller { get; private set; }
 
+        private CanvasScaler scaler;
+
         private void Awake()
         {
             var canvas = GetComponent<Canvas>() ?? gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = GetComponent<CanvasScaler>() ?? gameObject.AddComponent<CanvasScaler>();
+            scaler = GetComponent<CanvasScaler>();
+            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();
+
+            // CanvasScaler 依赖同一对象上的 Canvas；延后到 Start 配置，避免动态添加组件时的 Awake 顺序竞争。
+        }
+
+        private void Start()
+        {
+            scaler = scaler ?? gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
-            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();
             new GameObject("SpiceT3PrototypeEventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
             var camera = new GameObject("SpiceT3PrototypeCamera", typeof(Camera)).GetComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
