@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Threading.Tasks;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
@@ -27,9 +26,13 @@ namespace ElectricalSim.Spice.T3
             var report = new SpiceT3PlayerValidationReport();
             try
             {
-                await Task.Yield();
-                var workspace = GetComponent<SpiceWorkspaceController>();
-                if (workspace == null) throw new InvalidOperationException("SpiceWorkspaceController was not created.");
+                // 场景基础设施已序列化，Bootstrap 在全部 Awake 完成前绑定宿主并初始化 Controller；Start 无需等待一帧。
+                var bootstrap = GetComponent<SpiceWorkspacePrototypeBootstrap>();
+                if (bootstrap == null)
+                    throw new InvalidOperationException("SpiceWorkspacePrototypeBootstrap is missing from the validation host.");
+                var workspace = bootstrap.Controller;
+                if (workspace == null)
+                    throw new InvalidOperationException("Spice workspace was not initialized by Bootstrap.Awake.");
                 var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
                 var ground = workspace.CreateComponent(SpiceComponentKind.Ground, new Vector2(0f, -140f));
