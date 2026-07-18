@@ -24,6 +24,7 @@ namespace ElectricalSim.Spice.Workspace
     {
         private readonly Dictionary<string, SpiceWorkspaceComponentView> componentViews = new Dictionary<string, SpiceWorkspaceComponentView>(StringComparer.Ordinal);
         private readonly List<SpiceWorkspaceWireView> wireViews = new List<SpiceWorkspaceWireView>();
+        private SpiceWorkspaceViewBindings bindings;
         private SpiceDcSimulationService simulationService;
         private SpiceWorkspaceComponentView selectedComponent;
         private SpiceWorkspaceWireView selectedWire;
@@ -65,12 +66,21 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
         public RectTransform WorkspaceRect { get; private set; }
         public RectTransform WireLayer { get; private set; }
+        public RectTransform OverlayLayer { get; private set; }
 
-        private void Awake() => EnsureInitialized();
+        /// <summary>绑定外部宿主后初始化。本控制器不创建 Canvas、EventSystem 或 Camera。</summary>
+        public void Initialize(SpiceWorkspaceViewBindings hostBindings)
+        {
+            if (initialized) throw new InvalidOperationException("Spice workspace is already initialized.");
+            bindings = hostBindings ?? throw new ArgumentNullException(nameof(hostBindings));
+            bindings.Validate();
+            EnsureInitialized();
+        }
 
         private void EnsureInitialized()
         {
             if (initialized) return;
+            if (bindings == null) throw new InvalidOperationException("SpiceWorkspaceController requires explicit host bindings.");
             simulationService = new SpiceDcSimulationService();
             BuildUi();
             Model.Changed += HandleModelChanged;
@@ -80,6 +90,13 @@ namespace ElectricalSim.Spice.Workspace
         private void OnDestroy()
         {
             Model.Changed -= HandleModelChanged;
+        }
+
+        private void OnDisable()
+        {
+            // 正式电路和结果属于控制器状态；仅清理与当前指针交互相关的瞬态 Overlay。
+            CancelPendingWire();
+            CancelPaletteDrag();
         }
 
         private void Update()
@@ -213,6 +230,10 @@ namespace ElectricalSim.Spice.Workspace
                 RefreshNetlistUi();
             }
         }
+
+        public void RunCalculation() => RunFromButton();
+        public void RotateSelection() => RotateSelectedComponent();
+        public void ClearAll() => ClearWorkspace();
 
         public void SelectComponent(SpiceWorkspaceComponentView component)
         {
@@ -444,42 +465,17 @@ namespace ElectricalSim.Spice.Workspace
 
         private void BuildUi()
         {
-            var canvas = GetComponent<Canvas>() ?? gameObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = GetComponent<CanvasScaler>() ?? gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
-            if (GetComponent<GraphicRaycaster>() == null) gameObject.AddComponent<GraphicRaycaster>();
-            if (FindObjectOfType<EventSystem>() == null)
-            {
-                var eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-                eventSystem.transform.SetParent(transform, false);
-            }
-
-            var root = SpiceWorkspaceUi.CreateImage(transform, "SpiceT3Root", MainUiTheme.PageBackground);
-            SpiceWorkspaceUi.Stretch(root.rectTransform, Vector2.zero, Vector2.zero);
-            var toolbar = SpiceWorkspaceUi.CreateImage(root.transform, "Toolbar", Color.white);
-            SpiceWorkspaceUi.Anchor(toolbar.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -64f), Vector2.zero);
-            var toolbarOutline = toolbar.gameObject.AddComponent<Outline>();
-            toolbarOutline.effectColor = MainUiTheme.Divider;
-            toolbarOutline.effectDistance = new Vector2(0f, -1f);
-            runButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Run", "运行计算", MainUiTheme.PrimaryBlue, RunFromButton, true);
-            SpiceWorkspaceUi.Anchor(runButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(18f, -20f), new Vector2(130f, 20f));
-            rotateButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Rotate", "旋转", MainUiTheme.ToolbarButton, RotateSelectedComponent);
-            SpiceWorkspaceUi.Anchor(rotateButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(144f, -20f), new Vector2(238f, 20f));
-            var deleteButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Delete", "删除", MainUiTheme.ToolbarButton, DeleteSelection);
-            SpiceWorkspaceUi.Anchor(deleteButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(252f, -20f), new Vector2(346f, 20f));
-            var clearButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Clear", "清空", MainUiTheme.ToolbarButton, ClearWorkspace);
-            SpiceWorkspaceUi.Anchor(clearButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(360f, -20f), new Vector2(454f, 20f));
+            var toolbar = bindings.RunButton.transform.parent;
+            runButton = bindings.RunButton;
+            rotateButton = bindings.RotateButton;
+            runButton.onClick.AddListener(RunFromButton);
+            rotateButton.onClick.AddListener(RotateSelectedComponent);
+            bindings.DeleteButton.onClick.AddListener(DeleteSelection);
+            bindings.ClearButton.onClick.AddListener(ClearWorkspace);
             statusText = SpiceWorkspaceUi.CreateText(toolbar.transform, "Status", "未计算", 15, FontStyle.Normal, TextAnchor.MiddleRight, MainUiTheme.MutedText);
             SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-330f, 0f), new Vector2(-20f, 0f));
 
-            var palette = SpiceWorkspaceUi.CreateImage(root.transform, "Palette", Color.white);
-            SpiceWorkspaceUi.Anchor(palette.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(286f, -64f));
-            var paletteOutline = palette.gameObject.AddComponent<Outline>();
-            paletteOutline.effectColor = MainUiTheme.Divider;
-            paletteOutline.effectDistance = new Vector2(1f, 0f);
+            var palette = bindings.PaletteRoot;
             var paletteTitle = SpiceWorkspaceUi.CreateText(palette.transform, "Title", "基础元件", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(paletteTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -48f), new Vector2(-18f, -8f));
             CreatePaletteCard(palette.transform, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
@@ -488,47 +484,43 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
 
-            var workspace = SpiceWorkspaceUi.CreateImage(root.transform, "Workspace", new Color(0.96f, 0.98f, 1f));
-            SpiceWorkspaceUi.Anchor(workspace.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(302f, 16f), new Vector2(-384f, -80f));
-            WorkspaceRect = workspace.rectTransform;
+            var workspace = bindings.WorkspaceViewport;
+            WorkspaceRect = workspace;
             workspace.gameObject.AddComponent<SpiceWorkspaceBlankClick>().Initialize(this);
-            var wireLayer = new GameObject("WireLayer", typeof(RectTransform));
-            wireLayer.transform.SetParent(workspace.transform, false);
-            WireLayer = wireLayer.GetComponent<RectTransform>();
-            SpiceWorkspaceUi.Stretch(WireLayer, Vector2.zero, Vector2.zero);
-            WireLayer.SetAsFirstSibling();
+            WireLayer = bindings.WireLayer;
+            OverlayLayer = bindings.OverlayLayer;
 
-            palettePreview = SpiceWorkspaceUi.CreateImage(workspace.transform, "PaletteDragPreview", new Color(0.15f, 0.39f, 0.92f, 0.22f));
+            palettePreview = SpiceWorkspaceUi.CreateImage(OverlayLayer, "PaletteDragPreview", new Color(0.15f, 0.39f, 0.92f, 0.22f));
             palettePreview.rectTransform.sizeDelta = new Vector2(130f, 72f);
             palettePreview.raycastTarget = false;
             var previewLabel = SpiceWorkspaceUi.CreateText(palettePreview.transform, "Label", string.Empty, 13, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.PrimaryBlue);
             SpiceWorkspaceUi.Stretch(previewLabel.rectTransform, Vector2.zero, Vector2.zero);
             palettePreview.gameObject.SetActive(false);
 
-            var side = SpiceWorkspaceUi.CreateImage(root.transform, "Inspector", Color.white);
-            SpiceWorkspaceUi.Anchor(side.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-368f, 0f), new Vector2(0f, -64f));
-            var sideOutline = side.gameObject.AddComponent<Outline>();
-            sideOutline.effectColor = MainUiTheme.Divider;
-            sideOutline.effectDistance = new Vector2(-1f, 0f);
+            var side = bindings.AssistantRoot;
+            var parameterRoot = bindings.ParameterRoot;
+            var resultRoot = bindings.ResultRoot;
+            var netlistRoot = bindings.NetlistRoot;
+            var diagnosticRoot = bindings.DiagnosticRoot;
             var assistantTitle = SpiceWorkspaceUi.CreateText(side.transform, "AssistantTitle", "仿真助手", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(assistantTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -46f), new Vector2(-18f, -8f));
-            parameterTitle = SpiceWorkspaceUi.CreateText(side.transform, "ParameterTitle", "参数设置", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            parameterTitle = SpiceWorkspaceUi.CreateText(parameterRoot, "ParameterTitle", "参数设置", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -86f), new Vector2(-18f, -54f));
-            parameterInput = SpiceWorkspaceUi.CreateInput(side.transform, "ParameterInput");
+            parameterInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "ParameterInput");
             SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(18f, -132f), new Vector2(-4f, -94f));
-            unitButton = SpiceWorkspaceUi.CreateButton(side.transform, "Unit", "V", MainUiTheme.FilterButton, CycleUnit);
+            unitButton = SpiceWorkspaceUi.CreateButton(parameterRoot, "Unit", "V", MainUiTheme.FilterButton, CycleUnit);
             SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -132f), new Vector2(-18f, -94f));
             unitLabel = unitButton.GetComponentInChildren<Text>();
-            var apply = SpiceWorkspaceUi.CreateButton(side.transform, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
+            var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -178f), new Vector2(-18f, -140f));
-            var resultTitle = SpiceWorkspaceUi.CreateText(side.transform, "ResultTitle", "计算结果", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            var resultTitle = SpiceWorkspaceUi.CreateText(resultRoot, "ResultTitle", "计算结果", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             SpiceWorkspaceUi.Anchor(resultTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -222f), new Vector2(-18f, -190f));
-            resultText = SpiceWorkspaceUi.CreateText(side.transform, "Results", "尚无结果", 14, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.NormalText);
+            resultText = SpiceWorkspaceUi.CreateText(resultRoot, "Results", "尚无结果", 14, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.NormalText);
             resultText.horizontalOverflow = HorizontalWrapMode.Wrap;
             resultText.verticalOverflow = VerticalWrapMode.Overflow;
             resultRect = resultText.rectTransform;
 
-            var netlistHeader = SpiceWorkspaceUi.CreateImage(side.transform, "NetlistHeader", new Color(0.96f, 0.98f, 1f));
+            var netlistHeader = SpiceWorkspaceUi.CreateImage(netlistRoot, "NetlistHeader", new Color(0.96f, 0.98f, 1f));
             netlistHeaderRect = netlistHeader.rectTransform;
             var netlistTitle = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Title", "生成网表", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0f), new Vector2(0.4f, 1f), new Vector2(18f, 0f), Vector2.zero);
@@ -539,7 +531,7 @@ namespace ElectricalSim.Spice.Workspace
             copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制网表", MainUiTheme.FilterButton, CopyNetlist);
             SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(0.83f, 0.15f), new Vector2(1f, 0.85f), new Vector2(2f, 0f), new Vector2(-18f, 0f));
 
-            var netlistBody = SpiceWorkspaceUi.CreateImage(side.transform, "NetlistBody", Color.white);
+            var netlistBody = SpiceWorkspaceUi.CreateImage(netlistRoot, "NetlistBody", Color.white);
             netlistBodyRect = netlistBody.rectTransform;
             netlistInput = SpiceWorkspaceUi.CreateInput(netlistBody.transform, "Content");
             netlistInput.readOnly = true;
@@ -548,9 +540,9 @@ namespace ElectricalSim.Spice.Workspace
             netlistInput.textComponent.verticalOverflow = VerticalWrapMode.Overflow;
             SpiceWorkspaceUi.Stretch(netlistInput.GetComponent<RectTransform>(), new Vector2(6f, 6f), new Vector2(-6f, -6f));
 
-            var diagnosticTitle = SpiceWorkspaceUi.CreateText(side.transform, "DiagnosticTitle", "诊断信息", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            var diagnosticTitle = SpiceWorkspaceUi.CreateText(diagnosticRoot, "DiagnosticTitle", "诊断信息", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             diagnosticTitleRect = diagnosticTitle.rectTransform;
-            diagnosticText = SpiceWorkspaceUi.CreateText(side.transform, "Diagnostics", "", 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.DangerRed);
+            diagnosticText = SpiceWorkspaceUi.CreateText(diagnosticRoot, "Diagnostics", "", 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.DangerRed);
             diagnosticText.horizontalOverflow = HorizontalWrapMode.Wrap;
             diagnosticText.verticalOverflow = VerticalWrapMode.Overflow;
             diagnosticRect = diagnosticText.rectTransform;
@@ -578,7 +570,7 @@ namespace ElectricalSim.Spice.Workspace
         private void CreateComponentView(SpiceWorkspaceComponentData data)
         {
             var view = new GameObject(data.InstanceId, typeof(RectTransform), typeof(SpiceWorkspaceComponentView)).GetComponent<SpiceWorkspaceComponentView>();
-            view.transform.SetParent(WorkspaceRect, false);
+            view.transform.SetParent(bindings.ComponentLayer, false);
             view.Initialize(this, data);
             componentViews.Add(data.InstanceId, view);
         }
@@ -774,7 +766,7 @@ namespace ElectricalSim.Spice.Workspace
             var image = CreateImage(parent, name, color);
             var button = image.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
-            button.onClick.AddListener(action);
+            if (action != null) button.onClick.AddListener(action);
             var text = CreateText(image.transform, "Text", label, 14, FontStyle.Bold, TextAnchor.MiddleCenter, primary ? Color.white : MainUiTheme.NormalText);
             Stretch(text.rectTransform, Vector2.zero, Vector2.zero);
             var outline = image.gameObject.AddComponent<Outline>();

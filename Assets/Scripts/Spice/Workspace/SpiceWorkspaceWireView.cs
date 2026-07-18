@@ -120,7 +120,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private Image CreateSegment()
         {
-            var segment = SpiceWorkspaceUi.CreateImage(owner.WireLayer, "WirePreviewSegment", new Color(0.15f, 0.45f, 0.85f, 0.42f));
+            var segment = SpiceWorkspaceUi.CreateImage(owner.OverlayLayer, "WirePreviewSegment", new Color(0.15f, 0.45f, 0.85f, 0.42f));
             segment.raycastTarget = false;
             return segment;
         }

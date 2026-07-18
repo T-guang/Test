@@ -28,7 +28,7 @@ namespace ElectricalSim.Spice.T3
             try
             {
                 await Task.Yield();
-                var workspace = FindObjectOfType<SpiceWorkspaceController>();
+                var workspace = GetComponent<SpiceWorkspaceController>();
                 if (workspace == null) throw new InvalidOperationException("SpiceWorkspaceController was not created.");
                 var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));

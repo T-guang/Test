@@ -4,6 +4,7 @@ using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.T3
 {
@@ -11,6 +12,7 @@ namespace ElectricalSim.Spice.T3
     {
         public static void RunPureChecks()
         {
+            ValidateHostBindings();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -62,6 +64,51 @@ namespace ElectricalSim.Spice.T3
             model.MoveComponent(resistor.InstanceId, new Vector2(10f, 20f));
             if (changes != 0) throw new InvalidOperationException("Pure view movement changed the electrical result version.");
             if (!model.RemoveComponent(resistor.InstanceId) || model.Wires.Count != 1) throw new InvalidOperationException("Deleting a component did not remove all associated wires.");
+        }
+
+        private static void ValidateHostBindings()
+        {
+            var host = new GameObject("SpiceT3BindingValidation");
+            try
+            {
+                var incomplete = host.AddComponent<SpiceWorkspaceViewBindings>();
+                var rejected = false;
+                try { incomplete.Validate(); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected) throw new InvalidOperationException("Incomplete host bindings were accepted.");
+
+                var palette = CreateRect(host.transform);
+                var viewport = CreateRect(host.transform);
+                var wires = CreateRect(host.transform);
+                var components = CreateRect(host.transform);
+                var overlay = CreateRect(host.transform);
+                var assistant = CreateRect(host.transform);
+                var parameters = CreateRect(host.transform);
+                var results = CreateRect(host.transform);
+                var netlist = CreateRect(host.transform);
+                var diagnostics = CreateRect(host.transform);
+                incomplete.Bind(palette, viewport, wires, components, overlay, assistant, parameters, results, netlist, diagnostics,
+                    CreateButton(host.transform), CreateButton(host.transform), CreateButton(host.transform), CreateButton(host.transform));
+                incomplete.Validate();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static RectTransform CreateRect(Transform parent)
+        {
+            var rect = new GameObject("BindingRoot", typeof(RectTransform)).GetComponent<RectTransform>();
+            rect.SetParent(parent, false);
+            return rect;
+        }
+
+        private static Button CreateButton(Transform parent)
+        {
+            var button = new GameObject("BindingButton", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
+            button.transform.SetParent(parent, false);
+            return button;
         }
 
         public static void ConnectSingleResistor(SpiceWorkspaceController workspace, string source, string resistor, string ground)
