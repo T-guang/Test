@@ -4,11 +4,14 @@ using System.IO;
 using ElectricalSim.EditorTools.SpiceT2;
 using ElectricalSim.Spice.T3;
 using ElectricalSim.Spice.Workspace;
+using ElectricalSim.UI;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace ElectricalSim.EditorTools.SpiceT3
 {
@@ -71,10 +74,46 @@ namespace ElectricalSim.EditorTools.SpiceT3
         private static void CreateScene(string path, bool includeHarness)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var cameraObject = new GameObject("SpiceT3PrototypeCamera");
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = MainUiTheme.PageBackground;
+            camera.orthographic = true;
+            camera.cullingMask = 0;
+            camera.depth = -100f;
+            camera.transform.position = new Vector3(0f, 0f, -10f);
+
+            var eventSystemObject = new GameObject("SpiceT3PrototypeEventSystem");
+            var eventSystem = eventSystemObject.AddComponent<EventSystem>();
+            var inputModule = eventSystemObject.AddComponent<StandaloneInputModule>();
+
             var root = new GameObject(includeHarness ? "SpiceT3PlayerValidation" : "SpiceT3WorkspacePrototype", typeof(RectTransform));
-            root.AddComponent<SpiceWorkspacePrototypeBootstrap>();
+            var canvas = root.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.pixelPerfect = false;
+            var scaler = root.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            var raycaster = root.AddComponent<GraphicRaycaster>();
+            var bindings = root.AddComponent<SpiceWorkspaceViewBindings>();
+            var controller = root.AddComponent<SpiceWorkspaceController>();
+            var bootstrap = root.AddComponent<SpiceWorkspacePrototypeBootstrap>();
+            bootstrap.ConfigurePrototypeInfrastructure(canvas, scaler, raycaster, eventSystem, inputModule, camera, bindings, controller);
             if (includeHarness) root.AddComponent<SpiceT3PlayerValidationHarness>();
+            EditorUtility.SetDirty(bootstrap);
+            EditorUtility.SetDirty(bindings);
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(canvas);
+            EditorUtility.SetDirty(scaler);
+            EditorUtility.SetDirty(raycaster);
+            EditorUtility.SetDirty(eventSystem);
+            EditorUtility.SetDirty(inputModule);
+            EditorUtility.SetDirty(camera);
+            EditorSceneManager.MarkSceneDirty(scene);
             if (!EditorSceneManager.SaveScene(scene, path)) throw new InvalidOperationException("Unable to save Spice T3 scene: " + path);
+            AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
 
