@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
+using ElectricalSim.Spice.Topology;
 using ElectricalSim.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -42,6 +43,7 @@ namespace ElectricalSim.Spice.Workspace
         private Button unitButton;
         private Text unitLabel;
         private Button runButton;
+        private Button rotateButton;
         private string[] currentUnits = Array.Empty<string>();
         private int unitIndex;
         private bool initialized;
@@ -74,6 +76,7 @@ namespace ElectricalSim.Spice.Workspace
                 CancelPendingWire();
                 CancelPaletteDrag();
             }
+            if (Input.GetKeyDown(KeyCode.R)) RotateSelectedComponent();
             if (pendingComponent != null && TryScreenToWorkspace(Input.mousePosition, null, out var pointer))
             {
                 wirePreview.Refresh(pendingComponent.GetTerminalPosition(pendingTerminalId), pointer);
@@ -153,7 +156,9 @@ namespace ElectricalSim.Spice.Workspace
             EnsureInitialized();
             var component = Model.FindComponent(instanceId);
             if (component == null || !SpiceParameterUnits.TryToSi(component.Kind, displayValue, unit, out var siValue)) return false;
-            return Model.TrySetParameter(instanceId, siValue);
+            if (!Model.TrySetParameter(instanceId, siValue)) return false;
+            componentViews[instanceId].RefreshAnnotation();
+            return true;
         }
 
         public async Task<SpiceSimulationResult> RunCalculationAsync()
@@ -206,6 +211,7 @@ namespace ElectricalSim.Spice.Workspace
                 selectedComponent.SetSelected(true);
                 RefreshParameterPanel();
             }
+            UpdateRotateAvailability();
         }
 
         public void SelectWire(SpiceWorkspaceWireView wire)
@@ -218,6 +224,17 @@ namespace ElectricalSim.Spice.Workspace
             parameterTitle.text = "已选择导线";
             parameterInput.interactable = false;
             unitButton.interactable = false;
+            UpdateRotateAvailability();
+        }
+
+        public void ClearSelection()
+        {
+            if (selectedComponent != null) selectedComponent.SetSelected(false);
+            if (selectedWire != null) selectedWire.SetSelected(false);
+            selectedComponent = null;
+            selectedWire = null;
+            ClearParameterPanel();
+            UpdateRotateAvailability();
         }
 
         public void HandleTerminalClick(SpiceWorkspaceComponentView component, string terminalId)
@@ -254,6 +271,15 @@ namespace ElectricalSim.Spice.Workspace
         {
             Model.MoveComponent(instanceId, position);
             foreach (var wire in wireViews) wire.Refresh();
+            RefreshWirePreview();
+        }
+
+        public void RotateSelectedComponent()
+        {
+            if (selectedComponent == null) return;
+            selectedComponent.RotateClockwise();
+            foreach (var wire in wireViews) wire.Refresh();
+            RefreshWirePreview();
         }
 
         public void DeleteSelection()
@@ -268,6 +294,7 @@ namespace ElectricalSim.Spice.Workspace
                 Model.RemoveComponent(id);
                 selectedComponent = null;
                 ClearParameterPanel();
+                UpdateRotateAvailability();
                 return;
             }
             if (selectedWire != null)
@@ -275,6 +302,7 @@ namespace ElectricalSim.Spice.Workspace
                 RemoveWireView(selectedWire);
                 selectedWire = null;
                 ClearParameterPanel();
+                UpdateRotateAvailability();
             }
         }
 
@@ -289,6 +317,7 @@ namespace ElectricalSim.Spice.Workspace
             selectedWire = null;
             Model.Clear();
             ClearParameterPanel();
+            UpdateRotateAvailability();
         }
 
         public void CancelPendingWire()
@@ -310,6 +339,19 @@ namespace ElectricalSim.Spice.Workspace
         {
             paletteDragActive = false;
             if (palettePreview != null) palettePreview.gameObject.SetActive(false);
+        }
+
+        private void RefreshWirePreview()
+        {
+            if (pendingComponent != null && wirePreview != null && TryScreenToWorkspace(Input.mousePosition, null, out var pointer))
+            {
+                wirePreview.Refresh(pendingComponent.GetTerminalPosition(pendingTerminalId), pointer);
+            }
+        }
+
+        private void UpdateRotateAvailability()
+        {
+            if (rotateButton != null) rotateButton.interactable = selectedComponent != null;
         }
 
         private void BuildUi()
@@ -336,10 +378,12 @@ namespace ElectricalSim.Spice.Workspace
             toolbarOutline.effectDistance = new Vector2(0f, -1f);
             runButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Run", "运行计算", MainUiTheme.PrimaryBlue, RunFromButton, true);
             SpiceWorkspaceUi.Anchor(runButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(18f, -20f), new Vector2(130f, 20f));
+            rotateButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Rotate", "旋转", MainUiTheme.ToolbarButton, RotateSelectedComponent);
+            SpiceWorkspaceUi.Anchor(rotateButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(144f, -20f), new Vector2(238f, 20f));
             var deleteButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Delete", "删除", MainUiTheme.ToolbarButton, DeleteSelection);
-            SpiceWorkspaceUi.Anchor(deleteButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(144f, -20f), new Vector2(238f, 20f));
+            SpiceWorkspaceUi.Anchor(deleteButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(252f, -20f), new Vector2(346f, 20f));
             var clearButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "Clear", "清空", MainUiTheme.ToolbarButton, ClearWorkspace);
-            SpiceWorkspaceUi.Anchor(clearButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(252f, -20f), new Vector2(346f, 20f));
+            SpiceWorkspaceUi.Anchor(clearButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(360f, -20f), new Vector2(454f, 20f));
             statusText = SpiceWorkspaceUi.CreateText(toolbar.transform, "Status", "未计算", 15, FontStyle.Normal, TextAnchor.MiddleRight, MainUiTheme.MutedText);
             SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-330f, 0f), new Vector2(-20f, 0f));
 
@@ -402,6 +446,7 @@ namespace ElectricalSim.Spice.Workspace
             diagnosticText.verticalOverflow = VerticalWrapMode.Overflow;
             SpiceWorkspaceUi.Anchor(diagnosticText.rectTransform, Vector2.zero, new Vector2(1f, 0.34f), new Vector2(18f, 16f), new Vector2(-18f, -6f));
             ClearParameterPanel();
+            UpdateRotateAvailability();
         }
 
         private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -488,7 +533,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private Vector2 ClampToWorkspace(SpiceComponentKind kind, Vector2 position)
         {
-            var size = kind == SpiceComponentKind.Ground ? new Vector2(108f, 80f) : new Vector2(156f, 96f);
+            var size = SpiceWorkspaceComponentView.SizeFor(kind);
             var half = size * 0.5f;
             var bounds = WorkspaceRect.rect;
             return new Vector2(Mathf.Clamp(position.x, bounds.xMin + half.x, bounds.xMax - half.x), Mathf.Clamp(position.y, bounds.yMin + half.y, bounds.yMax - half.y));
@@ -507,13 +552,33 @@ namespace ElectricalSim.Spice.Workspace
         private static string FormatResult(SpiceSimulationResult result)
         {
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
-                value.ComponentId + "  " + value.ComponentKind + "\n电压  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A (positive -> negative)" +
+                value.ComponentId + "  " + value.ComponentKind + "\n电压  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n参考方向：正端 → 负端" +
                 (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
         }
 
         private static string FormatDiagnostics(SpiceSimulationResult result)
         {
-            return string.Join("\n", result.Diagnostics.Select(diagnostic => diagnostic.Code + ": " + diagnostic.Message + (string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : " [" + diagnostic.ComponentId + "]")));
+            return string.Join("\n\n", result.Diagnostics.Select(FormatDiagnostic));
+        }
+
+        private static string FormatDiagnostic(SpiceDiagnostic diagnostic)
+        {
+            var title = diagnostic.Code == "SPICE_GROUND_MISSING" ? "缺少接地参考" :
+                diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "存在悬空端子" :
+                diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT" ? "存在未接地子电路" :
+                diagnostic.Code == "SPICE_INVALID_PARAMETER" ? "元件参数无效" :
+                diagnostic.Code == "SPICE_SOURCE_MISSING" ? "缺少直流电压源" :
+                diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "电压源两端短接" :
+                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "元件两端短接" : "SPICE 计算诊断";
+            var detail = diagnostic.Code == "SPICE_GROUND_MISSING" ? "电路至少需要一个 GND 作为 0 V 参考。" :
+                diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "该端子尚未通过导线连接。" :
+                diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT" ? "该子电路无法通过元件与导线到达 GND。" :
+                diagnostic.Code == "SPICE_INVALID_PARAMETER" ? "请检查数值是否为支持范围内的 SI 参数。" :
+                diagnostic.Code == "SPICE_SOURCE_MISSING" ? "当前直流工作点计算需要一个直流电压源。" :
+                diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "请断开电压源两端的直接短接。" :
+                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "请检查该元件两端是否被同一电气节点直接连接。" : diagnostic.Message;
+            var related = string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : "\n关联元件：" + diagnostic.ComponentId + (string.IsNullOrEmpty(diagnostic.TerminalId) ? string.Empty : " / 端子：" + diagnostic.TerminalId);
+            return title + "\n" + detail + related + "\n错误码：" + diagnostic.Code;
         }
     }
 
@@ -521,7 +586,11 @@ namespace ElectricalSim.Spice.Workspace
     {
         private SpiceWorkspaceController owner;
         public void Initialize(SpiceWorkspaceController workspace) { owner = workspace; }
-        public void OnPointerClick(PointerEventData eventData) { owner.CancelPendingWire(); }
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            owner.CancelPendingWire();
+            owner.ClearSelection();
+        }
     }
 
     internal static class SpiceWorkspaceUi

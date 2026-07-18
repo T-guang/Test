@@ -31,6 +31,7 @@ namespace ElectricalSim.Spice.T2
             var results = new List<SpiceSimulationResult>();
             results.Add(await VerifySingleResistor(service, 1000d, 0.01d).ConfigureAwait(false));
             results.Add(await VerifySingleResistor(service, 2000d, 0.005d).ConfigureAwait(false));
+            results.Add(await VerifyReversedSingleResistor(service).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 1000d, 5d, 0.005d).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 3000d, 7.5d, 0.0025d).ConfigureAwait(false));
             results.Add(await VerifyParallel(service).ConfigureAwait(false));
@@ -53,6 +54,16 @@ namespace ElectricalSim.Spice.T2
             ExpectSuccess(result); ExpectNear(GetOnlyPositiveNode(result), 10d, VoltageTolerance, "single resistor node voltage");
             ExpectNear(result.ComponentResults["r1"].Current, expectedCurrent, CurrentTolerance, "single resistor current");
             ExpectNear(result.ComponentResults["source"].Current, -expectedCurrent, CurrentTolerance, "source current");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyReversedSingleResistor(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.ReversedSingleResistor()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            ExpectNear(result.ComponentResults["r1"].Voltage, -10d, VoltageTolerance, "reversed resistor voltage");
+            ExpectNear(result.ComponentResults["r1"].Current, -0.005d, CurrentTolerance, "reversed resistor current");
+            ExpectNear(result.ComponentResults["source"].Current, -0.005d, CurrentTolerance, "reversed resistor source current");
             return result;
         }
 

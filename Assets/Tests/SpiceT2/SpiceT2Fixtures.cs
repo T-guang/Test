@@ -16,6 +16,18 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        public static SpiceCircuitModel ReversedSingleResistor(double resistance = 2000d)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", resistance));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "r1", "negative");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "positive", "ground", "ground");
+            return circuit;
+        }
+
         public static SpiceCircuitModel Divider(double r2Resistance = 1000d)
         {
             var circuit = new SpiceCircuitModel();

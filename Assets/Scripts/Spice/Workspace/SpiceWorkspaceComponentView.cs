@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.UI;
 using UnityEngine;
@@ -8,8 +10,9 @@ using UnityEngine.UI;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// SPICE 原型元件的 UGUI 表现层。数据和端子标识仍由工作区模型拥有；
-    /// 视图拖动只更新画布位置，因此不会使数值结果过期。
+    /// SPICE 原型元件的 UGUI 表现层。SymbolRoot 承载可旋转的符号、端子和参考标记；
+    /// AnnotationRoot 保持水平显示设计编号和工程单位参数。旋转只改变视觉位置，
+    /// 不写入 SpiceCircuitModel，也不会使 DC 结果过期。
     /// </summary>
     public sealed class SpiceWorkspaceComponentView : MonoBehaviour, IBeginDragHandler, IDragHandler, IPointerClickHandler
     {
@@ -18,52 +21,48 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceWorkspaceController owner;
         private SpiceWorkspaceComponentData data;
         private RectTransform rectTransform;
+        private RectTransform symbolRoot;
+        private RectTransform annotationRoot;
+        private Image selectionFrame;
+        private Outline selectionOutline;
+        private Text summaryText;
         private Vector2 dragOffset;
-        private Image background;
+        private int rotationQuarterTurns;
 
         public string InstanceId => data.InstanceId;
         public SpiceComponentKind Kind => data.Kind;
         public SpiceWorkspaceComponentData Data => data;
+        public int RotationQuarterTurns => rotationQuarterTurns;
+
+        public static Vector2 SizeFor(SpiceComponentKind kind) => new Vector2(180f, 180f);
 
         public void Initialize(SpiceWorkspaceController workspace, SpiceWorkspaceComponentData component)
         {
             owner = workspace;
             data = component;
             rectTransform = GetComponent<RectTransform>();
-            background = gameObject.AddComponent<Image>();
-            background.color = new Color(1f, 1f, 1f, 0.98f);
-            background.raycastTarget = true;
-            var outline = gameObject.AddComponent<Outline>();
-            outline.effectColor = MainUiTheme.Divider;
-            outline.effectDistance = new Vector2(1f, -1f);
-            rectTransform.sizeDelta = component.Kind == SpiceComponentKind.Ground ? new Vector2(108f, 80f) : new Vector2(156f, 96f);
+            rectTransform.sizeDelta = SizeFor(component.Kind);
             rectTransform.anchoredPosition = component.Position;
+            var interactionSurface = gameObject.AddComponent<Image>();
+            interactionSurface.color = new Color(1f, 1f, 1f, 0f);
+            interactionSurface.raycastTarget = true;
 
-            BuildSchematicSymbol();
-            var label = SpiceWorkspaceUi.CreateText(transform, "Label", component.InstanceId, 12, FontStyle.Bold, TextAnchor.UpperCenter, MainUiTheme.DeepText);
-            SpiceWorkspaceUi.Stretch(label.rectTransform, new Vector2(8f, -5f), new Vector2(-8f, 0f));
-            var summary = SpiceWorkspaceUi.CreateText(transform, "Summary", SummaryFor(component), 12, FontStyle.Normal, TextAnchor.LowerCenter, MainUiTheme.MutedText);
-            SpiceWorkspaceUi.Stretch(summary.rectTransform, new Vector2(8f, 1f), new Vector2(-8f, 20f));
-
-            if (component.Kind == SpiceComponentKind.Ground)
-            {
-                CreateTerminal(SpiceComponentModel.GroundTerminalId, new Vector2(0f, -45f));
-            }
-            else
-            {
-                CreateTerminal(SpiceComponentModel.PositiveTerminalId, new Vector2(-82f, 0f));
-                CreateTerminal(SpiceComponentModel.NegativeTerminalId, new Vector2(82f, 0f));
-            }
+            BuildSelectionFrame();
+            BuildSymbolRoot();
+            BuildAnnotationRoot();
+            RefreshAnnotation();
+            ApplyRotation();
         }
 
         public Vector2 GetTerminalPosition(string terminalId)
         {
-            return terminalRects[terminalId].anchoredPosition + rectTransform.anchoredPosition;
+            var world = symbolRoot.TransformPoint(terminalRects[terminalId].localPosition);
+            return owner.WorkspaceRect.InverseTransformPoint(world);
         }
 
         public void SetSelected(bool selected)
         {
-            background.color = selected ? MainUiTheme.SelectedBlue : new Color(1f, 1f, 1f, 0.98f);
+            selectionOutline.effectColor = selected ? MainUiTheme.PrimaryBlue : MainUiTheme.Divider;
         }
 
         public void SetTerminalHighlighted(string terminalId, bool highlighted)
@@ -73,20 +72,20 @@ namespace ElectricalSim.Spice.Workspace
             terminal.rectTransform.sizeDelta = highlighted ? new Vector2(22f, 22f) : new Vector2(16f, 16f);
         }
 
-        public void SelectTerminal(string terminalId)
+        public void RefreshAnnotation()
         {
-            owner.HandleTerminalClick(this, terminalId);
+            if (summaryText != null) summaryText.text = SpiceWorkspaceDisplay.FormatParameter(data.Kind, data.SiValue);
         }
 
-        public void HoverTerminal(string terminalId, bool entered)
+        public void RotateClockwise()
         {
-            owner.HandleTerminalHover(this, terminalId, entered);
+            rotationQuarterTurns = (rotationQuarterTurns + 1) % 4;
+            ApplyRotation();
         }
 
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            owner.SelectComponent(this);
-        }
+        public void SelectTerminal(string terminalId) => owner.HandleTerminalClick(this, terminalId);
+        public void HoverTerminal(string terminalId, bool entered) => owner.HandleTerminalHover(this, terminalId, entered);
+        public void OnPointerClick(PointerEventData eventData) => owner.SelectComponent(this);
 
         public void OnBeginDrag(PointerEventData eventData)
         {
@@ -107,16 +106,71 @@ namespace ElectricalSim.Spice.Workspace
             owner.MoveComponent(data.InstanceId, position);
         }
 
+        private void BuildSelectionFrame()
+        {
+            selectionFrame = SpiceWorkspaceUi.CreateImage(transform, "SelectionFrame", new Color(1f, 1f, 1f, 0f));
+            SpiceWorkspaceUi.Stretch(selectionFrame.rectTransform, new Vector2(4f, 4f), new Vector2(-4f, -4f));
+            selectionFrame.raycastTarget = false;
+            selectionOutline = selectionFrame.gameObject.AddComponent<Outline>();
+            selectionOutline.effectColor = MainUiTheme.Divider;
+            selectionOutline.effectDistance = new Vector2(1f, -1f);
+        }
+
+        private void BuildSymbolRoot()
+        {
+            symbolRoot = new GameObject("SymbolRoot", typeof(RectTransform)).GetComponent<RectTransform>();
+            symbolRoot.SetParent(transform, false);
+            symbolRoot.sizeDelta = new Vector2(156f, 96f);
+            symbolRoot.anchoredPosition = Vector2.zero;
+            BuildSchematicSymbol();
+
+            if (data.Kind == SpiceComponentKind.Ground)
+            {
+                CreateTerminal(SpiceComponentModel.GroundTerminalId, new Vector2(0f, -45f));
+            }
+            else
+            {
+                CreateTerminal(SpiceComponentModel.PositiveTerminalId, new Vector2(-82f, 0f));
+                CreateTerminal(SpiceComponentModel.NegativeTerminalId, new Vector2(82f, 0f));
+                CreateReferenceLabel("PositiveReference", "+", new Vector2(-62f, 18f));
+                CreateReferenceLabel("NegativeReference", "-", new Vector2(62f, 18f));
+            }
+        }
+
+        private void BuildAnnotationRoot()
+        {
+            annotationRoot = new GameObject("AnnotationRoot", typeof(RectTransform)).GetComponent<RectTransform>();
+            annotationRoot.SetParent(transform, false);
+            SpiceWorkspaceUi.Stretch(annotationRoot, Vector2.zero, Vector2.zero);
+            var label = SpiceWorkspaceUi.CreateText(annotationRoot, "Designator", DesignatorFor(data), 13, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.DeepText);
+            label.rectTransform.sizeDelta = new Vector2(90f, 22f);
+            label.rectTransform.anchoredPosition = new Vector2(0f, 56f);
+            summaryText = SpiceWorkspaceUi.CreateText(annotationRoot, "Summary", string.Empty, 12, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.MutedText);
+            summaryText.rectTransform.sizeDelta = new Vector2(116f, 22f);
+            summaryText.rectTransform.anchoredPosition = new Vector2(0f, -56f);
+        }
+
+        private void ApplyRotation()
+        {
+            symbolRoot.localRotation = Quaternion.Euler(0f, 0f, -90f * rotationQuarterTurns);
+            var vertical = rotationQuarterTurns % 2 != 0;
+            var label = annotationRoot.Find("Designator").GetComponent<RectTransform>();
+            var summary = summaryText.rectTransform;
+            label.anchoredPosition = vertical ? new Vector2(56f, 16f) : new Vector2(0f, 56f);
+            summary.anchoredPosition = vertical ? new Vector2(56f, -12f) : new Vector2(0f, -56f);
+        }
+
         private void BuildSchematicSymbol()
         {
             var symbol = new GameObject("Symbol", typeof(RectTransform));
-            symbol.transform.SetParent(transform, false);
+            symbol.transform.SetParent(symbolRoot, false);
             var symbolRect = symbol.GetComponent<RectTransform>();
-            SpiceWorkspaceUi.Anchor(symbolRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-52f, -21f), new Vector2(52f, 25f));
+            symbolRect.sizeDelta = new Vector2(104f, 52f);
+            symbolRect.anchoredPosition = Vector2.zero;
             switch (data.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource:
-                    CreateCircle(symbol.transform, new Vector2(42f, 42f), Vector2.zero);
+                    CreateCircle(symbol.transform, 21f, Vector2.zero);
                     CreateLine(symbol.transform, new Vector2(-13f, 0f), new Vector2(13f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(0f, -13f), new Vector2(0f, 13f), 3f);
                     break;
@@ -133,7 +187,7 @@ namespace ElectricalSim.Spice.Workspace
                     CreateLine(symbol.transform, new Vector2(7f, -14f), new Vector2(7f, 14f), 3f);
                     break;
                 case SpiceComponentKind.Inductor:
-                    for (var i = 0; i < 4; i++) CreateCircle(symbol.transform, new Vector2(18f, 18f), new Vector2(-27f + i * 18f, 0f));
+                    for (var i = 0; i < 4; i++) CreateCircle(symbol.transform, 9f, new Vector2(-27f + i * 18f, 0f));
                     break;
                 case SpiceComponentKind.Ground:
                     CreateLine(symbol.transform, new Vector2(-28f, 8f), new Vector2(28f, 8f), 3f);
@@ -143,15 +197,17 @@ namespace ElectricalSim.Spice.Workspace
             }
         }
 
-        private static void CreateCircle(Transform parent, Vector2 size, Vector2 position)
+        private static void CreateCircle(Transform parent, float radius, Vector2 position)
         {
-            var circle = SpiceWorkspaceUi.CreateImage(parent, "Coil", Color.white);
-            circle.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
-            circle.rectTransform.sizeDelta = size;
-            circle.rectTransform.anchoredPosition = position;
-            var outline = circle.gameObject.AddComponent<Outline>();
-            outline.effectColor = MainUiTheme.PrimaryBlue;
-            outline.effectDistance = new Vector2(1.5f, -1.5f);
+            const int segmentCount = 12;
+            for (var index = 0; index < segmentCount; index++)
+            {
+                var startAngle = index * Mathf.PI * 2f / segmentCount;
+                var endAngle = (index + 1) * Mathf.PI * 2f / segmentCount;
+                var from = position + new Vector2(Mathf.Cos(startAngle), Mathf.Sin(startAngle)) * radius;
+                var to = position + new Vector2(Mathf.Cos(endAngle), Mathf.Sin(endAngle)) * radius;
+                CreateLine(parent, from, to, 2.5f);
+            }
         }
 
         private static void CreateLine(Transform parent, Vector2 from, Vector2 to, float thickness)
@@ -161,11 +217,12 @@ namespace ElectricalSim.Spice.Workspace
             line.rectTransform.sizeDelta = new Vector2(delta.magnitude <= 0.001f ? thickness : delta.magnitude, thickness);
             line.rectTransform.anchoredPosition = (from + to) * 0.5f;
             line.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+            line.raycastTarget = false;
         }
 
         private void CreateTerminal(string terminalId, Vector2 position)
         {
-            var terminal = SpiceWorkspaceUi.CreateImage(transform, "Terminal_" + terminalId, MainUiTheme.PrimaryBlue);
+            var terminal = SpiceWorkspaceUi.CreateImage(symbolRoot, "Terminal_" + terminalId, MainUiTheme.PrimaryBlue);
             terminal.rectTransform.sizeDelta = new Vector2(16f, 16f);
             terminal.rectTransform.anchoredPosition = position;
             terminal.raycastTarget = true;
@@ -174,26 +231,42 @@ namespace ElectricalSim.Spice.Workspace
             terminalImages.Add(terminalId, terminal);
         }
 
-        private static string SummaryFor(SpiceWorkspaceComponentData component)
+        private void CreateReferenceLabel(string name, string value, Vector2 position)
         {
-            return component.Kind == SpiceComponentKind.DcVoltageSource ? component.SiValue.ToString("G4") + " V" :
-                component.Kind == SpiceComponentKind.Resistor ? component.SiValue / 1000d + " kOhm" :
-                component.Kind == SpiceComponentKind.Capacitor ? component.SiValue / 1e-6d + " uF" :
-                component.Kind == SpiceComponentKind.Inductor ? component.SiValue / 1e-3d + " mH" : "GND";
+            var label = SpiceWorkspaceUi.CreateText(symbolRoot, name, value, 12, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.MutedText);
+            label.rectTransform.sizeDelta = new Vector2(18f, 18f);
+            label.rectTransform.anchoredPosition = position;
+            label.raycastTarget = false;
         }
+
+        private static string DesignatorFor(SpiceWorkspaceComponentData component)
+        {
+            var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
+            var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : "GND";
+            return prefix + index.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    public static class SpiceWorkspaceDisplay
+    {
+        public static string FormatParameter(SpiceComponentKind kind, double value)
+        {
+            if (kind == SpiceComponentKind.DcVoltageSource) return Format(value) + " V";
+            if (kind == SpiceComponentKind.Resistor) return value >= 1000000d ? Format(value / 1000000d) + " MΩ" : value >= 1000d ? Format(value / 1000d) + " kΩ" : Format(value) + " Ω";
+            if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
+            if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";
+            return "GND";
+        }
+
+        private static string Format(double value) => value.ToString("G4", CultureInfo.InvariantCulture);
     }
 
     public sealed class SpiceWorkspaceTerminalClick : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private SpiceWorkspaceComponentView component;
         private string terminalId;
-
-        public void Initialize(SpiceWorkspaceComponentView owner, string terminal)
-        {
-            component = owner;
-            terminalId = terminal;
-        }
-
+        public void Initialize(SpiceWorkspaceComponentView owner, string terminal) { component = owner; terminalId = terminal; }
         public void OnPointerClick(PointerEventData eventData) => component.SelectTerminal(terminalId);
         public void OnPointerEnter(PointerEventData eventData) => component.HoverTerminal(terminalId, true);
         public void OnPointerExit(PointerEventData eventData) => component.HoverTerminal(terminalId, false);
