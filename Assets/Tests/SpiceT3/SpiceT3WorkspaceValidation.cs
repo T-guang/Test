@@ -1,5 +1,6 @@
 using System;
 using ElectricalSim.Spice.Core;
+using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
@@ -43,6 +44,10 @@ namespace ElectricalSim.Spice.T3
             }
             var autoRoute = SpiceWorkspaceOrthogonalRoute.Build(Vector2.zero, new Vector2(140f, 20f), Vector2.right, SpiceWireVisualState.Auto());
             if (autoRoute.Count != 3 || Math.Abs(autoRoute[1].y) > 0.01f || Math.Abs(autoRoute[1].x - 140f) > 0.01f) throw new InvalidOperationException("Auto routing no longer uses the default horizontal-first elbow.");
+
+            var generatedNetlist = "V1 n001 0 DC 10\nR1 n001 0 1000";
+            var netlistResult = new SpiceSimulationResult { GeneratedNetlistContent = generatedNetlist };
+            if (netlistResult.Netlist != generatedNetlist) throw new InvalidOperationException("Generated netlist compatibility alias no longer exposes the submitted content.");
 
             var bypassCircuit = new SpiceCircuitModel();
             bypassCircuit.Components.Add(SpiceComponentModel.DcVoltageSource("bypass-source", 10d));

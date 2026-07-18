@@ -40,12 +40,23 @@ namespace ElectricalSim.Spice.Workspace
         private Text statusText;
         private Text resultText;
         private Text diagnosticText;
+        private Text netlistStatusText;
         private Text parameterTitle;
         private InputField parameterInput;
+        private InputField netlistInput;
         private Button unitButton;
         private Text unitLabel;
         private Button runButton;
         private Button rotateButton;
+        private Button netlistToggleButton;
+        private Button copyNetlistButton;
+        private RectTransform resultRect;
+        private RectTransform netlistHeaderRect;
+        private RectTransform netlistBodyRect;
+        private RectTransform diagnosticTitleRect;
+        private RectTransform diagnosticRect;
+        private bool netlistExpanded;
+        private string generatedNetlistContent;
         private string[] currentUnits = Array.Empty<string>();
         private int unitIndex;
         private bool initialized;
@@ -169,9 +180,11 @@ namespace ElectricalSim.Spice.Workspace
             statusText.text = "计算中...";
             resultText.text = string.Empty;
             diagnosticText.text = string.Empty;
+            RefreshNetlistUi();
             try
             {
                 var result = await simulationService.SimulateAsync(Model.BuildCircuitModel());
+                generatedNetlistContent = result.GeneratedNetlistContent;
                 if (result.Success)
                 {
                     ResultState = SpiceWorkspaceResultState.Current;
@@ -189,6 +202,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 ResultState = SpiceWorkspaceResultState.Failed;
+                generatedNetlistContent = null;
                 statusText.text = "计算失败";
                 diagnosticText.text = exception.ToString();
                 return null;
@@ -196,6 +210,7 @@ namespace ElectricalSim.Spice.Workspace
             finally
             {
                 runButton.interactable = true;
+                RefreshNetlistUi();
             }
         }
 
@@ -348,8 +363,10 @@ namespace ElectricalSim.Spice.Workspace
             selectedComponent = null;
             selectedWire = null;
             Model.Clear();
+            generatedNetlistContent = null;
             ClearParameterPanel();
             UpdateRotateAvailability();
+            RefreshNetlistUi();
         }
 
         public void CancelPendingWire()
@@ -509,15 +526,37 @@ namespace ElectricalSim.Spice.Workspace
             resultText = SpiceWorkspaceUi.CreateText(side.transform, "Results", "尚无结果", 14, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.NormalText);
             resultText.horizontalOverflow = HorizontalWrapMode.Wrap;
             resultText.verticalOverflow = VerticalWrapMode.Overflow;
-            SpiceWorkspaceUi.Anchor(resultText.rectTransform, new Vector2(0f, 0.38f), new Vector2(1f, 1f), new Vector2(18f, 0f), new Vector2(-18f, -228f));
+            resultRect = resultText.rectTransform;
+
+            var netlistHeader = SpiceWorkspaceUi.CreateImage(side.transform, "NetlistHeader", new Color(0.96f, 0.98f, 1f));
+            netlistHeaderRect = netlistHeader.rectTransform;
+            var netlistTitle = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Title", "生成网表", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0f), new Vector2(0.4f, 1f), new Vector2(18f, 0f), Vector2.zero);
+            netlistStatusText = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Status", "尚未生成网表。", 11, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.MutedText);
+            SpiceWorkspaceUi.Anchor(netlistStatusText.rectTransform, new Vector2(0.4f, 0f), new Vector2(0.66f, 1f), new Vector2(2f, 0f), Vector2.zero);
+            netlistToggleButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Toggle", "展开", MainUiTheme.FilterButton, ToggleNetlist);
+            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(0.67f, 0.15f), new Vector2(0.82f, 0.85f), new Vector2(1f, 0f), new Vector2(-2f, 0f));
+            copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制网表", MainUiTheme.FilterButton, CopyNetlist);
+            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(0.83f, 0.15f), new Vector2(1f, 0.85f), new Vector2(2f, 0f), new Vector2(-18f, 0f));
+
+            var netlistBody = SpiceWorkspaceUi.CreateImage(side.transform, "NetlistBody", Color.white);
+            netlistBodyRect = netlistBody.rectTransform;
+            netlistInput = SpiceWorkspaceUi.CreateInput(netlistBody.transform, "Content");
+            netlistInput.readOnly = true;
+            netlistInput.lineType = InputField.LineType.MultiLineNewline;
+            netlistInput.textComponent.horizontalOverflow = HorizontalWrapMode.Overflow;
+            netlistInput.textComponent.verticalOverflow = VerticalWrapMode.Overflow;
+            SpiceWorkspaceUi.Stretch(netlistInput.GetComponent<RectTransform>(), new Vector2(6f, 6f), new Vector2(-6f, -6f));
+
             var diagnosticTitle = SpiceWorkspaceUi.CreateText(side.transform, "DiagnosticTitle", "诊断信息", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(diagnosticTitle.rectTransform, new Vector2(0f, 0.34f), new Vector2(1f, 0.4f), new Vector2(18f, 0f), new Vector2(-18f, 0f));
+            diagnosticTitleRect = diagnosticTitle.rectTransform;
             diagnosticText = SpiceWorkspaceUi.CreateText(side.transform, "Diagnostics", "", 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.DangerRed);
             diagnosticText.horizontalOverflow = HorizontalWrapMode.Wrap;
             diagnosticText.verticalOverflow = VerticalWrapMode.Overflow;
-            SpiceWorkspaceUi.Anchor(diagnosticText.rectTransform, Vector2.zero, new Vector2(1f, 0.34f), new Vector2(18f, 16f), new Vector2(-18f, -6f));
+            diagnosticRect = diagnosticText.rectTransform;
             ClearParameterPanel();
             UpdateRotateAvailability();
+            RefreshNetlistUi();
         }
 
         private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -553,8 +592,53 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleModelChanged(SpiceWorkspaceChange change)
         {
-            if (ResultState == SpiceWorkspaceResultState.Current) ResultState = SpiceWorkspaceResultState.Stale;
+            if (ResultState != SpiceWorkspaceResultState.Running && (ResultState == SpiceWorkspaceResultState.Current || !string.IsNullOrEmpty(generatedNetlistContent))) ResultState = SpiceWorkspaceResultState.Stale;
             if (ResultState != SpiceWorkspaceResultState.Running) statusText.text = StateMessage();
+            RefreshNetlistUi();
+        }
+
+        // 网表仅显示 SpiceNetlistBuilder 已生成的原始文本，UI 不自行重建近似内容。
+        private void ToggleNetlist()
+        {
+            netlistExpanded = !netlistExpanded;
+            RefreshNetlistUi();
+        }
+
+        private void CopyNetlist()
+        {
+            if (string.IsNullOrEmpty(generatedNetlistContent)) return;
+            GUIUtility.systemCopyBuffer = generatedNetlistContent;
+            statusText.text = "已复制网表";
+        }
+
+        private void RefreshNetlistUi()
+        {
+            if (netlistInput == null) return;
+            var hasNetlist = !string.IsNullOrEmpty(generatedNetlistContent);
+            netlistInput.text = generatedNetlistContent ?? string.Empty;
+            netlistInput.transform.parent.gameObject.SetActive(netlistExpanded);
+            netlistToggleButton.GetComponentInChildren<Text>().text = netlistExpanded ? "收起" : "展开";
+            copyNetlistButton.interactable = hasNetlist;
+            netlistStatusText.text = NetlistStatusMessage(hasNetlist);
+
+            var headerMin = netlistExpanded ? 0.52f : 0.46f;
+            var headerMax = netlistExpanded ? 0.58f : 0.52f;
+            SpiceWorkspaceUi.Anchor(resultRect, new Vector2(0f, headerMax), new Vector2(1f, 1f), new Vector2(18f, 0f), new Vector2(-18f, -228f));
+            SpiceWorkspaceUi.Anchor(netlistHeaderRect, new Vector2(0f, headerMin), new Vector2(1f, headerMax), Vector2.zero, Vector2.zero);
+            SpiceWorkspaceUi.Anchor(netlistBodyRect, new Vector2(0f, 0.30f), new Vector2(1f, headerMin), new Vector2(18f, 0f), new Vector2(-18f, 0f));
+            var diagnosticTop = netlistExpanded ? 0.24f : 0.40f;
+            var diagnosticTitleBottom = netlistExpanded ? 0.24f : 0.40f;
+            SpiceWorkspaceUi.Anchor(diagnosticTitleRect, new Vector2(0f, diagnosticTop), new Vector2(1f, diagnosticTop + 0.06f), new Vector2(18f, 0f), new Vector2(-18f, 0f));
+            SpiceWorkspaceUi.Anchor(diagnosticRect, Vector2.zero, new Vector2(1f, diagnosticTitleBottom), new Vector2(18f, 16f), new Vector2(-18f, -6f));
+        }
+
+        private string NetlistStatusMessage(bool hasNetlist)
+        {
+            if (ResultState == SpiceWorkspaceResultState.NeverRun) return "尚未生成网表。";
+            if (ResultState == SpiceWorkspaceResultState.Running) return "正在生成本次网表。";
+            if (ResultState == SpiceWorkspaceResultState.Stale && hasNetlist) return "该网表对应修改前的电路，已过期。";
+            if (ResultState == SpiceWorkspaceResultState.Failed) return hasNetlist ? "本次网表已生成，但执行或解析失败。" : "当前电路未通过校验，尚未生成新网表。";
+            return hasNetlist ? "当前计算使用的网表。" : "尚未生成网表。";
         }
 
         private void RefreshParameterPanel()

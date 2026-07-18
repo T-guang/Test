@@ -31,7 +31,7 @@ namespace ElectricalSim.Spice.Core
             if (!graph.IsValid) return result;
 
             var document = SpiceNetlistBuilder.BuildDcOperatingPoint(circuit, graph);
-            result.Netlist = document.Content;
+            result.GeneratedNetlistContent = document.Content;
             var raw = await processRunner.RunRawNetlistAsync(document.Content, TimeSpan.FromSeconds(8), "SpiceT2", cancellationToken).ConfigureAwait(false);
             result.RawNgspiceResult = raw;
             result.Duration = raw.Duration;

@@ -31,7 +31,18 @@ namespace ElectricalSim.Spice.Results
         public bool Success { get; set; }
         public string AnalysisType { get; set; } = "DC Operating Point";
         public TimeSpan Duration { get; set; }
-        public string Netlist { get; set; }
+        /// <summary>
+        /// 图校验通过后由 SpiceNetlistBuilder 生成、并准备提交给 ngspice 的原始文本。
+        /// 拓扑校验失败时保持 null；后续进程或解析失败不会清除已经生成的网表。
+        /// </summary>
+        public string GeneratedNetlistContent { get; set; }
+
+        // 保留 T1/T2 测试报告的既有读取名称；其内容始终等同于实际生成的网表文本。
+        public string Netlist
+        {
+            get => GeneratedNetlistContent;
+            set => GeneratedNetlistContent = value;
+        }
         public List<SpiceDiagnostic> Diagnostics { get; } = new List<SpiceDiagnostic>();
         public Dictionary<string, double> NodeVoltages { get; } = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, SpiceComponentResult> ComponentResults { get; } = new Dictionary<string, SpiceComponentResult>(StringComparer.Ordinal);
