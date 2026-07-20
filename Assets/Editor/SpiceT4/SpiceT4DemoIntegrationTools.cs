@@ -154,7 +154,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var controlBackground = controlWorkspace.GetComponent<Image>();
             var spiceBackground = spiceViewport.GetComponent<Image>();
             var gridGraphic = spiceGrid.GetComponent<WorkspaceGrid>();
-            if (controlBackground == null || spiceBackground == null || gridGraphic == null || gridGraphic.raycastTarget || spiceGrid.GetSiblingIndex() != 0 || spiceViewport.GetComponent<RectMask2D>() == null || spiceBackground.color != controlBackground.color)
+            if (controlBackground == null || spiceBackground == null || gridGraphic == null || spiceGrid.GetComponent<CanvasRenderer>() == null || gridGraphic.raycastTarget || spiceGrid.GetSiblingIndex() != 0 || spiceViewport.GetComponent<RectMask2D>() == null || spiceBackground.color != controlBackground.color)
                 throw new InvalidOperationException("Demo SPICE workspace visual shell must provide the clipped, non-interactive control-style grid behind SPICE layers.");
             var popupCanvas = popupLayer.GetComponent<Canvas>();
             if (popupLayer.GetSiblingIndex() != popupLayer.parent.childCount - 1 || popupCanvas == null || !popupCanvas.overrideSorting || popupCanvas.sortingOrder != 100 || popupLayer.GetComponent<GraphicRaycaster>() == null || popupLayer.GetComponent<Mask>() != null || popupLayer.GetComponent<RectMask2D>() != null)
@@ -189,9 +189,14 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var grid = spiceViewport.Find("SpiceGridVisual") as RectTransform;
             if (grid == null)
             {
-                grid = new GameObject("SpiceGridVisual", typeof(RectTransform), typeof(WorkspaceGrid)).GetComponent<RectTransform>();
+                grid = new GameObject("SpiceGridVisual", typeof(RectTransform), typeof(CanvasRenderer), typeof(WorkspaceGrid)).GetComponent<RectTransform>();
                 grid.SetParent(spiceViewport, false);
                 Stretch(grid, Vector2.zero, Vector2.zero);
+            }
+
+            if (grid.GetComponent<CanvasRenderer>() == null)
+            {
+                grid.gameObject.AddComponent<CanvasRenderer>();
             }
 
             var gridGraphic = grid.GetComponent<WorkspaceGrid>()

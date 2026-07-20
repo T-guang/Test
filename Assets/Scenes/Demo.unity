@@ -75338,6 +75338,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1082849890}
   - component: {fileID: 1082849891}
+  - component: {fileID: 1082849892}
   m_Layer: 0
   m_Name: SpiceGridVisual
   m_TagString: Untagged
@@ -75390,6 +75391,14 @@ MonoBehaviour:
   majorLineEvery: 5
   lineWidth: 1
   majorLineWidth: 1.35
+--- !u!222 &1082849892
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1082849889}
+  m_CullTransparentMesh: 1
 --- !u!1 &1082931163
 GameObject:
   m_ObjectHideFlags: 0
