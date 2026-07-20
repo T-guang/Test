@@ -13,6 +13,7 @@ namespace ElectricalSim.Spice.T3
         public static void RunPureChecks()
         {
             ValidateHostBindings();
+            ValidateSimulationModeSwitching();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -97,6 +98,42 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
+        private static void ValidateSimulationModeSwitching()
+        {
+            var host = new GameObject("SimulationModeValidation");
+            host.SetActive(false);
+            try
+            {
+                var controller = host.AddComponent<SimulationModeController>();
+                var controlTopBar = CreateRoot(host.transform);
+                var controlPalette = CreateRoot(host.transform);
+                var controlWorkspace = CreateRoot(host.transform);
+                var inspector = CreateRoot(host.transform);
+                var spiceRoot = CreateRoot(host.transform);
+                var selector = CreateButton(host.transform);
+                var menu = CreateRoot(host.transform);
+                var controlOption = CreateButton(menu.transform);
+                var spiceOption = CreateButton(menu.transform);
+                var label = CreateText(host.transform);
+                controller.Configure(controlTopBar, controlPalette, controlWorkspace, inspector, spiceRoot, selector, menu, controlOption, spiceOption, label);
+                controller.Initialize();
+                host.SetActive(true);
+
+                if (controller.CurrentMode != SimulationWorkspaceMode.ControlCircuit || !controlTopBar.activeSelf || spiceRoot.activeSelf || label.text != "电工控制仿真")
+                    throw new InvalidOperationException("Simulation mode controller did not initialize the control mode.");
+                controller.SelectSpiceDc();
+                if (controller.CurrentMode != SimulationWorkspaceMode.SpiceDc || controlPalette.activeSelf || !spiceRoot.activeSelf || label.text != "基础电路原理仿真")
+                    throw new InvalidOperationException("Simulation mode controller did not preserve mutually exclusive roots.");
+                controller.SelectControlCircuit();
+                if (controller.CurrentMode != SimulationWorkspaceMode.ControlCircuit || !controlWorkspace.activeSelf || spiceRoot.activeSelf)
+                    throw new InvalidOperationException("Simulation mode controller did not restore the control roots.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
         private static RectTransform CreateRect(Transform parent)
         {
             var rect = new GameObject("BindingRoot", typeof(RectTransform)).GetComponent<RectTransform>();
@@ -104,11 +141,25 @@ namespace ElectricalSim.Spice.T3
             return rect;
         }
 
+        private static GameObject CreateRoot(Transform parent)
+        {
+            var root = new GameObject("ModeRoot", typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+            return root;
+        }
+
         private static Button CreateButton(Transform parent)
         {
             var button = new GameObject("BindingButton", typeof(RectTransform), typeof(Button)).GetComponent<Button>();
             button.transform.SetParent(parent, false);
             return button;
+        }
+
+        private static Text CreateText(Transform parent)
+        {
+            var text = new GameObject("ModeLabel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)).GetComponent<Text>();
+            text.transform.SetParent(parent, false);
+            return text;
         }
 
         public static void ConnectSingleResistor(SpiceWorkspaceController workspace, string source, string resistor, string ground)
