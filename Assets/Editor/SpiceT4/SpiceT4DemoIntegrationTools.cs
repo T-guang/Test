@@ -120,7 +120,9 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var spicePalette = RequireChild(spiceRoot, "SpicePaletteRoot") as RectTransform;
             var spiceWorkspace = RequireChild(spiceRoot, "SpiceWorkspaceRoot") as RectTransform;
             var spiceViewport = RequireChild(spiceWorkspace, "SpiceWorkspaceViewport") as RectTransform;
+            var spiceGrid = RequireChild(spiceViewport, "SpiceGridVisual") as RectTransform;
             var spiceAssistant = RequireChild(spiceRoot, "SpiceAssistantRoot") as RectTransform;
+            var controlWorkspace = RequireChild(simulationRoot, "Workspace");
             var inspectorRoot = RequireChild(simulationRoot, "ControlInspectorRoot");
             var navBar = RequireChild(RequireChild(canvasRoot.transform, "MainAppRoot"), "NavBar");
             var simulationTab = RequireChild(navBar, "Nav_0");
@@ -140,7 +142,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 throw new InvalidOperationException("Demo DC workspace host bindings or default root state are invalid.");
             var spiceRootRect = spiceRoot as RectTransform;
             if (simulationRoot.Find("SimulationModeSelector") != null || spiceRootRect == null || spiceRoot.GetComponent<Image>() != null ||
-                spiceToolbar == null || spicePalette == null || spiceWorkspace == null || spiceViewport == null || spiceAssistant == null)
+                spiceToolbar == null || spicePalette == null || spiceWorkspace == null || spiceViewport == null || spiceGrid == null || spiceAssistant == null)
                 throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and the four SimulationPage content regions.");
             if (spiceToolbar.offsetMin.y != -MainUiTheme.MainContentTop || spiceToolbar.offsetMax.y != -MainUiTheme.NavBarHeight ||
                 spicePalette.offsetMax.x != MainUiTheme.LeftPanelWidth || spicePalette.offsetMax.y != -MainUiTheme.MainContentTop ||
@@ -149,6 +151,11 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 throw new InvalidOperationException("Demo DC workspace content regions do not match the SimulationPage shell bounds.");
             if (inspectorRoot.GetComponent<Image>() != null || dropdown.GetComponent<Image>() != null)
                 throw new InvalidOperationException("Demo host containers must not block page input with transparent Images.");
+            var controlBackground = controlWorkspace.GetComponent<Image>();
+            var spiceBackground = spiceViewport.GetComponent<Image>();
+            var gridGraphic = spiceGrid.GetComponent<WorkspaceGrid>();
+            if (controlBackground == null || spiceBackground == null || gridGraphic == null || gridGraphic.raycastTarget || spiceGrid.GetSiblingIndex() != 0 || spiceViewport.GetComponent<RectMask2D>() == null || spiceBackground.color != controlBackground.color)
+                throw new InvalidOperationException("Demo SPICE workspace visual shell must provide the clipped, non-interactive control-style grid behind SPICE layers.");
             var popupCanvas = popupLayer.GetComponent<Canvas>();
             if (popupLayer.GetSiblingIndex() != popupLayer.parent.childCount - 1 || popupCanvas == null || !popupCanvas.overrideSorting || popupCanvas.sortingOrder != 100 || popupLayer.GetComponent<GraphicRaycaster>() == null || popupLayer.GetComponent<Mask>() != null || popupLayer.GetComponent<RectMask2D>() != null)
                 throw new InvalidOperationException("Demo global popup layer must be the last, unclipped Canvas child with sorting order 100.");
@@ -158,6 +165,50 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 throw new InvalidOperationException("SimulationModeController default mode is not ControlCircuit.");
 
             Debug.Log("[SpiceT4] Demo DC workspace binding validation passed.");
+        }
+
+        [MenuItem("Tools/Spice/T4/Apply DC Workspace Visual Shell")]
+        public static void ApplyDcWorkspaceVisualShell()
+        {
+            var scene = EditorSceneManager.OpenScene(DemoScenePath, OpenSceneMode.Single);
+            var canvasRoot = RequireRoot(scene, "AppCanvas");
+            var simulationRoot = RequireChild(RequireChild(canvasRoot.transform, "MainAppRoot"), "SimulationPage");
+            var controlWorkspace = RequireChild(simulationRoot, "Workspace");
+            var spiceViewport = RequireChild(RequireChild(RequireChild(simulationRoot, "SpiceModeRoot"), "SpiceWorkspaceRoot"), "SpiceWorkspaceViewport") as RectTransform;
+            if (spiceViewport == null)
+            {
+                throw new InvalidOperationException("Demo SpiceWorkspaceViewport is missing RectTransform.");
+            }
+
+            var controlBackground = controlWorkspace.GetComponent<Image>()
+                ?? throw new InvalidOperationException("Demo control Workspace is missing its background Image.");
+            var spiceBackground = spiceViewport.GetComponent<Image>()
+                ?? throw new InvalidOperationException("Demo SpiceWorkspaceViewport is missing its input Image.");
+            spiceBackground.color = controlBackground.color;
+
+            var grid = spiceViewport.Find("SpiceGridVisual") as RectTransform;
+            if (grid == null)
+            {
+                grid = new GameObject("SpiceGridVisual", typeof(RectTransform), typeof(WorkspaceGrid)).GetComponent<RectTransform>();
+                grid.SetParent(spiceViewport, false);
+                Stretch(grid, Vector2.zero, Vector2.zero);
+            }
+
+            var gridGraphic = grid.GetComponent<WorkspaceGrid>()
+                ?? throw new InvalidOperationException("SpiceGridVisual is missing WorkspaceGrid.");
+            // The grid shares only the control canvas visual language; the viewport Image remains the SPICE input surface.
+            gridGraphic.raycastTarget = false;
+            grid.SetAsFirstSibling();
+
+            EditorUtility.SetDirty(spiceBackground);
+            EditorUtility.SetDirty(gridGraphic);
+            EditorSceneManager.MarkSceneDirty(scene);
+            if (!EditorSceneManager.SaveScene(scene, DemoScenePath))
+            {
+                throw new InvalidOperationException("Failed to save the T4-A3-A SPICE workspace visual shell.");
+            }
+
+            Debug.Log("[SpiceT4] Applied the DC workspace visual shell without rebuilding scene roots.");
         }
 
         private static GameObject RequireRoot(Scene scene, string name)
