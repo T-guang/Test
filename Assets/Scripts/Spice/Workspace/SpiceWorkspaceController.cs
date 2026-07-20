@@ -517,26 +517,27 @@ namespace ElectricalSim.Spice.Workspace
             var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
 
-            CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 40f);
-            resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 48f);
+            CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
+            resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 38f);
             resultText = resultView.Text;
 
             var netlistHeader = SpiceWorkspaceUi.CreateImage(netlistRoot, "NetlistHeader", new Color(0.96f, 0.98f, 1f));
-            SpiceWorkspaceUi.Anchor(netlistHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0f, -64f));
+            netlistHeader.rectTransform.pivot = new Vector2(0.5f, 1f);
+            SpiceWorkspaceUi.Anchor(netlistHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -58f), new Vector2(-10f, 0f));
             var netlistTitle = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Title", "生成网表", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-142f, -4f));
             netlistStatusText = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Status", "尚未生成网表。", 11, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.MutedText);
             SpiceWorkspaceUi.Anchor(netlistStatusText.rectTransform, Vector2.zero, new Vector2(1f, 0.5f), new Vector2(14f, 4f), new Vector2(-14f, 0f));
             netlistToggleButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Toggle", "展开", MainUiTheme.FilterButton, ToggleNetlist);
-            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-132f, -32f), new Vector2(-76f, -6f));
+            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-132f, 2f), new Vector2(-76f, -2f));
             copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制", MainUiTheme.FilterButton, CopyNetlist);
-            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-70f, -32f), new Vector2(-14f, -6f));
+            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-70f, 2f), new Vector2(-14f, -2f));
 
-            netlistView = CreateScrollableTextView(netlistRoot, "NetlistScrollView", "NetlistText", 12, MainUiTheme.NormalText, 72f);
+            netlistView = CreateScrollableTextView(netlistRoot, "NetlistScrollView", "NetlistText", 12, MainUiTheme.NormalText, 62f);
             netlistText = netlistView.Text;
 
-            CreatePanelHeader(diagnosticRoot, "DiagnosticHeader", "诊断信息", 40f);
-            diagnosticView = CreateScrollableTextView(diagnosticRoot, "DiagnosticScrollView", "DiagnosticText", 13, MainUiTheme.DangerRed, 48f);
+            CreatePanelHeader(diagnosticRoot, "DiagnosticHeader", "诊断信息", 34f);
+            diagnosticView = CreateScrollableTextView(diagnosticRoot, "DiagnosticScrollView", "DiagnosticText", 13, MainUiTheme.DangerRed, 38f);
             diagnosticText = diagnosticView.Text;
             ClearParameterPanel();
             UpdateRotateAvailability();
@@ -623,7 +624,8 @@ namespace ElectricalSim.Spice.Workspace
         private static void CreatePanelHeader(RectTransform panel, string name, string title, float height)
         {
             var header = SpiceWorkspaceUi.CreateImage(panel, name, new Color(0.96f, 0.98f, 1f));
-            SpiceWorkspaceUi.Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0f, -height));
+            header.rectTransform.pivot = new Vector2(0.5f, 1f);
+            SpiceWorkspaceUi.Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -height), new Vector2(-10f, 0f));
             var text = SpiceWorkspaceUi.CreateText(header.transform, "Title", title, 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
             SpiceWorkspaceUi.Stretch(text.rectTransform, new Vector2(14f, 0f), new Vector2(-14f, 0f));
         }
@@ -633,24 +635,31 @@ namespace ElectricalSim.Spice.Workspace
         {
             var scroll = new GameObject(scrollName, typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<ScrollRect>();
             scroll.transform.SetParent(panel, false);
-            SpiceWorkspaceUi.Stretch(scroll.GetComponent<RectTransform>(), new Vector2(12f, 12f), new Vector2(-12f, -topInset));
+            SpiceWorkspaceUi.Anchor(scroll.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, new Vector2(10f, 8f), new Vector2(-10f, -topInset));
             scroll.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
             scroll.horizontal = false;
             scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
 
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
             viewport.SetParent(scroll.transform, false);
+            viewport.pivot = new Vector2(0.5f, 0.5f);
             SpiceWorkspaceUi.Stretch(viewport, Vector2.zero, Vector2.zero);
             var content = new GameObject("Content", typeof(RectTransform)).GetComponent<RectTransform>();
             content.SetParent(viewport, false);
             content.anchorMin = new Vector2(0f, 1f);
             content.anchorMax = new Vector2(1f, 1f);
-            content.pivot = new Vector2(0.5f, 1f);
+            content.pivot = new Vector2(0f, 1f);
             content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new Vector2(0f, 0f);
             var text = SpiceWorkspaceUi.CreateText(content, textName, string.Empty, fontSize, FontStyle.Normal, TextAnchor.UpperLeft, color);
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
-            SpiceWorkspaceUi.Anchor(text.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(6f, 0f), new Vector2(-6f, 0f));
+            text.rectTransform.anchorMin = Vector2.zero;
+            text.rectTransform.anchorMax = Vector2.one;
+            text.rectTransform.pivot = new Vector2(0f, 1f);
+            SpiceWorkspaceUi.Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(6f, 6f), new Vector2(-6f, -6f));
+            text.rectTransform.anchoredPosition = Vector2.zero;
             scroll.viewport = viewport;
             scroll.content = content;
             return new SpiceScrollableTextView(scroll, viewport, content, text);
@@ -663,7 +672,12 @@ namespace ElectricalSim.Spice.Workspace
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(view.Text.rectTransform);
             var height = Mathf.Max(view.Viewport.rect.height, view.Text.preferredHeight + 12f);
-            view.Content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+            view.Content.sizeDelta = new Vector2(0f, height);
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(view.Content);
+            view.ScrollRect.StopMovement();
+            view.Content.anchoredPosition = Vector2.zero;
+            view.ScrollRect.horizontalNormalizedPosition = 0f;
             view.ScrollRect.verticalNormalizedPosition = 1f;
         }
 
