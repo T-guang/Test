@@ -52,7 +52,7 @@ namespace ElectricalSim.Core
         private CircuitComponent selectedMeasurementTarget;
         private WireView selectedWire;
         private bool restoringHistory;
-        private bool simulationDirty = true;
+
         private bool panningCanvas;
         private float canvasZoom = 1f;
         private float simulationRefreshTimer;
@@ -323,7 +323,7 @@ namespace ElectricalSim.Core
             catch (System.Exception exception)
             {
                 IsSimulationRunning = false;
-                simulationDirty = true;
+
                 ClearSimulationResult();
                 SetStatus("仿真启动失败：" + exception.Message);
                 Debug.LogException(exception);
@@ -334,7 +334,7 @@ namespace ElectricalSim.Core
         {
             IsSimulationRunning = false;
             simulationRefreshTimer = 0f;
-            simulationDirty = true;
+
             SimulationEngine.ResetRuntimeState();
             ClearSimulationResult();
             SetStatus("仿真已结束，当前可继续编辑电路。");
@@ -345,14 +345,14 @@ namespace ElectricalSim.Core
             // Workspace 控制仿真生命周期，具体状态推导仍委托 SimulationEngine；
             // 任何拓扑、参数或交互变更后都必须先清除旧结果，避免展示过期运行态。
             var result = new SimulationEngine(components, wireManager.Wires, deltaTime).Run();
-            simulationDirty = false;
+
             SetStatus(result);
             RefreshMeasurementPanel();
         }
 
         public void MarkSimulationDirty(string message = null)
         {
-            simulationDirty = true;
+
 
             if (IsSimulationRunning)
             {
@@ -372,7 +372,7 @@ namespace ElectricalSim.Core
         {
             // 清空活动电路的运行态而不删除场景历史对象。Analyzer/Validation 的输入始终来自
             // Components 与 WireManager.Wires，因此 ClearDrawing 后活动输入应为空。
-            simulationDirty = true;
+
             ClearRuntimeLatchedStates();
 
             if (IsSimulationRunning)

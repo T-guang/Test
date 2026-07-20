@@ -71,7 +71,7 @@ namespace ElectricalSim.UI
         private Image collapseHandleIcon;
         private Text collapseHandleLabel;
         private bool isLeftPanelCollapsed;
-        private bool actionLogLayoutApplied;
+
 
         private void Awake()
         {
@@ -97,7 +97,7 @@ namespace ElectricalSim.UI
             EnsureActionLogLayout();
             AlignActionLogToPalette();
             EnsureViewportPosition();
-            actionLogLayoutApplied = true;
+
         }
 
         private void EnsureCardPaletteShell()

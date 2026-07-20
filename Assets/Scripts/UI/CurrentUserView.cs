@@ -8,7 +8,7 @@ namespace ElectricalSim.UI
     {
         [SerializeField] private Text currentUserText;
         [SerializeField] private Button logoutButton;
-        [SerializeField] private string loginSceneName = "LoginScene";
+
 
         private void Awake()
         {

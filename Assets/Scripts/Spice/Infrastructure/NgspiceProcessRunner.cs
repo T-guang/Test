@@ -138,6 +138,7 @@ namespace ElectricalSim.Spice.Infrastructure
                     RedirectStandardError = true
                 };
 
+                bool wasCancelled = false;
                 using (var process = new Process { StartInfo = startInfo })
                 {
                     try
@@ -161,7 +162,6 @@ namespace ElectricalSim.Spice.Infrastructure
                     var timeoutMilliseconds = Math.Max(1, (int)Math.Min(int.MaxValue, timeout.TotalMilliseconds));
                     var elapsedMilliseconds = 0;
                     const int pollMilliseconds = 50;
-                    bool wasCancelled = false;
 
                     while (!process.WaitForExit(pollMilliseconds))
                     {
