@@ -80,14 +80,6 @@ namespace ElectricalSim.Spice.Infrastructure
                     () => Execute(netlist, timeout, executablePath, workingDirectory, persistentDiagnosticDirectory, netlistFileName, parseT1Output, cancellationToken),
                     CancellationToken.None).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                return new NgspiceRunResult
-                {
-                    FailureCode = NgspiceFailureCode.Cancelled,
-                    FailureMessage = "The ngspice run was cancelled."
-                };
-            }
             finally
             {
                 runGate.Release();
@@ -169,43 +161,73 @@ namespace ElectricalSim.Spice.Infrastructure
                     var timeoutMilliseconds = Math.Max(1, (int)Math.Min(int.MaxValue, timeout.TotalMilliseconds));
                     var elapsedMilliseconds = 0;
                     const int pollMilliseconds = 50;
+                    bool wasCancelled = false;
 
                     while (!process.WaitForExit(pollMilliseconds))
                     {
                         elapsedMilliseconds += pollMilliseconds;
                         if (cancellationToken.IsCancellationRequested)
                         {
-                            TerminateProcessTree(process);
-                            result.FailureCode = NgspiceFailureCode.Cancelled;
-                            result.FailureMessage = "The ngspice run was cancelled.";
+                            TryTerminateProcess(process, out _);
+                            process.WaitForExit(1000);
+                            wasCancelled = true;
                             break;
                         }
 
                         if (elapsedMilliseconds >= timeoutMilliseconds)
                         {
+                            TryTerminateProcess(process, out var killDiag);
+                            process.WaitForExit(1000);
                             result.TimedOut = true;
                             result.FailureCode = NgspiceFailureCode.TimedOut;
                             result.FailureMessage = "ngspice exceeded the configured timeout of " + timeoutMilliseconds + " ms.";
-                            TerminateProcessTree(process);
+                            if (!string.IsNullOrEmpty(killDiag)) result.FailureMessage += " " + killDiag;
                             break;
                         }
                     }
 
                     if (!process.HasExited)
                     {
-                        TerminateProcessTree(process);
+                        TryTerminateProcess(process, out _);
+                        process.WaitForExit(1000);
                     }
 
-                    process.WaitForExit();
-                    result.ExitCode = process.ExitCode;
-                    result.StandardOutput = stdoutTask.GetAwaiter().GetResult() ?? string.Empty;
-                    result.StandardError = stderrTask.GetAwaiter().GetResult() ?? string.Empty;
+                    try
+                    {
+                        if (Task.WaitAll(new[] { stdoutTask, stderrTask }, 1000))
+                        {
+                            result.StandardOutput = stdoutTask.Result ?? string.Empty;
+                            result.StandardError = stderrTask.Result ?? string.Empty;
+                        }
+                        else
+                        {
+                            result.StandardOutput = string.Empty;
+                            result.StandardError = string.Empty;
+                        }
+                    }
+                    catch (AggregateException ae)
+                    {
+                        ae.Handle(ex => true);
+                        result.StandardOutput = string.Empty;
+                        result.StandardError = string.Empty;
+                    }
+
+                    try
+                    {
+                        result.ExitCode = process.HasExited ? process.ExitCode : -1;
+                    }
+                    catch { result.ExitCode = -1; }
                 }
 
                 File.WriteAllText(Path.Combine(workingDirectory, "stdout.txt"), result.StandardOutput, new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(workingDirectory, "stderr.txt"), result.StandardError, new UTF8Encoding(false));
 
-                if (result.FailureCode == NgspiceFailureCode.Cancelled || result.TimedOut)
+                if (wasCancelled)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                if (result.TimedOut)
                 {
                     return result;
                 }
@@ -240,6 +262,15 @@ namespace ElectricalSim.Spice.Infrastructure
                 stopwatch.Stop();
                 result.Duration = stopwatch.Elapsed;
                 PersistDiagnostics(netlist, result, persistentDiagnosticDirectory, netlistFileName);
+                
+                try
+                {
+                    if (Directory.Exists(workingDirectory))
+                    {
+                        Directory.Delete(workingDirectory, true);
+                    }
+                }
+                catch { }
             }
         }
 
@@ -311,50 +342,35 @@ namespace ElectricalSim.Spice.Infrastructure
             }
         }
 
-        private static void TerminateProcessTree(Process process)
+        private static bool TryTerminateProcess(Process process, out string diagnostic)
         {
-            if (process == null)
-            {
-                return;
-            }
+            diagnostic = string.Empty;
+            if (process == null) return true;
 
             try
             {
-                if (process.HasExited)
-                {
-                    return;
-                }
-
-                var taskKill = new ProcessStartInfo
-                {
-                    FileName = Path.Combine(Environment.SystemDirectory, "taskkill.exe"),
-                    Arguments = "/PID " + process.Id + " /T /F",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-                using (var killer = Process.Start(taskKill))
-                {
-                    if (killer != null)
-                    {
-                        killer.WaitForExit(3000);
-                    }
-                }
+                if (process.HasExited) return true;
+                process.Kill();
+                return true;
             }
-            catch
+            catch (InvalidOperationException)
             {
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill();
-                    }
-                }
-                catch
-                {
-                    // The original failure is retained in the run result.
-                }
+                return true;
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                diagnostic = "无法终止进程可能权限不足：" + ex.Message;
+                return false;
+            }
+            catch (NotSupportedException ex)
+            {
+                diagnostic = "不支持终止进程：" + ex.Message;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                diagnostic = "终止进程发生未预期异常：" + ex.Message;
+                return false;
             }
         }
     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
@@ -59,6 +60,8 @@ namespace ElectricalSim.Spice.Workspace
         private string[] currentUnits = Array.Empty<string>();
         private int unitIndex;
         private bool initialized;
+        private CancellationTokenSource simulationCancellation;
+        private bool shuttingDown;
 
         public SpiceWorkspaceModel Model { get; } = new SpiceWorkspaceModel();
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
@@ -87,7 +90,26 @@ namespace ElectricalSim.Spice.Workspace
 
         private void OnDestroy()
         {
+            shuttingDown = true;
+            CancelActiveSimulation();
             Model.Changed -= HandleModelChanged;
+        }
+
+        private void OnApplicationQuit()
+        {
+            shuttingDown = true;
+            CancelActiveSimulation();
+        }
+
+        private void CancelActiveSimulation()
+        {
+            if (simulationCancellation != null)
+            {
+                if (!simulationCancellation.IsCancellationRequested)
+                {
+                    simulationCancellation.Cancel();
+                }
+            }
         }
 
         private void OnDisable()
@@ -190,15 +212,26 @@ namespace ElectricalSim.Spice.Workspace
         {
             EnsureInitialized();
             if (ResultState == SpiceWorkspaceResultState.Running) return null;
+            
+            var previousState = ResultState;
             ResultState = SpiceWorkspaceResultState.Running;
             runButton.interactable = false;
             statusText.text = "计算中...";
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             RefreshNetlistUi();
+
+            CancellationTokenSource localCancellation = null;
             try
             {
-                var result = await simulationService.SimulateAsync(Model.BuildCircuitModel());
+                localCancellation = new CancellationTokenSource();
+                simulationCancellation = localCancellation;
+
+                var result = await simulationService.SimulateAsync(Model.BuildCircuitModel(), localCancellation.Token);
+
+                if (localCancellation.IsCancellationRequested || shuttingDown)
+                    return null;
+
                 generatedNetlistContent = result.GeneratedNetlistContent;
                 if (result.Success)
                 {
@@ -214,8 +247,20 @@ namespace ElectricalSim.Spice.Workspace
                 }
                 return result;
             }
+            catch (OperationCanceledException)
+            {
+                if (!shuttingDown)
+                {
+                    ResultState = previousState;
+                    statusText.text = "计算已取消";
+                }
+                return null;
+            }
             catch (Exception exception)
             {
+                if (localCancellation != null && localCancellation.IsCancellationRequested || shuttingDown)
+                    return null;
+
                 ResultState = SpiceWorkspaceResultState.Failed;
                 generatedNetlistContent = null;
                 statusText.text = "计算失败";
@@ -224,8 +269,17 @@ namespace ElectricalSim.Spice.Workspace
             }
             finally
             {
-                runButton.interactable = true;
-                RefreshNetlistUi();
+                if (ReferenceEquals(simulationCancellation, localCancellation))
+                    simulationCancellation = null;
+
+                if (localCancellation != null)
+                    localCancellation.Dispose();
+
+                if (!shuttingDown && runButton != null)
+                {
+                    runButton.interactable = true;
+                    RefreshNetlistUi();
+                }
             }
         }
 
