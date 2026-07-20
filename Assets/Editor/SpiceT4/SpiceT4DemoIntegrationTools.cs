@@ -35,7 +35,8 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 ?? throw new InvalidOperationException("Demo AppCanvas is missing DemoUIController.");
 
             RebuildOwnedChild(simulationRoot, "ControlInspectorRoot");
-            var inspectorHost = CreatePanel(simulationRoot, "ControlInspectorRoot", Color.clear);
+            // 这是检查助手的宿主层，不应成为覆盖整个页面的透明射线目标。
+            var inspectorHost = CreateContainer(simulationRoot, "ControlInspectorRoot");
             Anchor(inspectorHost, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             demoUi.ConfigureLocalInspectorHost(inspectorHost);
 
@@ -125,6 +126,8 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var spiceRootRect = spiceRoot as RectTransform;
             if (simulationRoot.Find("SimulationModeSelector") != null || spiceRootRect == null || spiceRootRect.offsetMax.y > -MainUiTheme.NavBarHeight + 0.01f)
                 throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and remain below the NavBar content boundary.");
+            if (inspectorRoot.GetComponent<Image>() != null || dropdown.GetComponent<Image>() != null)
+                throw new InvalidOperationException("Demo host containers must not block page input with transparent Images.");
             if (CountComponents<Canvas>(scene) != 1 || CountComponents<UnityEngine.EventSystems.EventSystem>(scene) != 1 || CountComponents<Camera>(scene) != 1)
                 throw new InvalidOperationException("Demo DC workspace must reuse the existing single Canvas, EventSystem, and Camera.");
             if (modeController.CurrentMode != SimulationWorkspaceMode.ControlCircuit)
@@ -191,6 +194,13 @@ namespace ElectricalSim.EditorTools.SpiceT4
             return panel;
         }
 
+        private static RectTransform CreateContainer(Transform parent, string name)
+        {
+            var container = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+            container.SetParent(parent, false);
+            return container;
+        }
+
         private static RectTransform CreateLayer(Transform parent, string name)
         {
             var layer = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
@@ -221,7 +231,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
 
         private static void CreateSimulationModeDropdown(Transform simulationTab, TopNavigationController navigation, SimulationModeController modeController)
         {
-            var root = CreatePanel(simulationTab, "SimulationModeDropdown", Color.clear);
+            var root = CreateContainer(simulationTab, "SimulationModeDropdown");
             Anchor(root, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             root.SetAsLastSibling();
 
