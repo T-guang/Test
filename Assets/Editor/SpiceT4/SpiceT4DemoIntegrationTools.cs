@@ -45,14 +45,17 @@ namespace ElectricalSim.EditorTools.SpiceT4
             RebuildOwnedChild(simulationTab, "SimulationModeDropdown");
             RebuildOwnedChild(canvasRoot.transform, "GlobalPopupLayer");
 
-            var spiceRoot = CreatePanel(simulationRoot, "SpiceModeRoot", MainUiTheme.PageBackground);
-            Anchor(spiceRoot, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0f, -MainUiTheme.NavBarHeight));
-            var spiceTopBar = CreatePanel(spiceRoot, "SpiceTopBar", MainUiTheme.PanelBackground);
-            Anchor(spiceTopBar, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -82f), new Vector2(0f, -18f));
+            // SpiceModeRoot is only a visibility container. Its children occupy the same four regions as the control page.
+            var spiceRoot = CreateContainer(simulationRoot, "SpiceModeRoot");
+            Stretch(spiceRoot, Vector2.zero, Vector2.zero);
+            var spiceTopBar = CreatePanel(spiceRoot, "SpiceToolbarGroup", MainUiTheme.PanelBackground);
+            Anchor(spiceTopBar, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -MainUiTheme.MainContentTop), new Vector2(0f, -MainUiTheme.NavBarHeight));
             var palette = CreatePanel(spiceRoot, "SpicePaletteRoot", MainUiTheme.PanelBackground);
-            Anchor(palette, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(286f, -98f));
-            var viewport = CreatePanel(spiceRoot, "SpiceWorkspaceViewport", new Color(0.96f, 0.98f, 1f));
-            Anchor(viewport, Vector2.zero, Vector2.one, new Vector2(302f, 0f), new Vector2(-384f, -98f));
+            Anchor(palette, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(MainUiTheme.LeftPanelWidth, -MainUiTheme.MainContentTop));
+            var workspaceRoot = CreateContainer(spiceRoot, "SpiceWorkspaceRoot");
+            Anchor(workspaceRoot, Vector2.zero, Vector2.one, new Vector2(MainUiTheme.LeftPanelWidth, 0f), new Vector2(-MainUiTheme.RightPanelWidth - 12f, -MainUiTheme.MainContentTop));
+            var viewport = CreatePanel(workspaceRoot, "SpiceWorkspaceViewport", new Color(0.96f, 0.98f, 1f));
+            Stretch(viewport, Vector2.zero, Vector2.zero);
             viewport.gameObject.AddComponent<RectMask2D>();
             var wireLayer = CreateLayer(viewport, "SpiceWireLayer");
             var componentLayer = CreateLayer(viewport, "SpiceComponentLayer");
@@ -61,7 +64,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             overlayLayer.SetAsLastSibling();
 
             var assistant = CreatePanel(spiceRoot, "SpiceAssistantRoot", MainUiTheme.PanelBackground);
-            Anchor(assistant, new Vector2(1f, 0f), Vector2.one, new Vector2(-368f, 0f), new Vector2(0f, -98f));
+            Anchor(assistant, new Vector2(1f, 0f), Vector2.one, new Vector2(-MainUiTheme.RightPanelWidth - 12f, 12f), new Vector2(-12f, -MainUiTheme.MainContentTop));
             var parameters = CreateLayer(assistant, "ParameterPanel");
             var results = CreateLayer(assistant, "ResultPanel");
             var netlist = CreateLayer(assistant, "NetlistPanel");
@@ -111,6 +114,11 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var canvasRoot = RequireRoot(scene, "AppCanvas");
             var simulationRoot = RequireChild(RequireChild(canvasRoot.transform, "MainAppRoot"), "SimulationPage");
             var spiceRoot = RequireChild(simulationRoot, "SpiceModeRoot");
+            var spiceToolbar = RequireChild(spiceRoot, "SpiceToolbarGroup") as RectTransform;
+            var spicePalette = RequireChild(spiceRoot, "SpicePaletteRoot") as RectTransform;
+            var spiceWorkspace = RequireChild(spiceRoot, "SpiceWorkspaceRoot") as RectTransform;
+            var spiceViewport = RequireChild(spiceWorkspace, "SpiceWorkspaceViewport") as RectTransform;
+            var spiceAssistant = RequireChild(spiceRoot, "SpiceAssistantRoot") as RectTransform;
             var inspectorRoot = RequireChild(simulationRoot, "ControlInspectorRoot");
             var navBar = RequireChild(RequireChild(canvasRoot.transform, "MainAppRoot"), "NavBar");
             var simulationTab = RequireChild(navBar, "Nav_0");
@@ -129,8 +137,14 @@ namespace ElectricalSim.EditorTools.SpiceT4
             if (host.Controller != controller || spiceRoot.gameObject.activeSelf || dropdownButton.parent != simulationTab || dropdown.parent != popupLayer || inspectorRoot.parent != simulationRoot)
                 throw new InvalidOperationException("Demo DC workspace host bindings or default root state are invalid.");
             var spiceRootRect = spiceRoot as RectTransform;
-            if (simulationRoot.Find("SimulationModeSelector") != null || spiceRootRect == null || spiceRootRect.offsetMax.y > -MainUiTheme.NavBarHeight + 0.01f)
-                throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and remain below the NavBar content boundary.");
+            if (simulationRoot.Find("SimulationModeSelector") != null || spiceRootRect == null || spiceRoot.GetComponent<Image>() != null ||
+                spiceToolbar == null || spicePalette == null || spiceWorkspace == null || spiceViewport == null || spiceAssistant == null)
+                throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and the four SimulationPage content regions.");
+            if (spiceToolbar.offsetMin.y != -MainUiTheme.MainContentTop || spiceToolbar.offsetMax.y != -MainUiTheme.NavBarHeight ||
+                spicePalette.offsetMax.x != MainUiTheme.LeftPanelWidth || spicePalette.offsetMax.y != -MainUiTheme.MainContentTop ||
+                spiceWorkspace.offsetMin.x != MainUiTheme.LeftPanelWidth || spiceWorkspace.offsetMax.x != -MainUiTheme.RightPanelWidth - 12f ||
+                spiceAssistant.offsetMin.x != -MainUiTheme.RightPanelWidth - 12f || spiceAssistant.offsetMax.x != -12f)
+                throw new InvalidOperationException("Demo DC workspace content regions do not match the SimulationPage shell bounds.");
             if (inspectorRoot.GetComponent<Image>() != null || dropdown.GetComponent<Image>() != null)
                 throw new InvalidOperationException("Demo host containers must not block page input with transparent Images.");
             var popupCanvas = popupLayer.GetComponent<Canvas>();
