@@ -53,6 +53,7 @@ namespace ElectricalSim.Spice.Workspace
         private void Awake()
         {
             ValidateBindings();
+            ApplyMenuLayout();
             dropdownButton.onClick.AddListener(ToggleMenu);
             controlCircuitOption.onClick.AddListener(SelectControlCircuit);
             spiceDcOption.onClick.AddListener(SelectSpiceDc);
@@ -150,7 +151,34 @@ namespace ElectricalSim.Spice.Workspace
             menuRect.anchorMin = new Vector2(.5f, .5f);
             menuRect.anchorMax = new Vector2(.5f, .5f);
             menuRect.pivot = new Vector2(0f, 1f);
-            menuRect.anchoredPosition = localPoint + new Vector2(0f, -5f);
+
+            // The popup owns its own Canvas, so this conversion remains correct for every CanvasScaler size.
+            var desiredPosition = localPoint + new Vector2(0f, -5f);
+            var popupRect = popupLayer.rect;
+            var menuSize = menuRect.sizeDelta;
+            desiredPosition.x = Mathf.Clamp(desiredPosition.x, popupRect.xMin, popupRect.xMax - menuSize.x);
+            desiredPosition.y = Mathf.Clamp(desiredPosition.y, popupRect.yMin + menuSize.y, popupRect.yMax);
+            menuRect.anchoredPosition = desiredPosition;
+        }
+
+        private void ApplyMenuLayout()
+        {
+            var menuRect = menuPanel.GetComponent<RectTransform>();
+            menuRect.anchorMin = new Vector2(.5f, .5f);
+            menuRect.anchorMax = new Vector2(.5f, .5f);
+            menuRect.pivot = new Vector2(0f, 1f);
+            menuRect.sizeDelta = new Vector2(208f, 92f);
+
+            AnchorOption(controlCircuitOption.GetComponent<RectTransform>(), -44f, -6f);
+            AnchorOption(spiceDcOption.GetComponent<RectTransform>(), -86f, -48f);
+        }
+
+        private static void AnchorOption(RectTransform option, float bottom, float top)
+        {
+            option.anchorMin = new Vector2(0f, 1f);
+            option.anchorMax = new Vector2(1f, 1f);
+            option.offsetMin = new Vector2(6f, bottom);
+            option.offsetMax = new Vector2(-6f, top);
         }
 
         private void ValidateBindings()

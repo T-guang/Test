@@ -266,11 +266,14 @@ namespace ElectricalSim.EditorTools.SpiceT4
             root.SetAsLastSibling();
 
             var menu = CreatePanel(root, "ModeMenu", MainUiTheme.PanelBackground);
-            Anchor(menu, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(208f, -84f));
+            menu.anchorMin = new Vector2(.5f, .5f);
+            menu.anchorMax = new Vector2(.5f, .5f);
+            menu.pivot = new Vector2(0f, 1f);
+            menu.sizeDelta = new Vector2(208f, 92f);
             var controlOption = CreateButton(menu, "ControlCircuitOption", "电工控制仿真", MainUiTheme.FilterButton, MainUiTheme.NormalText);
             var spiceOption = CreateButton(menu, "SpiceDcOption", "基础电路原理仿真", MainUiTheme.FilterButton, MainUiTheme.NormalText);
-            Anchor(controlOption.GetComponent<RectTransform>(), new Vector2(0f, .5f), new Vector2(1f, .5f), new Vector2(6f, 2f), new Vector2(-6f, 36f));
-            Anchor(spiceOption.GetComponent<RectTransform>(), new Vector2(0f, .5f), new Vector2(1f, .5f), new Vector2(6f, -36f), new Vector2(-6f, -2f));
+            Anchor(controlOption.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(6f, -44f), new Vector2(-6f, -6f));
+            Anchor(spiceOption.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(6f, -86f), new Vector2(-6f, -48f));
             menu.gameObject.SetActive(false);
 
             var dropdown = root.gameObject.AddComponent<SimulationModeDropdown>();
