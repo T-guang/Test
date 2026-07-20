@@ -160,36 +160,34 @@ namespace ElectricalSim.Spice.Infrastructure
                     var stdoutTask = process.StandardOutput.ReadToEndAsync();
                     var stderrTask = process.StandardError.ReadToEndAsync();
                     var timeoutMilliseconds = Math.Max(1, (int)Math.Min(int.MaxValue, timeout.TotalMilliseconds));
-                    var elapsedMilliseconds = 0;
-                    const int pollMilliseconds = 50;
 
-                    while (!process.WaitForExit(pollMilliseconds))
+                    using (cancellationToken.Register(() => TryTerminateProcess(process, out _)))
                     {
-                        elapsedMilliseconds += pollMilliseconds;
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            TryTerminateProcess(process, out _);
-                            process.WaitForExit(1000);
-                            wasCancelled = true;
-                            break;
-                        }
-
-                        if (elapsedMilliseconds >= timeoutMilliseconds)
+                        if (!process.WaitForExit(timeoutMilliseconds))
                         {
                             TryTerminateProcess(process, out var killDiag);
-                            process.WaitForExit(1000);
                             result.TimedOut = true;
                             result.FailureCode = NgspiceFailureCode.TimedOut;
                             result.FailureMessage = "ngspice exceeded the configured timeout of " + timeoutMilliseconds + " ms.";
                             if (!string.IsNullOrEmpty(killDiag)) result.FailureMessage += " " + killDiag;
-                            break;
                         }
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        wasCancelled = true;
                     }
 
                     if (!process.HasExited)
                     {
                         TryTerminateProcess(process, out _);
+                    }
+
+                    if (wasCancelled || result.TimedOut)
+                    {
                         process.WaitForExit(1000);
+                        try { process.StandardOutput.Close(); } catch { }
+                        try { process.StandardError.Close(); } catch { }
                     }
 
                     try
@@ -207,7 +205,11 @@ namespace ElectricalSim.Spice.Infrastructure
                     }
                     catch (AggregateException ae)
                     {
-                        ae.Handle(ex => true);
+                        ae.Handle(ex => 
+                        {
+                            if (ex is ObjectDisposedException || ex is IOException || ex is TaskCanceledException) return true;
+                            return false;
+                        });
                         result.StandardOutput = string.Empty;
                         result.StandardError = string.Empty;
                     }
