@@ -81064,6 +81064,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   controlTopBar: {fileID: 840589941}
   controlPalette: {fileID: 543093300}
+  controlPaletteController: {fileID: 543093303}
   controlWorkspace: {fileID: 1612767332}
   localInspectorPanel: {fileID: 913362983}
   spiceModeRoot: {fileID: 1534315240}
@@ -121014,8 +121015,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -172, y: -62}
-  m_SizeDelta: {x: 320, y: -148}
+  m_AnchoredPosition: {x: -172, y: -68}
+  m_SizeDelta: {x: 320, y: -160}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1736845223
 MonoBehaviour:

@@ -3,6 +3,7 @@ using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
 using ElectricalSim.Spice.Workspace;
+using ElectricalSim.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -108,10 +109,11 @@ namespace ElectricalSim.Spice.T3
                 var controller = host.AddComponent<SimulationModeController>();
                 var controlTopBar = CreateRoot(host.transform);
                 var controlPalette = CreateRoot(host.transform);
+                var controlPaletteController = controlPalette.AddComponent<PaletteController>();
                 var controlWorkspace = CreateRoot(host.transform);
                 var inspector = CreateRoot(host.transform);
                 var spiceRoot = CreateRoot(host.transform);
-                controller.Configure(controlTopBar, controlPalette, controlWorkspace, inspector, spiceRoot);
+                controller.Configure(controlTopBar, controlPalette, controlPaletteController, controlWorkspace, inspector, spiceRoot);
                 controller.Initialize();
                 host.SetActive(true);
 

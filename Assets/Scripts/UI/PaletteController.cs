@@ -71,6 +71,7 @@ namespace ElectricalSim.UI
         private Image collapseHandleIcon;
         private Text collapseHandleLabel;
         private bool isLeftPanelCollapsed;
+        private bool isCollapseHandleVisible = true;
 
 
         private void Awake()
@@ -229,6 +230,7 @@ namespace ElectricalSim.UI
             colors.pressedColor = new Color(0.93f, 0.96f, 1f, 1f);
             colors.selectedColor = Color.white;
             collapseHandleButton.colors = colors;
+            collapseHandleButton.gameObject.SetActive(isCollapseHandleVisible);
 
             collapseHandleLabel = handle.GetComponentInChildren<Text>(true);
             if (collapseHandleLabel != null)
@@ -265,6 +267,18 @@ namespace ElectricalSim.UI
         {
             isLeftPanelCollapsed = !isLeftPanelCollapsed;
             ApplyLeftPanelLayout(isLeftPanelCollapsed ? CollapsedPaletteWidth : PaletteWidth);
+        }
+
+        /// <summary>
+        /// Controls visibility of the control-circuit palette handle without changing its collapsed state or layout.
+        /// </summary>
+        public void SetCollapseHandleVisible(bool visible)
+        {
+            isCollapseHandleVisible = visible;
+            if (collapseHandleButton != null)
+            {
+                collapseHandleButton.gameObject.SetActive(visible);
+            }
         }
 
         private void ApplyLeftPanelLayout(float width)

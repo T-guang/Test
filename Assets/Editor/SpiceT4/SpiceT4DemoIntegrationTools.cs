@@ -30,6 +30,8 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 ?? throw new InvalidOperationException("Demo AppCanvas is missing TopNavigationController.");
             var controlTopBar = RequireChild(simulationRoot, "TopBar").gameObject;
             var controlPalette = RequireChild(simulationRoot, "Palette").gameObject;
+            var controlPaletteController = controlPalette.GetComponent<PaletteController>()
+                ?? throw new InvalidOperationException("Demo Palette is missing PaletteController.");
             var controlWorkspace = RequireChild(simulationRoot, "Workspace").gameObject;
             var demoUi = canvasRoot.GetComponent<DemoUIController>()
                 ?? throw new InvalidOperationException("Demo AppCanvas is missing DemoUIController.");
@@ -53,7 +55,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var palette = CreatePanel(spiceRoot, "SpicePaletteRoot", MainUiTheme.PanelBackground);
             Anchor(palette, new Vector2(0f, 0f), new Vector2(0f, 1f), Vector2.zero, new Vector2(MainUiTheme.LeftPanelWidth, -MainUiTheme.MainContentTop));
             var workspaceRoot = CreateContainer(spiceRoot, "SpiceWorkspaceRoot");
-            Anchor(workspaceRoot, Vector2.zero, Vector2.one, new Vector2(MainUiTheme.LeftPanelWidth, 0f), new Vector2(-MainUiTheme.RightPanelWidth - 12f, -MainUiTheme.MainContentTop));
+            Anchor(workspaceRoot, Vector2.zero, Vector2.one, new Vector2(MainUiTheme.LeftPanelWidth, 0f), new Vector2(-MainUiTheme.RightPanelWidth - 24f, -MainUiTheme.MainContentTop));
             var viewport = CreatePanel(workspaceRoot, "SpiceWorkspaceViewport", new Color(0.96f, 0.98f, 1f));
             Stretch(viewport, Vector2.zero, Vector2.zero);
             viewport.gameObject.AddComponent<RectMask2D>();
@@ -64,7 +66,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             overlayLayer.SetAsLastSibling();
 
             var assistant = CreatePanel(spiceRoot, "SpiceAssistantRoot", MainUiTheme.PanelBackground);
-            Anchor(assistant, new Vector2(1f, 0f), Vector2.one, new Vector2(-MainUiTheme.RightPanelWidth - 12f, 12f), new Vector2(-12f, -MainUiTheme.MainContentTop));
+            Anchor(assistant, new Vector2(1f, 0f), Vector2.one, new Vector2(-MainUiTheme.RightPanelWidth - 12f, 12f), new Vector2(-12f, -MainUiTheme.MainContentTop - 12f));
             var parameters = CreateLayer(assistant, "ParameterPanel");
             var results = CreateLayer(assistant, "ResultPanel");
             var netlist = CreateLayer(assistant, "NetlistPanel");
@@ -86,7 +88,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             host.Configure(bindings, workspaceController);
 
             var modeController = GetOrAddComponent<SimulationModeController>(simulationRoot.gameObject);
-            modeController.Configure(controlTopBar, controlPalette, controlWorkspace, inspectorHost.gameObject, spiceRoot.gameObject);
+            modeController.Configure(controlTopBar, controlPalette, controlPaletteController, controlWorkspace, inspectorHost.gameObject, spiceRoot.gameObject);
             var popupLayer = CreateGlobalPopupLayer(canvasRoot.transform);
             CreateSimulationModeDropdown(simulationTab, popupLayer, navigation, modeController);
             spiceRoot.gameObject.SetActive(false);
@@ -142,8 +144,8 @@ namespace ElectricalSim.EditorTools.SpiceT4
                 throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and the four SimulationPage content regions.");
             if (spiceToolbar.offsetMin.y != -MainUiTheme.MainContentTop || spiceToolbar.offsetMax.y != -MainUiTheme.NavBarHeight ||
                 spicePalette.offsetMax.x != MainUiTheme.LeftPanelWidth || spicePalette.offsetMax.y != -MainUiTheme.MainContentTop ||
-                spiceWorkspace.offsetMin.x != MainUiTheme.LeftPanelWidth || spiceWorkspace.offsetMax.x != -MainUiTheme.RightPanelWidth - 12f ||
-                spiceAssistant.offsetMin.x != -MainUiTheme.RightPanelWidth - 12f || spiceAssistant.offsetMax.x != -12f)
+                spiceWorkspace.offsetMin.x != MainUiTheme.LeftPanelWidth || spiceWorkspace.offsetMax.x != -MainUiTheme.RightPanelWidth - 24f ||
+                spiceAssistant.offsetMin.x != -MainUiTheme.RightPanelWidth - 12f || spiceAssistant.offsetMax.x != -12f || spiceAssistant.offsetMax.y != -MainUiTheme.MainContentTop - 12f)
                 throw new InvalidOperationException("Demo DC workspace content regions do not match the SimulationPage shell bounds.");
             if (inspectorRoot.GetComponent<Image>() != null || dropdown.GetComponent<Image>() != null)
                 throw new InvalidOperationException("Demo host containers must not block page input with transparent Images.");

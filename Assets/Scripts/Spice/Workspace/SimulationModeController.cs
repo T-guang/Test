@@ -1,4 +1,5 @@
 using System;
+using ElectricalSim.UI;
 using UnityEngine;
 
 namespace ElectricalSim.Spice.Workspace
@@ -17,6 +18,7 @@ namespace ElectricalSim.Spice.Workspace
     {
         [SerializeField] private GameObject controlTopBar;
         [SerializeField] private GameObject controlPalette;
+        [SerializeField] private PaletteController controlPaletteController;
         [SerializeField] private GameObject controlWorkspace;
         [SerializeField] private GameObject localInspectorPanel;
         [SerializeField] private GameObject spiceModeRoot;
@@ -28,6 +30,7 @@ namespace ElectricalSim.Spice.Workspace
         public void Configure(
             GameObject topBar,
             GameObject palette,
+            PaletteController paletteController,
             GameObject workspace,
             GameObject inspector,
             GameObject spiceRoot)
@@ -39,6 +42,7 @@ namespace ElectricalSim.Spice.Workspace
 
             controlTopBar = topBar;
             controlPalette = palette;
+            controlPaletteController = paletteController;
             controlWorkspace = workspace;
             localInspectorPanel = inspector;
             spiceModeRoot = spiceRoot;
@@ -95,6 +99,7 @@ namespace ElectricalSim.Spice.Workspace
             var useSpice = mode == SimulationWorkspaceMode.SpiceDc;
             controlTopBar.SetActive(!useSpice);
             controlPalette.SetActive(!useSpice);
+            controlPaletteController.SetCollapseHandleVisible(!useSpice);
             controlWorkspace.SetActive(!useSpice);
             localInspectorPanel.SetActive(!useSpice);
             spiceModeRoot.SetActive(useSpice);
@@ -111,7 +116,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void ValidateBindings()
         {
-            if (controlTopBar == null || controlPalette == null || controlWorkspace == null || localInspectorPanel == null || spiceModeRoot == null)
+            if (controlTopBar == null || controlPalette == null || controlPaletteController == null || controlWorkspace == null || localInspectorPanel == null || spiceModeRoot == null)
             {
                 throw new InvalidOperationException(
                     "Simulation mode controller is missing serialized control or SPICE content bindings.");
