@@ -41,21 +41,19 @@ namespace ElectricalSim.Spice.Workspace
         private Text statusText;
         private Text resultText;
         private Text diagnosticText;
+        private Text netlistText;
         private Text netlistStatusText;
         private Text parameterTitle;
         private InputField parameterInput;
-        private InputField netlistInput;
         private Button unitButton;
         private Text unitLabel;
         private Button runButton;
         private Button rotateButton;
         private Button netlistToggleButton;
         private Button copyNetlistButton;
-        private RectTransform resultRect;
-        private RectTransform netlistHeaderRect;
-        private RectTransform netlistBodyRect;
-        private RectTransform diagnosticTitleRect;
-        private RectTransform diagnosticRect;
+        private SpiceScrollableTextView resultView;
+        private SpiceScrollableTextView netlistView;
+        private SpiceScrollableTextView diagnosticView;
         private bool netlistExpanded;
         private string generatedNetlistContent;
         private string[] currentUnits = Array.Empty<string>();
@@ -195,8 +193,8 @@ namespace ElectricalSim.Spice.Workspace
             ResultState = SpiceWorkspaceResultState.Running;
             runButton.interactable = false;
             statusText.text = "计算中...";
-            resultText.text = string.Empty;
-            diagnosticText.text = string.Empty;
+            SetResultText(string.Empty);
+            SetDiagnosticText(string.Empty);
             RefreshNetlistUi();
             try
             {
@@ -206,13 +204,13 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     ResultState = SpiceWorkspaceResultState.Current;
                     statusText.text = "结果有效";
-                    resultText.text = FormatResult(result);
+                    SetResultText(FormatResult(result));
                 }
                 else
                 {
                     ResultState = SpiceWorkspaceResultState.Failed;
                     statusText.text = "计算失败";
-                    diagnosticText.text = FormatDiagnostics(result);
+                    SetDiagnosticText(FormatDiagnostics(result));
                 }
                 return result;
             }
@@ -221,7 +219,7 @@ namespace ElectricalSim.Spice.Workspace
                 ResultState = SpiceWorkspaceResultState.Failed;
                 generatedNetlistContent = null;
                 statusText.text = "计算失败";
-                diagnosticText.text = exception.ToString();
+                SetDiagnosticText(exception.ToString());
                 return null;
             }
             finally
@@ -504,51 +502,48 @@ namespace ElectricalSim.Spice.Workspace
             var diagnosticRoot = bindings.DiagnosticRoot;
             var assistantTitle = SpiceWorkspaceUi.CreateText(side.transform, "AssistantTitle", "仿真助手", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(assistantTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -46f), new Vector2(-18f, -8f));
+            ConfigureAssistantPanel(parameterRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -198f), new Vector2(-12f, -54f));
+            ConfigureAssistantPanel(resultRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -396f), new Vector2(-12f, -206f));
+            ConfigureAssistantPanel(netlistRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -564f), new Vector2(-12f, -404f));
+            ConfigureAssistantPanel(diagnosticRoot, Vector2.zero, Vector2.one, new Vector2(12f, 18f), new Vector2(-12f, -572f));
+
             parameterTitle = SpiceWorkspaceUi.CreateText(parameterRoot, "ParameterTitle", "参数设置", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -86f), new Vector2(-18f, -54f));
+            SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -38f), new Vector2(-14f, -8f));
             parameterInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "ParameterInput");
-            SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(18f, -132f), new Vector2(-4f, -94f));
+            SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -82f), new Vector2(-4f, -44f));
             unitButton = SpiceWorkspaceUi.CreateButton(parameterRoot, "Unit", "V", MainUiTheme.FilterButton, CycleUnit);
-            SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -132f), new Vector2(-18f, -94f));
+            SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -82f), new Vector2(-14f, -44f));
             unitLabel = unitButton.GetComponentInChildren<Text>();
             var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
-            SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -178f), new Vector2(-18f, -140f));
-            var resultTitle = SpiceWorkspaceUi.CreateText(resultRoot, "ResultTitle", "计算结果", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(resultTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -222f), new Vector2(-18f, -190f));
-            resultText = SpiceWorkspaceUi.CreateText(resultRoot, "Results", "尚无结果", 14, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.NormalText);
-            resultText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            resultText.verticalOverflow = VerticalWrapMode.Overflow;
-            resultRect = resultText.rectTransform;
+            SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
+
+            CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 40f);
+            resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 48f);
+            resultText = resultView.Text;
 
             var netlistHeader = SpiceWorkspaceUi.CreateImage(netlistRoot, "NetlistHeader", new Color(0.96f, 0.98f, 1f));
-            netlistHeaderRect = netlistHeader.rectTransform;
+            SpiceWorkspaceUi.Anchor(netlistHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0f, -64f));
             var netlistTitle = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Title", "生成网表", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0f), new Vector2(0.4f, 1f), new Vector2(18f, 0f), Vector2.zero);
+            SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-142f, -4f));
             netlistStatusText = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Status", "尚未生成网表。", 11, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.MutedText);
-            SpiceWorkspaceUi.Anchor(netlistStatusText.rectTransform, new Vector2(0.4f, 0f), new Vector2(0.66f, 1f), new Vector2(2f, 0f), Vector2.zero);
+            SpiceWorkspaceUi.Anchor(netlistStatusText.rectTransform, Vector2.zero, new Vector2(1f, 0.5f), new Vector2(14f, 4f), new Vector2(-14f, 0f));
             netlistToggleButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Toggle", "展开", MainUiTheme.FilterButton, ToggleNetlist);
-            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(0.67f, 0.15f), new Vector2(0.82f, 0.85f), new Vector2(1f, 0f), new Vector2(-2f, 0f));
-            copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制网表", MainUiTheme.FilterButton, CopyNetlist);
-            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(0.83f, 0.15f), new Vector2(1f, 0.85f), new Vector2(2f, 0f), new Vector2(-18f, 0f));
+            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-132f, -32f), new Vector2(-76f, -6f));
+            copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制", MainUiTheme.FilterButton, CopyNetlist);
+            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-70f, -32f), new Vector2(-14f, -6f));
 
-            var netlistBody = SpiceWorkspaceUi.CreateImage(netlistRoot, "NetlistBody", Color.white);
-            netlistBodyRect = netlistBody.rectTransform;
-            netlistInput = SpiceWorkspaceUi.CreateInput(netlistBody.transform, "Content");
-            netlistInput.readOnly = true;
-            netlistInput.lineType = InputField.LineType.MultiLineNewline;
-            netlistInput.textComponent.horizontalOverflow = HorizontalWrapMode.Overflow;
-            netlistInput.textComponent.verticalOverflow = VerticalWrapMode.Overflow;
-            SpiceWorkspaceUi.Stretch(netlistInput.GetComponent<RectTransform>(), new Vector2(6f, 6f), new Vector2(-6f, -6f));
+            netlistView = CreateScrollableTextView(netlistRoot, "NetlistScrollView", "NetlistText", 12, MainUiTheme.NormalText, 72f);
+            netlistText = netlistView.Text;
 
-            var diagnosticTitle = SpiceWorkspaceUi.CreateText(diagnosticRoot, "DiagnosticTitle", "诊断信息", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            diagnosticTitleRect = diagnosticTitle.rectTransform;
-            diagnosticText = SpiceWorkspaceUi.CreateText(diagnosticRoot, "Diagnostics", "", 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.DangerRed);
-            diagnosticText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            diagnosticText.verticalOverflow = VerticalWrapMode.Overflow;
-            diagnosticRect = diagnosticText.rectTransform;
+            CreatePanelHeader(diagnosticRoot, "DiagnosticHeader", "诊断信息", 40f);
+            diagnosticView = CreateScrollableTextView(diagnosticRoot, "DiagnosticScrollView", "DiagnosticText", 13, MainUiTheme.DangerRed, 48f);
+            diagnosticText = diagnosticView.Text;
             ClearParameterPanel();
             UpdateRotateAvailability();
             RefreshNetlistUi();
+            SetResultText(string.Empty);
+            SetDiagnosticText(string.Empty);
+            ValidateAssistantScrollStructure();
         }
 
         private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -605,23 +600,124 @@ namespace ElectricalSim.Spice.Workspace
 
         private void RefreshNetlistUi()
         {
-            if (netlistInput == null) return;
+            if (netlistView == null) return;
             var hasNetlist = !string.IsNullOrEmpty(generatedNetlistContent);
-            netlistInput.text = generatedNetlistContent ?? string.Empty;
-            netlistInput.transform.parent.gameObject.SetActive(netlistExpanded);
+            netlistView.ScrollRect.gameObject.SetActive(netlistExpanded);
+            if (netlistExpanded) RefreshScrollableText(netlistView, generatedNetlistContent ?? string.Empty);
+            else netlistText.text = generatedNetlistContent ?? string.Empty;
             netlistToggleButton.GetComponentInChildren<Text>().text = netlistExpanded ? "收起" : "展开";
             copyNetlistButton.interactable = hasNetlist;
             netlistStatusText.text = NetlistStatusMessage(hasNetlist);
+        }
 
-            var headerMin = netlistExpanded ? 0.52f : 0.46f;
-            var headerMax = netlistExpanded ? 0.58f : 0.52f;
-            SpiceWorkspaceUi.Anchor(resultRect, new Vector2(0f, headerMax), new Vector2(1f, 1f), new Vector2(18f, 0f), new Vector2(-18f, -228f));
-            SpiceWorkspaceUi.Anchor(netlistHeaderRect, new Vector2(0f, headerMin), new Vector2(1f, headerMax), Vector2.zero, Vector2.zero);
-            SpiceWorkspaceUi.Anchor(netlistBodyRect, new Vector2(0f, 0.30f), new Vector2(1f, headerMin), new Vector2(18f, 0f), new Vector2(-18f, 0f));
-            var diagnosticTop = netlistExpanded ? 0.24f : 0.40f;
-            var diagnosticTitleBottom = netlistExpanded ? 0.24f : 0.40f;
-            SpiceWorkspaceUi.Anchor(diagnosticTitleRect, new Vector2(0f, diagnosticTop), new Vector2(1f, diagnosticTop + 0.06f), new Vector2(18f, 0f), new Vector2(-18f, 0f));
-            SpiceWorkspaceUi.Anchor(diagnosticRect, Vector2.zero, new Vector2(1f, diagnosticTitleBottom), new Vector2(18f, 16f), new Vector2(-18f, -6f));
+        private static void ConfigureAssistantPanel(RectTransform panel, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            SpiceWorkspaceUi.Anchor(panel, anchorMin, anchorMax, offsetMin, offsetMax);
+            var image = panel.GetComponent<Image>() ?? panel.gameObject.AddComponent<Image>();
+            image.color = Color.white;
+            var outline = panel.GetComponent<Outline>() ?? panel.gameObject.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Divider;
+            outline.effectDistance = new Vector2(1f, -1f);
+        }
+
+        private static void CreatePanelHeader(RectTransform panel, string name, string title, float height)
+        {
+            var header = SpiceWorkspaceUi.CreateImage(panel, name, new Color(0.96f, 0.98f, 1f));
+            SpiceWorkspaceUi.Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0f, -height));
+            var text = SpiceWorkspaceUi.CreateText(header.transform, "Title", title, 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Stretch(text.rectTransform, new Vector2(14f, 0f), new Vector2(-14f, 0f));
+        }
+
+        // 每个助手信息区各自裁剪并滚动，长文本不会越过相邻 Panel 的边界。
+        private static SpiceScrollableTextView CreateScrollableTextView(RectTransform panel, string scrollName, string textName, int fontSize, Color color, float topInset)
+        {
+            var scroll = new GameObject(scrollName, typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<ScrollRect>();
+            scroll.transform.SetParent(panel, false);
+            SpiceWorkspaceUi.Stretch(scroll.GetComponent<RectTransform>(), new Vector2(12f, 12f), new Vector2(-12f, -topInset));
+            scroll.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
+            scroll.horizontal = false;
+            scroll.vertical = true;
+
+            var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
+            viewport.SetParent(scroll.transform, false);
+            SpiceWorkspaceUi.Stretch(viewport, Vector2.zero, Vector2.zero);
+            var content = new GameObject("Content", typeof(RectTransform)).GetComponent<RectTransform>();
+            content.SetParent(viewport, false);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            var text = SpiceWorkspaceUi.CreateText(content, textName, string.Empty, fontSize, FontStyle.Normal, TextAnchor.UpperLeft, color);
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            SpiceWorkspaceUi.Anchor(text.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(6f, 0f), new Vector2(-6f, 0f));
+            scroll.viewport = viewport;
+            scroll.content = content;
+            return new SpiceScrollableTextView(scroll, viewport, content, text);
+        }
+
+        // Content 高度只在文本或布局发生实际变化时按 preferredHeight 刷新，不在 Update 中轮询。
+        private static void RefreshScrollableText(SpiceScrollableTextView view, string value)
+        {
+            view.Text.text = value;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(view.Text.rectTransform);
+            var height = Mathf.Max(view.Viewport.rect.height, view.Text.preferredHeight + 12f);
+            view.Content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+            view.ScrollRect.verticalNormalizedPosition = 1f;
+        }
+
+        private void SetResultText(string value) => RefreshScrollableText(resultView, string.IsNullOrEmpty(value) ? "尚无结果" : value);
+        private void SetDiagnosticText(string value) => RefreshScrollableText(diagnosticView, value ?? string.Empty);
+
+        /// <summary>由宿主在 Start 或更晚阶段调用，以验证 Canvas 完成布局后的三块固定信息区。</summary>
+        public void ValidateAssistantPanelLayout()
+        {
+            Canvas.ForceUpdateCanvases();
+            var resultPanel = bindings.ResultRoot;
+            var netlistPanel = bindings.NetlistRoot;
+            var diagnosticPanel = bindings.DiagnosticRoot;
+            if (resultPanel.rect.height <= 0f || netlistPanel.rect.height <= 0f || diagnosticPanel.rect.height <= 0f)
+                throw new InvalidOperationException("Spice assistant panels require positive layout height.");
+            if (RectsOverlap(resultPanel, netlistPanel) || RectsOverlap(netlistPanel, diagnosticPanel)) throw new InvalidOperationException("Spice assistant panels overlap.");
+        }
+
+        private void ValidateAssistantScrollStructure()
+        {
+            ValidateScrollableTextView(resultView, bindings.ResultRoot);
+            ValidateScrollableTextView(netlistView, bindings.NetlistRoot);
+            ValidateScrollableTextView(diagnosticView, bindings.DiagnosticRoot);
+            if (resultView.ScrollRect.content == netlistView.ScrollRect.content || netlistView.ScrollRect.content == diagnosticView.ScrollRect.content || resultView.ScrollRect.content == diagnosticView.ScrollRect.content)
+                throw new InvalidOperationException("Spice assistant panels must not share scroll content.");
+        }
+
+        private static void ValidateScrollableTextView(SpiceScrollableTextView view, RectTransform panel)
+        {
+            if (view.ScrollRect.viewport != view.Viewport || view.ScrollRect.content != view.Content || view.Viewport.GetComponent<RectMask2D>() == null || !view.Viewport.IsChildOf(panel) || !view.Text.transform.IsChildOf(view.Content))
+                throw new InvalidOperationException("Spice assistant scroll view bindings are incomplete.");
+            if (!RectContains(panel, view.Viewport)) throw new InvalidOperationException("Spice assistant viewport extends outside its panel.");
+        }
+
+        private static bool RectsOverlap(RectTransform left, RectTransform right)
+        {
+            GetWorldBounds(left, out var leftMin, out var leftMax);
+            GetWorldBounds(right, out var rightMin, out var rightMax);
+            return leftMin.x < rightMax.x && leftMax.x > rightMin.x && leftMin.y < rightMax.y && leftMax.y > rightMin.y;
+        }
+
+        private static bool RectContains(RectTransform outer, RectTransform inner)
+        {
+            GetWorldBounds(outer, out var outerMin, out var outerMax);
+            GetWorldBounds(inner, out var innerMin, out var innerMax);
+            return innerMin.x >= outerMin.x && innerMax.x <= outerMax.x && innerMin.y >= outerMin.y && innerMax.y <= outerMax.y;
+        }
+
+        private static void GetWorldBounds(RectTransform rect, out Vector2 min, out Vector2 max)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            min = corners[0];
+            max = corners[2];
         }
 
         private string NetlistStatusMessage(bool hasNetlist)
@@ -729,6 +825,23 @@ namespace ElectricalSim.Spice.Workspace
             var related = string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : "\n关联元件：" + diagnostic.ComponentId + (string.IsNullOrEmpty(diagnostic.TerminalId) ? string.Empty : " / 端子：" + diagnostic.TerminalId);
             return title + "\n" + detail + related + "\n错误码：" + diagnostic.Code;
         }
+    }
+
+    /// <summary>固定助手 Panel 内的独立滚动文本引用；文字永远裁剪在自己的 Viewport 中。</summary>
+    internal sealed class SpiceScrollableTextView
+    {
+        public SpiceScrollableTextView(ScrollRect scrollRect, RectTransform viewport, RectTransform content, Text text)
+        {
+            ScrollRect = scrollRect;
+            Viewport = viewport;
+            Content = content;
+            Text = text;
+        }
+
+        public ScrollRect ScrollRect { get; }
+        public RectTransform Viewport { get; }
+        public RectTransform Content { get; }
+        public Text Text { get; }
     }
 
     public sealed class SpiceWorkspaceBlankClick : MonoBehaviour, IPointerClickHandler

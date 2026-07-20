@@ -33,6 +33,7 @@ namespace ElectricalSim.Spice.T3
                 var workspace = bootstrap.Controller;
                 if (workspace == null)
                     throw new InvalidOperationException("Spice workspace was not initialized by Bootstrap.Awake.");
+                workspace.ValidateAssistantPanelLayout();
                 var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
                 var ground = workspace.CreateComponent(SpiceComponentKind.Ground, new Vector2(0f, -140f));
