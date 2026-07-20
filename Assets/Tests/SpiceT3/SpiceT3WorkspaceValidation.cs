@@ -111,19 +111,14 @@ namespace ElectricalSim.Spice.T3
                 var controlWorkspace = CreateRoot(host.transform);
                 var inspector = CreateRoot(host.transform);
                 var spiceRoot = CreateRoot(host.transform);
-                var selector = CreateButton(host.transform);
-                var menu = CreateRoot(host.transform);
-                var controlOption = CreateButton(menu.transform);
-                var spiceOption = CreateButton(menu.transform);
-                var label = CreateText(host.transform);
-                controller.Configure(controlTopBar, controlPalette, controlWorkspace, inspector, spiceRoot, selector, menu, controlOption, spiceOption, label);
+                controller.Configure(controlTopBar, controlPalette, controlWorkspace, inspector, spiceRoot);
                 controller.Initialize();
                 host.SetActive(true);
 
-                if (controller.CurrentMode != SimulationWorkspaceMode.ControlCircuit || !controlTopBar.activeSelf || spiceRoot.activeSelf || label.text != "电工控制仿真")
+                if (controller.CurrentMode != SimulationWorkspaceMode.ControlCircuit || !controlTopBar.activeSelf || spiceRoot.activeSelf)
                     throw new InvalidOperationException("Simulation mode controller did not initialize the control mode.");
                 controller.SelectSpiceDc();
-                if (controller.CurrentMode != SimulationWorkspaceMode.SpiceDc || controlPalette.activeSelf || !spiceRoot.activeSelf || label.text != "基础电路原理仿真")
+                if (controller.CurrentMode != SimulationWorkspaceMode.SpiceDc || controlPalette.activeSelf || !spiceRoot.activeSelf)
                     throw new InvalidOperationException("Simulation mode controller did not preserve mutually exclusive roots.");
                 controller.SelectControlCircuit();
                 if (controller.CurrentMode != SimulationWorkspaceMode.ControlCircuit || !controlWorkspace.activeSelf || spiceRoot.activeSelf)
