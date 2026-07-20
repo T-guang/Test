@@ -11,7 +11,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
 {
     /// <summary>
     /// 只装配 Demo 场景的 T4-A DC 宿主层。它不调用 DemoSceneBuilder，也不创建或修改电工工作区数据。
-    /// 每次运行都会精确重建本工具拥有的 SPICE 内容 Root 与 NavBar 下的模式菜单，避免手工层级漂移。
+    /// 每次运行都会精确重建本工具拥有的 SPICE 内容 Root 与全局模式菜单，避免手工层级漂移。
     /// </summary>
     public static class SpiceT4DemoIntegrationTools
     {
@@ -43,6 +43,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             RebuildOwnedChild(simulationRoot, "SpiceModeRoot");
             RebuildOwnedChild(simulationRoot, "SimulationModeSelector");
             RebuildOwnedChild(simulationTab, "SimulationModeDropdown");
+            RebuildOwnedChild(canvasRoot.transform, "GlobalPopupLayer");
 
             var spiceRoot = CreatePanel(simulationRoot, "SpiceModeRoot", MainUiTheme.PageBackground);
             Anchor(spiceRoot, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0f, -MainUiTheme.NavBarHeight));
@@ -83,7 +84,8 @@ namespace ElectricalSim.EditorTools.SpiceT4
 
             var modeController = GetOrAddComponent<SimulationModeController>(simulationRoot.gameObject);
             modeController.Configure(controlTopBar, controlPalette, controlWorkspace, inspectorHost.gameObject, spiceRoot.gameObject);
-            CreateSimulationModeDropdown(simulationTab, navigation, modeController);
+            var popupLayer = CreateGlobalPopupLayer(canvasRoot.transform);
+            CreateSimulationModeDropdown(simulationTab, popupLayer, navigation, modeController);
             spiceRoot.gameObject.SetActive(false);
 
             EditorUtility.SetDirty(demoUi);
@@ -111,7 +113,10 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var spiceRoot = RequireChild(simulationRoot, "SpiceModeRoot");
             var inspectorRoot = RequireChild(simulationRoot, "ControlInspectorRoot");
             var navBar = RequireChild(RequireChild(canvasRoot.transform, "MainAppRoot"), "NavBar");
-            var dropdown = RequireChild(RequireChild(navBar, "Nav_0"), "SimulationModeDropdown");
+            var simulationTab = RequireChild(navBar, "Nav_0");
+            var dropdownButton = RequireChild(simulationTab, "SimulationModeDropdownButton");
+            var popupLayer = RequireChild(canvasRoot.transform, "GlobalPopupLayer") as RectTransform;
+            var dropdown = RequireChild(popupLayer, "SimulationModeDropdown");
             var host = simulationRoot.GetComponent<SpiceWorkspaceDemoHost>()
                 ?? throw new InvalidOperationException("Demo SimulationPage is missing SpiceWorkspaceDemoHost.");
             var modeController = simulationRoot.GetComponent<SimulationModeController>()
@@ -121,15 +126,18 @@ namespace ElectricalSim.EditorTools.SpiceT4
             var controller = spiceRoot.GetComponent<SpiceWorkspaceController>()
                 ?? throw new InvalidOperationException("Demo SpiceModeRoot is missing SpiceWorkspaceController.");
             bindings.Validate();
-            if (host.Controller != controller || spiceRoot.gameObject.activeSelf || dropdown.parent.name != "Nav_0" || inspectorRoot.parent != simulationRoot)
+            if (host.Controller != controller || spiceRoot.gameObject.activeSelf || dropdownButton.parent != simulationTab || dropdown.parent != popupLayer || inspectorRoot.parent != simulationRoot)
                 throw new InvalidOperationException("Demo DC workspace host bindings or default root state are invalid.");
             var spiceRootRect = spiceRoot as RectTransform;
             if (simulationRoot.Find("SimulationModeSelector") != null || spiceRootRect == null || spiceRootRect.offsetMax.y > -MainUiTheme.NavBarHeight + 0.01f)
                 throw new InvalidOperationException("Demo DC workspace must use the NavBar dropdown and remain below the NavBar content boundary.");
             if (inspectorRoot.GetComponent<Image>() != null || dropdown.GetComponent<Image>() != null)
                 throw new InvalidOperationException("Demo host containers must not block page input with transparent Images.");
-            if (CountComponents<Canvas>(scene) != 1 || CountComponents<UnityEngine.EventSystems.EventSystem>(scene) != 1 || CountComponents<Camera>(scene) != 1)
-                throw new InvalidOperationException("Demo DC workspace must reuse the existing single Canvas, EventSystem, and Camera.");
+            var popupCanvas = popupLayer.GetComponent<Canvas>();
+            if (popupLayer.GetSiblingIndex() != popupLayer.parent.childCount - 1 || popupCanvas == null || !popupCanvas.overrideSorting || popupCanvas.sortingOrder != 100 || popupLayer.GetComponent<GraphicRaycaster>() == null || popupLayer.GetComponent<Mask>() != null || popupLayer.GetComponent<RectMask2D>() != null)
+                throw new InvalidOperationException("Demo global popup layer must be the last, unclipped Canvas child with sorting order 100.");
+            if (CountComponents<Canvas>(scene) != 2 || CountComponents<UnityEngine.EventSystems.EventSystem>(scene) != 1 || CountComponents<Camera>(scene) != 1)
+                throw new InvalidOperationException("Demo DC workspace must contain its main Canvas plus one global popup Canvas, while reusing the single EventSystem and Camera.");
             if (modeController.CurrentMode != SimulationWorkspaceMode.ControlCircuit)
                 throw new InvalidOperationException("SimulationModeController default mode is not ControlCircuit.");
 
@@ -229,18 +237,36 @@ namespace ElectricalSim.EditorTools.SpiceT4
             return button;
         }
 
-        private static void CreateSimulationModeDropdown(Transform simulationTab, TopNavigationController navigation, SimulationModeController modeController)
+        private static RectTransform CreateGlobalPopupLayer(Transform canvasRoot)
         {
-            var root = CreateContainer(simulationTab, "SimulationModeDropdown");
-            Anchor(root, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            root.SetAsLastSibling();
+            var layer = CreateContainer(canvasRoot, "GlobalPopupLayer");
+            Stretch(layer, Vector2.zero, Vector2.zero);
+            var canvas = layer.gameObject.AddComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 100;
+            layer.gameObject.AddComponent<GraphicRaycaster>();
+            layer.SetAsLastSibling();
+            return layer;
+        }
 
-            var toggle = CreateButton(root, "DropdownButton", "v", Color.clear, MainUiTheme.NormalText);
+        private static void CreateSimulationModeDropdown(Transform simulationTab, RectTransform popupLayer, TopNavigationController navigation, SimulationModeController modeController)
+        {
+            var toggle = CreateButton(simulationTab, "SimulationModeDropdownButton", "v", Color.clear, MainUiTheme.NormalText);
             Anchor(toggle.GetComponent<RectTransform>(), new Vector2(1f, .5f), new Vector2(1f, .5f), new Vector2(-24f, -16f), new Vector2(-4f, 16f));
             toggle.GetComponent<Outline>().enabled = false;
 
+            var blocker = CreatePanel(popupLayer, "OutsideClickBlocker", Color.clear);
+            Stretch(blocker, Vector2.zero, Vector2.zero);
+            var blockerButton = blocker.gameObject.AddComponent<Button>();
+            blockerButton.targetGraphic = blocker.GetComponent<Image>();
+            blocker.gameObject.SetActive(false);
+
+            var root = CreateContainer(popupLayer, "SimulationModeDropdown");
+            Anchor(root, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            root.SetAsLastSibling();
+
             var menu = CreatePanel(root, "ModeMenu", MainUiTheme.PanelBackground);
-            Anchor(menu, new Vector2(.5f, 0f), new Vector2(.5f, 0f), new Vector2(-118f, -92f), new Vector2(118f, -8f));
+            Anchor(menu, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero, new Vector2(208f, -84f));
             var controlOption = CreateButton(menu, "ControlCircuitOption", "电工控制仿真", MainUiTheme.FilterButton, MainUiTheme.NormalText);
             var spiceOption = CreateButton(menu, "SpiceDcOption", "基础电路原理仿真", MainUiTheme.FilterButton, MainUiTheme.NormalText);
             Anchor(controlOption.GetComponent<RectTransform>(), new Vector2(0f, .5f), new Vector2(1f, .5f), new Vector2(6f, 2f), new Vector2(-6f, 36f));
@@ -248,7 +274,7 @@ namespace ElectricalSim.EditorTools.SpiceT4
             menu.gameObject.SetActive(false);
 
             var dropdown = root.gameObject.AddComponent<SimulationModeDropdown>();
-            dropdown.Configure(navigation, modeController, toggle, menu.gameObject, controlOption, spiceOption);
+            dropdown.Configure(navigation, modeController, toggle, menu.gameObject, controlOption, spiceOption, blockerButton, popupLayer, popupLayer.GetComponent<Canvas>());
         }
 
         private static void Stretch(RectTransform rect, Vector2 offsetMin, Vector2 offsetMax)

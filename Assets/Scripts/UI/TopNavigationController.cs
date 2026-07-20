@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using ElectricalSim.UI.CommonTools;
 using UnityEngine;
 using UnityEngine.UI;
@@ -25,6 +26,9 @@ namespace ElectricalSim.UI
         [SerializeField] private Text emptyPageTitle;
 
         private Button exitButton;
+
+        /// <summary>在导航标签完成页面切换后通知局部浮层关闭自身，不参与页面内容逻辑。</summary>
+        public event Action<int> TabSelected;
 
         private void Awake()
         {
@@ -310,6 +314,7 @@ namespace ElectricalSim.UI
             }
 
             RefreshTabStates(index);
+            TabSelected?.Invoke(index);
         }
 
         private void RefreshTabStates(int activeIndex)

@@ -17,10 +17,22 @@ namespace ElectricalSim.Spice.Workspace
         [SerializeField] private GameObject menuPanel;
         [SerializeField] private Button controlCircuitOption;
         [SerializeField] private Button spiceDcOption;
+        [SerializeField] private Button outsideClickBlocker;
+        [SerializeField] private RectTransform popupLayer;
+        [SerializeField] private Canvas popupCanvas;
 
         private bool initialized;
 
-        public void Configure(TopNavigationController navigation, SimulationModeController controller, Button toggle, GameObject menu, Button controlOption, Button spiceOption)
+        public void Configure(
+            TopNavigationController navigation,
+            SimulationModeController controller,
+            Button toggle,
+            GameObject menu,
+            Button controlOption,
+            Button spiceOption,
+            Button blocker,
+            RectTransform layer,
+            Canvas canvas)
         {
             if (initialized)
             {
@@ -33,6 +45,9 @@ namespace ElectricalSim.Spice.Workspace
             menuPanel = menu;
             controlCircuitOption = controlOption;
             spiceDcOption = spiceOption;
+            outsideClickBlocker = blocker;
+            popupLayer = layer;
+            popupCanvas = canvas;
         }
 
         private void Awake()
@@ -41,6 +56,9 @@ namespace ElectricalSim.Spice.Workspace
             dropdownButton.onClick.AddListener(ToggleMenu);
             controlCircuitOption.onClick.AddListener(SelectControlCircuit);
             spiceDcOption.onClick.AddListener(SelectSpiceDc);
+            outsideClickBlocker.onClick.AddListener(CloseMenu);
+            topNavigation.TabSelected += HandleTabSelected;
+            outsideClickBlocker.gameObject.SetActive(false);
             menuPanel.SetActive(false);
             initialized = true;
         }
@@ -55,12 +73,28 @@ namespace ElectricalSim.Spice.Workspace
             dropdownButton.onClick.RemoveListener(ToggleMenu);
             controlCircuitOption.onClick.RemoveListener(SelectControlCircuit);
             spiceDcOption.onClick.RemoveListener(SelectSpiceDc);
+            outsideClickBlocker.onClick.RemoveListener(CloseMenu);
+            topNavigation.TabSelected -= HandleTabSelected;
+        }
+
+        private void Update()
+        {
+            if (menuPanel.activeSelf && Input.GetKeyDown(KeyCode.Escape))
+            {
+                CloseMenu();
+            }
         }
 
         private void ToggleMenu()
         {
+            if (menuPanel.activeSelf)
+            {
+                CloseMenu();
+                return;
+            }
+
             topNavigation.SelectTab(0);
-            menuPanel.SetActive(!menuPanel.activeSelf);
+            OpenMenu();
         }
 
         private void SelectControlCircuit() => SelectMode(SimulationWorkspaceMode.ControlCircuit);
@@ -70,12 +104,58 @@ namespace ElectricalSim.Spice.Workspace
         {
             topNavigation.SelectTab(0);
             modeController.SetMode(mode);
+            CloseMenu();
+        }
+
+        private void OpenMenu()
+        {
+            PositionMenuBelowSimulationTab();
+            transform.SetAsLastSibling();
+            outsideClickBlocker.gameObject.SetActive(true);
+            menuPanel.SetActive(true);
+        }
+
+        private void CloseMenu()
+        {
+            if (!initialized)
+            {
+                return;
+            }
+
             menuPanel.SetActive(false);
+            outsideClickBlocker.gameObject.SetActive(false);
+        }
+
+        private void HandleTabSelected(int index)
+        {
+            if (index != 0)
+            {
+                CloseMenu();
+            }
+        }
+
+        private void PositionMenuBelowSimulationTab()
+        {
+            var buttonRect = dropdownButton.GetComponent<RectTransform>();
+            var eventCamera = popupCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : popupCanvas.worldCamera;
+            var buttonWorldCorners = new Vector3[4];
+            buttonRect.GetWorldCorners(buttonWorldCorners);
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(eventCamera, buttonWorldCorners[0]);
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(popupLayer, screenPoint, eventCamera, out var localPoint))
+            {
+                throw new InvalidOperationException("Simulation mode menu could not convert the navigation button position into the popup layer.");
+            }
+
+            var menuRect = menuPanel.GetComponent<RectTransform>();
+            menuRect.anchorMin = new Vector2(.5f, .5f);
+            menuRect.anchorMax = new Vector2(.5f, .5f);
+            menuRect.pivot = new Vector2(0f, 1f);
+            menuRect.anchoredPosition = localPoint + new Vector2(0f, -5f);
         }
 
         private void ValidateBindings()
         {
-            if (topNavigation == null || modeController == null || dropdownButton == null || menuPanel == null || controlCircuitOption == null || spiceDcOption == null)
+            if (topNavigation == null || modeController == null || dropdownButton == null || menuPanel == null || controlCircuitOption == null || spiceDcOption == null || outsideClickBlocker == null || popupLayer == null || popupCanvas == null)
             {
                 throw new InvalidOperationException("Simulation mode dropdown is missing serialized navigation or menu bindings.");
             }
