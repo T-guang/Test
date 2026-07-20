@@ -28,6 +28,7 @@ namespace ElectricalSim.UI
         [SerializeField] private SaveBlueprintDialog saveDialog;
         [SerializeField] private ImportBlueprintPanel importPanel;
         [SerializeField] private LocalInspectorPanel localInspectorPanel;
+        [SerializeField] private RectTransform localInspectorHostRoot;
         [SerializeField] private Button undoButton;
         [SerializeField] private Button redoButton;
         [SerializeField] private Button quickDeleteButton;
@@ -1101,7 +1102,9 @@ namespace ElectricalSim.UI
                 return;
             }
 
-            var parent = workspace.WorkspaceRect != null ? workspace.WorkspaceRect.parent as RectTransform : null;
+            var parent = localInspectorHostRoot != null
+                ? localInspectorHostRoot
+                : workspace.WorkspaceRect != null ? workspace.WorkspaceRect.parent as RectTransform : null;
             if (parent == null)
             {
                 parent = startButton != null && startButton.transform.parent != null ? startButton.transform.parent.parent as RectTransform : null;
@@ -1113,6 +1116,14 @@ namespace ElectricalSim.UI
             }
 
             localInspectorPanel = LocalInspectorPanel.Create(parent, workspace);
+        }
+
+        /// <summary>
+        /// 由 Demo 场景装配工具指定检查助手的控制模式宿主，使模式切换能够显隐整个助手及折叠把手。
+        /// </summary>
+        public void ConfigureLocalInspectorHost(RectTransform hostRoot)
+        {
+            localInspectorHostRoot = hostRoot;
         }
         private void EnsureBlueprintPanels()
         {

@@ -13,6 +13,7 @@ namespace ElectricalSim.Spice.T3
         public static void RunPureChecks()
         {
             ValidateHostBindings();
+            ValidateHiddenDemoHostInitialization();
             ValidateSimulationModeSwitching();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
@@ -131,6 +132,43 @@ namespace ElectricalSim.Spice.T3
             finally
             {
                 UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static void ValidateHiddenDemoHostInitialization()
+        {
+            var canvasRoot = new GameObject("SpiceDemoHostValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var spiceRoot = CreateRoot(canvasRoot.transform);
+                spiceRoot.SetActive(false);
+                var bindings = spiceRoot.AddComponent<SpiceWorkspaceViewBindings>();
+                var workspace = spiceRoot.AddComponent<SpiceWorkspaceController>();
+                var palette = CreateRect(spiceRoot.transform);
+                var viewport = CreateRect(spiceRoot.transform);
+                var wires = CreateRect(viewport);
+                var components = CreateRect(viewport);
+                var overlay = CreateRect(viewport);
+                var assistant = CreateRect(spiceRoot.transform);
+                var parameters = CreateRect(assistant);
+                var results = CreateRect(assistant);
+                var netlist = CreateRect(assistant);
+                var diagnostics = CreateRect(assistant);
+                bindings.Bind(palette, viewport, wires, components, overlay, assistant, parameters, results, netlist, diagnostics,
+                    CreateButton(canvasRoot.transform), CreateButton(canvasRoot.transform), CreateButton(canvasRoot.transform), CreateButton(canvasRoot.transform));
+
+                var hostRoot = CreateRoot(canvasRoot.transform);
+                hostRoot.SetActive(false);
+                var host = hostRoot.AddComponent<SpiceWorkspaceDemoHost>();
+                host.Configure(bindings, workspace);
+                host.Initialize();
+                host.Initialize();
+                if (!host.IsInitialized || host.Controller != workspace)
+                    throw new InvalidOperationException("Hidden SPICE Demo host did not initialize exactly once.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
         }
 
