@@ -120,6 +120,40 @@ namespace ElectricalSim.Core
     }
 
     /// <summary>
+    /// Ordinary three-phase motor state derived from the active simulation graph.
+    /// It is runtime-only and never becomes template or drawing data.
+    /// </summary>
+    public sealed class MotorRuntimeState
+    {
+        public bool IsRunning;
+        public MotorDirectionState Direction;
+        public string PhaseAtU;
+        public string PhaseAtV;
+        public string PhaseAtW;
+        public string Reason;
+
+        public void Update(MotorDirectionResult result, bool isRunning)
+        {
+            Direction = result != null ? result.Direction : MotorDirectionState.Stopped;
+            PhaseAtU = result != null ? result.PhaseAtU : string.Empty;
+            PhaseAtV = result != null ? result.PhaseAtV : string.Empty;
+            PhaseAtW = result != null ? result.PhaseAtW : string.Empty;
+            Reason = result != null ? result.Reason : string.Empty;
+            IsRunning = isRunning && (Direction == MotorDirectionState.Forward || Direction == MotorDirectionState.Reverse);
+        }
+
+        public void Reset()
+        {
+            IsRunning = false;
+            Direction = MotorDirectionState.Stopped;
+            PhaseAtU = string.Empty;
+            PhaseAtV = string.Empty;
+            PhaseAtW = string.Empty;
+            Reason = string.Empty;
+        }
+    }
+
+    /// <summary>
     /// 单个元件实例的保护脱扣与过载计时缓存。它只承载运行态数据，不定义热继或保护规则，也不进入持久化图纸。
     /// </summary>
     public sealed class ProtectionRuntimeState
@@ -144,6 +178,7 @@ namespace ElectricalSim.Core
     {
         private readonly Dictionary<string, TimerRuntimeState> timerStates = new Dictionary<string, TimerRuntimeState>();
         private readonly Dictionary<string, MotionRuntimeState> motionStates = new Dictionary<string, MotionRuntimeState>();
+        private readonly Dictionary<string, MotorRuntimeState> motorStates = new Dictionary<string, MotorRuntimeState>();
         private readonly Dictionary<string, ProtectionRuntimeState> protectionStates = new Dictionary<string, ProtectionRuntimeState>();
 
         public static RuntimeStateManager Shared { get; } = new RuntimeStateManager();
@@ -152,6 +187,7 @@ namespace ElectricalSim.Core
 
         public int TimerStateCount => timerStates.Count;
         public int MotionStateCount => motionStates.Count;
+        public int MotorStateCount => motorStates.Count;
         public int ProtectionStateCount => protectionStates.Count;
 
         public TimerRuntimeState GetOrCreateTimerState(string componentId)
@@ -189,6 +225,23 @@ namespace ElectricalSim.Core
             return state;
         }
 
+        public MotorRuntimeState GetOrCreateMotorState(string componentId)
+        {
+            if (string.IsNullOrWhiteSpace(componentId))
+            {
+                return null;
+            }
+
+            if (!motorStates.TryGetValue(componentId, out var state))
+            {
+                state = new MotorRuntimeState();
+                state.Reset();
+                motorStates[componentId] = state;
+            }
+
+            return state;
+        }
+
         public ProtectionRuntimeState GetOrCreateProtectionState(string componentId)
         {
             if (string.IsNullOrWhiteSpace(componentId))
@@ -215,6 +268,11 @@ namespace ElectricalSim.Core
             return motionStates.TryGetValue(componentId ?? string.Empty, out state);
         }
 
+        public bool TryGetMotorState(string componentId, out MotorRuntimeState state)
+        {
+            return motorStates.TryGetValue(componentId ?? string.Empty, out state);
+        }
+
         public bool TryGetProtectionState(string componentId, out ProtectionRuntimeState state)
         {
             return protectionStates.TryGetValue(componentId ?? string.Empty, out state);
@@ -230,6 +288,7 @@ namespace ElectricalSim.Core
             // 删除元件时必须一并清理三类运行态，避免同一实例 ID 在撤销、导入后继承旧状态。
             timerStates.Remove(componentId);
             motionStates.Remove(componentId);
+            motorStates.Remove(componentId);
             protectionStates.Remove(componentId);
         }
 
@@ -240,6 +299,7 @@ namespace ElectricalSim.Core
             LastResetReason = reason;
             timerStates.Clear();
             motionStates.Clear();
+            motorStates.Clear();
             protectionStates.Clear();
         }
 
