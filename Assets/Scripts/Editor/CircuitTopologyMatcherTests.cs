@@ -1,5 +1,6 @@
 using System;
 using ElectricalSim.AI;
+using ElectricalSim.Templates;
 using UnityEditor;
 using UnityEngine;
 
@@ -15,7 +16,12 @@ namespace ElectricalSim.Editor
             var extra = BuildChain("Power", "Switch", "Lamp");
             extra.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = "N", NodeB = 2, TerminalB = "N" });
             AssertMatch(extra, BuildChain("Power", "Switch", "Lamp"), false);
-            Debug.Log("Circuit topology matcher tests: 3/3 passed.");
+            if (!CircuitTemplateLoader.TryLoad("Blueprints/Templates/single_lamp_template", out var singleLamp, out var error))
+            {
+                throw new InvalidOperationException("Unable to load single lamp template: " + error);
+            }
+            AssertMatch(CircuitTopologyExtractor.FromTemplate(singleLamp), CircuitTopologyExtractor.FromTemplate(singleLamp), true);
+            Debug.Log("Circuit topology matcher tests: 4/4 passed.");
         }
 
         private static CircuitTopologyGraph BuildChain(string first, string second, string third)

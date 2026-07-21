@@ -57,7 +57,7 @@ namespace ElectricalSim.AI
                     "最新检查报告",
                     "接线检查",
                     workspace.IsSimulationRunning,
-                    ResolveCurrentCircuitDisplayName(),
+                    ResolveRecognitionDisplayName(recognition),
                     InspectionReportComposer.BuildCheckSummaryConclusion(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount),
                     InspectionReportComposer.ResolveRiskLevel(industrialStateResult, industrialResult.ErrorCount, industrialResult.WarningCount));
                 var industrialNotices = runtimeAdapter.PrependCheckPanelRuntimeNotices(
@@ -97,7 +97,7 @@ namespace ElectricalSim.AI
                 "最新检查报告",
                 "接线检查",
                 workspace.IsSimulationRunning,
-                ResolveCurrentCircuitDisplayName(),
+                ResolveRecognitionDisplayName(recognition),
                 InspectionReportComposer.BuildCheckSummaryConclusion(stateResult, displayResult.ErrorCount, displayResult.WarningCount),
                 InspectionReportComposer.ResolveRiskLevel(stateResult, displayResult.ErrorCount, displayResult.WarningCount));
             var notices = runtimeAdapter.PrependCheckPanelRuntimeNotices(
@@ -134,7 +134,7 @@ namespace ElectricalSim.AI
                 "当前电路解释",
                 "电路解释",
                 workspace.IsSimulationRunning,
-                ResolveCurrentCircuitDisplayName(),
+                ResolveRecognitionDisplayName(recognitionService.Recognize(workspace)),
                 "以下内容基于当前元件状态和接线拓扑生成。",
                 string.Empty);
             report.AddRange(runtimeAdapter.BuildCurrentCircuitExplanationReportData(stateResult));
@@ -160,6 +160,16 @@ namespace ElectricalSim.AI
         {
             var name = runtimeAdapter.ResolveCurrentCircuitName();
             return string.IsNullOrWhiteSpace(name) ? "未识别模板" : name;
+        }
+
+        private string ResolveRecognitionDisplayName(CircuitRecognitionResult recognition)
+        {
+            if (recognition != null && recognition.Status == CircuitRecognitionStatus.ExactMatch)
+            {
+                return recognition.MatchedTemplateName;
+            }
+
+            return ResolveCurrentCircuitDisplayName();
         }
 
         private static InspectionReportData BuildRecognitionReport(CircuitRecognitionResult recognition)
