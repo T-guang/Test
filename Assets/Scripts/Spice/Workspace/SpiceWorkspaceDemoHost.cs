@@ -69,13 +69,13 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
         private const float AssistantSectionHeaderHeight = 42f;
-        private const float ParameterSectionHeight = 146f;
-        private const float ResultSectionHeight = 286f;
-        private const float NetlistSectionHeight = 280f;
-        private const float DiagnosticSectionHeight = 112f;
+        private const float ParameterSectionHeight = 118f;
+        private const float NetlistSectionHeight = 170f;
         private const float AssistantSectionGap = 8f;
-        private const float ParameterApplyButtonWidth = 120f;
-        private const float ParameterApplyButtonHeight = 34f;
+        private const float ParameterInputWidth = 130f;
+        private const float ParameterUnitWidth = 60f;
+        private const float ParameterApplyButtonWidth = 62f;
+        private const float ParameterControlHeight = 32f;
 
         public static void Apply(SpiceWorkspaceViewBindings bindings)
         {
@@ -284,9 +284,13 @@ namespace ElectricalSim.Spice.Workspace
 
             LayoutAssistantSections(bindings);
             StyleParameterSection(bindings.ParameterRoot);
-            StyleTextSection(bindings.ResultRoot, "ResultHeader", "计算结果", "ResultScrollView", "ResultText", "尚无计算结果\n完成接线后点击运行计算", false, MainUiTheme.NormalText);
+            var outcomeText = StyleTextSection(bindings.ResultRoot, "ResultHeader", "仿真结果", "ResultScrollView", "ResultText", "尚无仿真结果\n完成接线后点击“运行计算”", false, MainUiTheme.NormalText);
             StyleNetlistSection(bindings.NetlistRoot);
-            StyleTextSection(bindings.DiagnosticRoot, "DiagnosticHeader", "诊断信息", "DiagnosticScrollView", "DiagnosticText", "暂无诊断信息", false, MainUiTheme.DangerRed);
+            var diagnosticText = StyleTextSection(bindings.DiagnosticRoot, "DiagnosticHeader", "诊断信息", "DiagnosticScrollView", "DiagnosticText", "暂无诊断信息", false, MainUiTheme.DangerRed);
+            bindings.DiagnosticRoot.gameObject.SetActive(false);
+
+            var outcome = bindings.ResultRoot.GetComponent<SpiceAssistantOutcomePresentation>() ?? bindings.ResultRoot.gameObject.AddComponent<SpiceAssistantOutcomePresentation>();
+            outcome.Initialize(outcomeText, diagnosticText, bindings.RunButton);
         }
 
         private static void LayoutAssistantSections(SpiceWorkspaceViewBindings bindings)
@@ -294,12 +298,8 @@ namespace ElectricalSim.Spice.Workspace
             Anchor(bindings.ParameterRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -54f - ParameterSectionHeight), new Vector2(-12f, -54f));
 
             var resultTop = -54f - ParameterSectionHeight - AssistantSectionGap;
-            Anchor(bindings.ResultRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, resultTop - ResultSectionHeight), new Vector2(-12f, resultTop));
-
-            var netlistTop = resultTop - ResultSectionHeight - AssistantSectionGap;
-            Anchor(bindings.NetlistRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, netlistTop - NetlistSectionHeight), new Vector2(-12f, netlistTop));
-
-            Anchor(bindings.DiagnosticRoot, Vector2.zero, new Vector2(1f, 0f), new Vector2(12f, 18f), new Vector2(-12f, 18f + DiagnosticSectionHeight));
+            Anchor(bindings.ResultRoot, Vector2.zero, Vector2.one, new Vector2(12f, 18f + NetlistSectionHeight + AssistantSectionGap), new Vector2(-12f, resultTop));
+            Anchor(bindings.NetlistRoot, Vector2.zero, new Vector2(1f, 0f), new Vector2(12f, 18f), new Vector2(-12f, 18f + NetlistSectionHeight));
         }
 
         private static void StyleParameterSection(RectTransform section)
@@ -331,18 +331,20 @@ namespace ElectricalSim.Spice.Workspace
             var apply = section.Find("Apply") as RectTransform;
             if (input != null)
             {
-                Anchor(input, new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -122f), new Vector2(-4f, -88f));
+                Anchor(input, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -112f), new Vector2(14f + ParameterInputWidth, -112f + ParameterControlHeight));
                 StyleInput(input.GetComponent<InputField>());
             }
             if (unit != null)
             {
-                Anchor(unit, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -122f), new Vector2(-14f, -88f));
+                var unitLeft = 14f + ParameterInputWidth + AssistantSectionGap;
+                Anchor(unit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(unitLeft, -112f), new Vector2(unitLeft + ParameterUnitWidth, -112f + ParameterControlHeight));
                 StyleSmallButton(unit.GetComponent<Button>(), false);
             }
             if (apply != null)
             {
-                Anchor(apply, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-14f - ParameterApplyButtonWidth, -164f), new Vector2(-14f, -164f + ParameterApplyButtonHeight));
-                StyleSmallButton(apply.GetComponent<Button>(), true);
+                var applyLeft = 14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth + AssistantSectionGap;
+                Anchor(apply, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(applyLeft, -112f), new Vector2(applyLeft + ParameterApplyButtonWidth, -112f + ParameterControlHeight));
+                StyleSmallButton(apply.GetComponent<Button>(), true, "应用");
             }
 
             var presenter = section.GetComponent<SpiceAssistantParameterPresentation>() ?? section.gameObject.AddComponent<SpiceAssistantParameterPresentation>();
@@ -380,9 +382,9 @@ namespace ElectricalSim.Spice.Workspace
             if (view != null && string.IsNullOrWhiteSpace(view.text)) view.text = "尚未生成网表";
         }
 
-        private static void StyleTextSection(RectTransform section, string headerName, string title, string scrollName, string textName, string emptyText, bool monospace, Color color)
+        private static Text StyleTextSection(RectTransform section, string headerName, string title, string scrollName, string textName, string emptyText, bool monospace, Color color)
         {
-            if (section == null) return;
+            if (section == null) return null;
 
             StyleSectionPanel(section);
             var header = section.Find(headerName) as RectTransform;
@@ -390,6 +392,7 @@ namespace ElectricalSim.Spice.Workspace
 
             var text = StyleScrollableText(section, scrollName, textName, monospace, color);
             if (text != null && string.IsNullOrWhiteSpace(text.text)) text.text = emptyText;
+            return text;
         }
 
         private static void StyleSectionPanel(RectTransform section)
@@ -521,7 +524,7 @@ namespace ElectricalSim.Spice.Workspace
             }
         }
 
-        private static void StyleSmallButton(Button button, bool primary)
+        private static void StyleSmallButton(Button button, bool primary, string label = null)
         {
             if (button == null) return;
             var image = button.GetComponent<Image>() ?? button.gameObject.AddComponent<Image>();
@@ -536,6 +539,7 @@ namespace ElectricalSim.Spice.Workspace
             var text = button.GetComponentInChildren<Text>();
             if (text != null)
             {
+                if (!string.IsNullOrEmpty(label)) text.text = label;
                 MainUiTheme.ApplyTextRole(text, primary ? MainUiTheme.UiTextRole.InspectorButton : MainUiTheme.UiTextRole.FilterText);
                 text.alignment = TextAnchor.MiddleCenter;
                 text.color = primary ? Color.white : MainUiTheme.SecondaryText;
@@ -603,6 +607,84 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (image == null) return;
             image.color = pressed ? MainUiTheme.Hex("DBEAFE") : hovered ? MainUiTheme.Hex("F8FBFF") : Color.white;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the existing result and diagnostic producers intact while presenting either outcome in ResultRoot.
+    /// The hidden diagnostic view remains the controller's explicit diagnostic sink.
+    /// </summary>
+    internal sealed class SpiceAssistantOutcomePresentation : MonoBehaviour
+    {
+        private const string EmptyOutcome = "尚无仿真结果\n完成接线后点击“运行计算”";
+        private const string RunningOutcome = "正在计算……";
+
+        private Text outcomeText;
+        private Text diagnosticText;
+        private Button runButton;
+        private ScrollRect scrollRect;
+        private string lastRendered;
+
+        public void Initialize(Text result, Text diagnostics, Button run)
+        {
+            outcomeText = result;
+            diagnosticText = diagnostics;
+            runButton = run;
+            scrollRect = result != null ? result.GetComponentInParent<ScrollRect>() : null;
+            lastRendered = null;
+            Refresh();
+        }
+
+        private void LateUpdate()
+        {
+            Refresh();
+        }
+
+        private void Refresh()
+        {
+            if (outcomeText == null) return;
+
+            var diagnostics = diagnosticText != null ? diagnosticText.text : string.Empty;
+            if (!string.IsNullOrWhiteSpace(diagnostics))
+            {
+                Render(diagnostics, MainUiTheme.DangerRed);
+                return;
+            }
+
+            if (runButton != null && !runButton.interactable)
+            {
+                Render(RunningOutcome, MainUiTheme.MutedText);
+                return;
+            }
+
+            if (outcomeText.text == lastRendered) return;
+
+            var source = outcomeText.text;
+            Render(string.IsNullOrWhiteSpace(source) || source == "尚无结果" ? EmptyOutcome : source, MainUiTheme.NormalText);
+        }
+
+        private void Render(string value, Color color)
+        {
+            if (outcomeText.text == value && outcomeText.color == color)
+            {
+                lastRendered = value;
+                return;
+            }
+
+            outcomeText.text = value;
+            outcomeText.color = color;
+            lastRendered = value;
+
+            if (scrollRect == null || scrollRect.content == null || scrollRect.viewport == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(outcomeText.rectTransform);
+            var height = Mathf.Max(scrollRect.viewport.rect.height, outcomeText.preferredHeight + 12f);
+            scrollRect.content.sizeDelta = new Vector2(0f, height);
+            scrollRect.StopMovement();
+            scrollRect.content.anchoredPosition = Vector2.zero;
+            scrollRect.horizontalNormalizedPosition = 0f;
+            scrollRect.verticalNormalizedPosition = 1f;
         }
     }
 
