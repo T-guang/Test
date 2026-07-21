@@ -1304,8 +1304,31 @@ namespace ElectricalSim.Core
                 return false;
             }
 
+            if (target.GetComponentInParent<TerminalView>() != null ||
+                target.GetComponentInParent<CircuitComponent>() != null ||
+                target.GetComponentInParent<WireView>() != null ||
+                target.GetComponentInParent<WireBendHandle>() != null)
+            {
+                return false;
+            }
+
+            var selectable = target.GetComponentInParent<Selectable>();
+            if (selectable != null)
+            {
+                return false;
+            }
+
+            var scrollRect = target.GetComponentInParent<ScrollRect>();
+            if (scrollRect != null)
+            {
+                return false;
+            }
+
+            var targetTransform = target.transform;
             return target == gameObject ||
-                workspaceRect != null && (target == workspaceRect.gameObject || target.transform == workspaceRect);
+                workspaceRect != null && (target == workspaceRect.gameObject || targetTransform == workspaceRect) ||
+                canvasContent != null && (target == canvasContent.gameObject || targetTransform.IsChildOf(canvasContent)) ||
+                wireLayer != null && (target == wireLayer.gameObject || targetTransform.IsChildOf(wireLayer));
         }
 
         private void UpdatePreviewLine()
