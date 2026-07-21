@@ -20,6 +20,7 @@ namespace ElectricalSim.Core
         private const float SegmentThickness = 5f;
         private const float SelectedSegmentThickness = 10f;
         private const float SegmentHitThickness = 22f;
+        private const int LegacyManualRoutePointCount = 6;
 
         public string WireId { get; private set; }
         public TerminalView StartTerminal { get; private set; }
@@ -38,6 +39,7 @@ namespace ElectricalSim.Core
         private bool manualRoute;
         private bool manualRouteHorizontal;
         private float manualRouteAxis;
+        private bool preserveManualRoutePoints;
         private bool bendDragging;
         private int activeDragSegmentIndex = -1;
         private bool activeDragHorizontal;
@@ -118,6 +120,7 @@ namespace ElectricalSim.Core
             manualRoute = true;
             manualRouteHorizontal = horizontal;
             manualRouteAxis = axis;
+            preserveManualRoutePoints = false;
             manualPoints.Clear();
             Refresh();
         }
@@ -134,6 +137,7 @@ namespace ElectricalSim.Core
             }
 
             manualRoute = manualPoints.Count >= 2;
+            preserveManualRoutePoints = manualRoute && !IsLegacySixPointManualRoute(manualPoints);
             // 手工折点优先于自动避让；保留端点出口段，避免拖动后导线直接穿过元件本体。
             if (manualRoute)
             {
@@ -146,7 +150,29 @@ namespace ElectricalSim.Core
         public void ClearManualRoute()
         {
             manualRoute = false;
+            preserveManualRoutePoints = false;
             manualPoints.Clear();
+            Refresh();
+        }
+
+        public void SetManualRoutePointsAsFullPath(IReadOnlyList<Vector2> points)
+        {
+            manualPoints.Clear();
+            if (points != null)
+            {
+                for (var i = 0; i < points.Count; i++)
+                {
+                    manualPoints.Add(points[i]);
+                }
+            }
+
+            manualRoute = manualPoints.Count >= 2;
+            preserveManualRoutePoints = manualRoute;
+            if (manualRoute)
+            {
+                ResolveManualRouteAxisFromPoints(manualPoints);
+            }
+
             Refresh();
         }
 
@@ -274,7 +300,16 @@ namespace ElectricalSim.Core
 
             if (manualRoute)
             {
-                RebuildManualRouteAsSixPoints(start, end, startExit.Point, endExit.Point, manualRouteHorizontal, manualRouteAxis);
+                if (preserveManualRoutePoints && manualPoints.Count >= 2)
+                {
+                    manualPoints[0] = start;
+                    manualPoints[manualPoints.Count - 1] = end;
+                }
+                else
+                {
+                    RebuildManualRouteAsSixPoints(start, end, startExit.Point, endExit.Point, manualRouteHorizontal, manualRouteAxis);
+                }
+
                 currentPoints.AddRange(manualPoints);
                 return;
             }
@@ -354,6 +389,7 @@ namespace ElectricalSim.Core
             manualRoute = true;
             manualRouteHorizontal = horizontal;
             manualRouteAxis = axis;
+            preserveManualRoutePoints = false;
         }
 
         private void AddAutomaticMiddlePoints(TerminalExit startExit, TerminalExit endExit)
@@ -672,6 +708,11 @@ namespace ElectricalSim.Core
             return Mathf.Abs(end.x - start.x) >= Mathf.Abs(end.y - start.y);
         }
 
+        private static bool IsLegacySixPointManualRoute(IReadOnlyList<Vector2> points)
+        {
+            return points != null && points.Count == LegacyManualRoutePointCount;
+        }
+
         private void ResolveManualRouteAxisFromPoints(IReadOnlyList<Vector2> points)
         {
             if (points == null || points.Count < 2)
@@ -714,7 +755,7 @@ namespace ElectricalSim.Core
             var handleIndex = 0;
             for (var i = 0; i < currentPoints.Count - 1; i++)
             {
-                if (manualRoute && i != 2)
+                if (manualRoute && (!CanUseLegacyManualRouteHandle() || i != 2))
                 {
                     continue;
                 }
@@ -737,6 +778,11 @@ namespace ElectricalSim.Core
                     segmentHandles[i].gameObject.SetActive(false);
                 }
             }
+        }
+
+        private bool CanUseLegacyManualRouteHandle()
+        {
+            return manualPoints.Count == LegacyManualRoutePointCount;
         }
 
         private WireBendHandle EnsureSegmentHandle(int handleIndex, int segmentIndex)
