@@ -70,7 +70,7 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardGap = 12f;
         private const float AssistantSectionHeaderHeight = 42f;
         private const float ParameterSectionHeight = 118f;
-        private const float NetlistSectionHeight = 170f;
+        private const float NetlistSectionHeight = 180f;
         private const float AssistantSectionGap = 8f;
         private const float ParameterInputWidth = 130f;
         private const float ParameterUnitWidth = 60f;
