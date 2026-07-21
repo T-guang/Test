@@ -10,7 +10,7 @@ namespace ElectricalSim.AI
     public sealed class CircuitTopologyRecognitionService
     {
         private const string CatalogPath = "Blueprints/Templates/template_catalog";
-        private readonly List<CircuitTemplateCatalogItemDto> householdTemplates = new List<CircuitTemplateCatalogItemDto>();
+        private readonly List<CircuitTemplateCatalogItemDto> standardTemplates = new List<CircuitTemplateCatalogItemDto>();
         private bool initialized;
 
         public CircuitRecognitionResult Recognize(WorkspaceController workspace)
@@ -26,7 +26,7 @@ namespace ElectricalSim.AI
             EnsureCatalogLoaded();
             var graph = CircuitTopologyExtractor.FromWorkspace(workspace.Components, workspace.WireManager.Wires);
             var matches = new List<CircuitTemplateCatalogItemDto>();
-            foreach (var item in householdTemplates)
+            foreach (var item in standardTemplates)
             {
                 if (!CircuitTemplateLoader.TryLoad(item.resourcePath, out var template, out _)) continue;
                 var templateGraph = CircuitTopologyExtractor.FromTemplate(template);
@@ -58,7 +58,7 @@ namespace ElectricalSim.AI
             else
             {
                 result.Reason = TemplateEditSession.HasSystemTemplateLoaded
-                    ? "当前拓扑已偏离原始系统模板。" : "未匹配到标准家庭电路。";
+                    ? "当前拓扑已偏离原始系统模板。" : "未匹配到标准模板。";
             }
 
             return Finish(result, stopwatch);
@@ -73,7 +73,7 @@ namespace ElectricalSim.AI
             if (catalog == null || catalog.templates == null) return;
             foreach (var item in catalog.templates)
             {
-                if (item != null && item.category == "家庭电路") householdTemplates.Add(item);
+                if (item != null) standardTemplates.Add(item);
             }
         }
 
