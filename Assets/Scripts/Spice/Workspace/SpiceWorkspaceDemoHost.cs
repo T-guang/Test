@@ -69,6 +69,13 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
         private const float AssistantSectionHeaderHeight = 42f;
+        private const float ParameterSectionHeight = 146f;
+        private const float ResultSectionHeight = 286f;
+        private const float NetlistSectionHeight = 280f;
+        private const float DiagnosticSectionHeight = 112f;
+        private const float AssistantSectionGap = 8f;
+        private const float ParameterApplyButtonWidth = 120f;
+        private const float ParameterApplyButtonHeight = 34f;
 
         public static void Apply(SpiceWorkspaceViewBindings bindings)
         {
@@ -275,10 +282,24 @@ namespace ElectricalSim.Spice.Workspace
                 }
             }
 
+            LayoutAssistantSections(bindings);
             StyleParameterSection(bindings.ParameterRoot);
             StyleTextSection(bindings.ResultRoot, "ResultHeader", "计算结果", "ResultScrollView", "ResultText", "尚无计算结果\n完成接线后点击运行计算", false, MainUiTheme.NormalText);
             StyleNetlistSection(bindings.NetlistRoot);
             StyleTextSection(bindings.DiagnosticRoot, "DiagnosticHeader", "诊断信息", "DiagnosticScrollView", "DiagnosticText", "暂无诊断信息", false, MainUiTheme.DangerRed);
+        }
+
+        private static void LayoutAssistantSections(SpiceWorkspaceViewBindings bindings)
+        {
+            Anchor(bindings.ParameterRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -54f - ParameterSectionHeight), new Vector2(-12f, -54f));
+
+            var resultTop = -54f - ParameterSectionHeight - AssistantSectionGap;
+            Anchor(bindings.ResultRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, resultTop - ResultSectionHeight), new Vector2(-12f, resultTop));
+
+            var netlistTop = resultTop - ResultSectionHeight - AssistantSectionGap;
+            Anchor(bindings.NetlistRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, netlistTop - NetlistSectionHeight), new Vector2(-12f, netlistTop));
+
+            Anchor(bindings.DiagnosticRoot, Vector2.zero, new Vector2(1f, 0f), new Vector2(12f, 18f), new Vector2(-12f, 18f + DiagnosticSectionHeight));
         }
 
         private static void StyleParameterSection(RectTransform section)
@@ -310,17 +331,17 @@ namespace ElectricalSim.Spice.Workspace
             var apply = section.Find("Apply") as RectTransform;
             if (input != null)
             {
-                Anchor(input, new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -120f), new Vector2(-4f, -84f));
+                Anchor(input, new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -122f), new Vector2(-4f, -88f));
                 StyleInput(input.GetComponent<InputField>());
             }
             if (unit != null)
             {
-                Anchor(unit, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -120f), new Vector2(-14f, -84f));
+                Anchor(unit, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -122f), new Vector2(-14f, -88f));
                 StyleSmallButton(unit.GetComponent<Button>(), false);
             }
             if (apply != null)
             {
-                Anchor(apply, Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 44f));
+                Anchor(apply, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-14f - ParameterApplyButtonWidth, -164f), new Vector2(-14f, -164f + ParameterApplyButtonHeight));
                 StyleSmallButton(apply.GetComponent<Button>(), true);
             }
 
@@ -447,8 +468,8 @@ namespace ElectricalSim.Spice.Workspace
             {
                 if (monospace)
                 {
-                    text.font = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Cascadia Mono", "Courier New" }, 12);
-                    text.fontSize = 12;
+                    text.font = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Cascadia Mono", "Courier New" }, 14);
+                    text.fontSize = 14;
                     text.fontStyle = FontStyle.Normal;
                 }
                 else
@@ -457,7 +478,7 @@ namespace ElectricalSim.Spice.Workspace
                 }
                 text.color = color;
                 text.alignment = TextAnchor.UpperLeft;
-                text.lineSpacing = 1.28f;
+                text.lineSpacing = monospace ? 1.1f : 1.28f;
                 text.horizontalOverflow = HorizontalWrapMode.Wrap;
                 text.verticalOverflow = VerticalWrapMode.Overflow;
             }
