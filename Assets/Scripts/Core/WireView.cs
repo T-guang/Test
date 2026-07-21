@@ -20,6 +20,7 @@ namespace ElectricalSim.Core
         private const float SegmentThickness = 5f;
         private const float SelectedSegmentThickness = 10f;
         private const float SegmentHitThickness = 22f;
+        private const int LegacyManualRoutePointCount = 6;
 
         public string WireId { get; private set; }
         public TerminalView StartTerminal { get; private set; }
@@ -274,7 +275,16 @@ namespace ElectricalSim.Core
 
             if (manualRoute)
             {
-                RebuildManualRouteAsSixPoints(start, end, startExit.Point, endExit.Point, manualRouteHorizontal, manualRouteAxis);
+                if (manualPoints.Count >= 2)
+                {
+                    manualPoints[0] = start;
+                    manualPoints[manualPoints.Count - 1] = end;
+                }
+                else
+                {
+                    RebuildManualRouteAsSixPoints(start, end, startExit.Point, endExit.Point, manualRouteHorizontal, manualRouteAxis);
+                }
+
                 currentPoints.AddRange(manualPoints);
                 return;
             }
@@ -714,7 +724,7 @@ namespace ElectricalSim.Core
             var handleIndex = 0;
             for (var i = 0; i < currentPoints.Count - 1; i++)
             {
-                if (manualRoute && i != 2)
+                if (manualRoute && (!CanUseLegacyManualRouteHandle() || i != 2))
                 {
                     continue;
                 }
@@ -737,6 +747,11 @@ namespace ElectricalSim.Core
                     segmentHandles[i].gameObject.SetActive(false);
                 }
             }
+        }
+
+        private bool CanUseLegacyManualRouteHandle()
+        {
+            return manualPoints.Count == LegacyManualRoutePointCount;
         }
 
         private WireBendHandle EnsureSegmentHandle(int handleIndex, int segmentIndex)

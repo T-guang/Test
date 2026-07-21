@@ -47,7 +47,9 @@ namespace ElectricalSim.Core
         private readonly List<DrawingSnapshot> undoStack = new List<DrawingSnapshot>();
         private readonly List<DrawingSnapshot> redoStack = new List<DrawingSnapshot>();
         private readonly List<string> actionLogEntries = new List<string>();
+        private readonly List<Vector2> pendingWaypoints = new List<Vector2>();
         private TerminalView pendingTerminal;
+        private bool pendingNextSegmentHorizontal = true;
         private CircuitComponent selectedComponent;
         private CircuitComponent selectedMeasurementTarget;
         private WireView selectedWire;
@@ -61,6 +63,7 @@ namespace ElectricalSim.Core
         private const int HistoryLimit = 40;
         private const int ActionLogEntryLimit = 180;
         private const int ActionLogCharacterLimit = 10000;
+        private const float PreviewPointEpsilon = 2f;
 
         private void Awake()
         {
@@ -105,7 +108,11 @@ namespace ElectricalSim.Core
 
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                CancelPendingWire(null);
+                if (pendingTerminal != null)
+                {
+                    CancelPendingWire("已取消接线。");
+                    return;
+                }
                 ClearSelection();
                 SetStatus("已取消当前选择。");
             }
@@ -255,6 +262,8 @@ namespace ElectricalSim.Core
             if (pendingTerminal == null)
             {
                 pendingTerminal = terminal;
+                pendingWaypoints.Clear();
+                pendingNextSegmentHorizontal = true;
                 pendingTerminal.SetSelected(true);
                 EnsurePreviewSegments(CurrentWireStyle == WireStyle.Orthogonal ? 3 : 1);
                 SetStatus("正在接线：移动鼠标预览线路，点击另一个端子完成接线。");
@@ -269,17 +278,20 @@ namespace ElectricalSim.Core
 
             if (!wireManager.CanCreateWire(pendingTerminal, terminal, out var rejectionReason))
             {
-                pendingTerminal.SetSelected(false);
-                pendingTerminal = null;
-                HidePreviewLine();
                 SetStatus(rejectionReason);
                 return;
             }
 
             RecordHistoryCheckpoint();
-            wireManager.CreateWire(pendingTerminal, terminal, ResolveWireColor(pendingTerminal, terminal), CurrentWireStyle);
+            var wire = wireManager.CreateWire(pendingTerminal, terminal, ResolveWireColor(pendingTerminal, terminal), CurrentWireStyle);
+            if (wire != null && pendingWaypoints.Count > 0 && CurrentWireStyle == WireStyle.Orthogonal)
+            {
+                wire.SetManualRoutePoints(BuildCommittedManualRoute(pendingTerminal, terminal));
+            }
+
             pendingTerminal.SetSelected(false);
             pendingTerminal = null;
+            pendingWaypoints.Clear();
             HidePreviewLine();
             wireManager.RefreshAll();
             MarkTopologyDirty("已完成接线，点击开始仿真查看结果。");
@@ -728,18 +740,40 @@ namespace ElectricalSim.Core
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (IsInteractionLocked)
+            if (IsInteractionLocked || eventData == null)
             {
                 return;
             }
 
             if (pendingTerminal != null)
             {
+                if (eventData.button == PointerEventData.InputButton.Right)
+                {
+                    UndoPendingWaypoint();
+                    eventData.Use();
+                    return;
+                }
+
+                if (eventData.button == PointerEventData.InputButton.Left && IsWorkspaceBlankClick(eventData))
+                {
+                    AddPendingWaypoint(eventData);
+                    eventData.Use();
+                    return;
+                }
+
+                if (eventData.button == PointerEventData.InputButton.Left)
+                {
+                    return;
+                }
+
                 CancelPendingWire("已取消接线。");
                 return;
             }
 
-            ClearSelection();
+            if (eventData.button == PointerEventData.InputButton.Left && IsWorkspaceBlankClick(eventData))
+            {
+                ClearSelection();
+            }
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -1108,8 +1142,170 @@ namespace ElectricalSim.Core
                 pendingTerminal = null;
             }
 
+            pendingWaypoints.Clear();
+            pendingNextSegmentHorizontal = true;
             HidePreviewLine();
             SetStatus(status);
+        }
+
+        private void AddPendingWaypoint(PointerEventData eventData)
+        {
+            if (pendingTerminal == null || eventData == null ||
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(wireLayer, eventData.position, eventData.pressEventCamera, out var pointer))
+            {
+                return;
+            }
+
+            var anchor = ResolvePendingAnchor();
+            var waypoint = ConstrainToAxis(anchor, pointer, pendingNextSegmentHorizontal);
+            if ((waypoint - anchor).sqrMagnitude <= PreviewPointEpsilon * PreviewPointEpsilon)
+            {
+                return;
+            }
+
+            pendingWaypoints.Add(waypoint);
+            pendingNextSegmentHorizontal = !pendingNextSegmentHorizontal;
+            UpdatePreviewLine();
+        }
+
+        private void UndoPendingWaypoint()
+        {
+            if (pendingTerminal == null)
+            {
+                return;
+            }
+
+            if (pendingWaypoints.Count == 0)
+            {
+                CancelPendingWire("已取消接线。");
+                return;
+            }
+
+            pendingWaypoints.RemoveAt(pendingWaypoints.Count - 1);
+            pendingNextSegmentHorizontal = pendingWaypoints.Count % 2 == 0;
+            UpdatePreviewLine();
+        }
+
+        private Vector2 ResolvePendingAnchor()
+        {
+            if (pendingWaypoints.Count > 0)
+            {
+                return pendingWaypoints[pendingWaypoints.Count - 1];
+            }
+
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                wireLayer,
+                RectTransformUtility.WorldToScreenPoint(null, pendingTerminal.WorldPosition),
+                null,
+                out var start);
+            return start;
+        }
+
+        private List<Vector2> BuildCommittedManualRoute(TerminalView startTerminal, TerminalView endTerminal)
+        {
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                wireLayer,
+                RectTransformUtility.WorldToScreenPoint(null, startTerminal.WorldPosition),
+                null,
+                out var start);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                wireLayer,
+                RectTransformUtility.WorldToScreenPoint(null, endTerminal.WorldPosition),
+                null,
+                out var end);
+            return BuildManualRoute(start, pendingWaypoints, end);
+        }
+
+        private List<Vector2> BuildPendingPreviewRoute(Vector2 start, Vector2 pointer)
+        {
+            return BuildManualRoute(start, pendingWaypoints, pointer);
+        }
+
+        private static List<Vector2> BuildManualRoute(Vector2 start, IReadOnlyList<Vector2> waypoints, Vector2 end)
+        {
+            var points = new List<Vector2> { start };
+            var horizontal = true;
+            if (waypoints != null)
+            {
+                for (var i = 0; i < waypoints.Count; i++)
+                {
+                    AppendOrthogonal(points, waypoints[i], horizontal);
+                    horizontal = !horizontal;
+                }
+            }
+
+            AppendOrthogonal(points, end, horizontal);
+            RemoveCollinearPreviewPoints(points);
+            return points;
+        }
+
+        private static void AppendOrthogonal(List<Vector2> points, Vector2 target, bool horizontalFirst)
+        {
+            var from = points[points.Count - 1];
+            if ((from - target).sqrMagnitude <= PreviewPointEpsilon * PreviewPointEpsilon)
+            {
+                return;
+            }
+
+            if (Mathf.Abs(from.x - target.x) <= PreviewPointEpsilon || Mathf.Abs(from.y - target.y) <= PreviewPointEpsilon)
+            {
+                AddPreviewPoint(points, target);
+                return;
+            }
+
+            AddPreviewPoint(points, horizontalFirst ? new Vector2(target.x, from.y) : new Vector2(from.x, target.y));
+            AddPreviewPoint(points, target);
+        }
+
+        private static Vector2 ConstrainToAxis(Vector2 anchor, Vector2 pointer, bool horizontal)
+        {
+            return horizontal ? new Vector2(pointer.x, anchor.y) : new Vector2(anchor.x, pointer.y);
+        }
+
+        private static void AddPreviewPoint(List<Vector2> points, Vector2 point)
+        {
+            if ((points[points.Count - 1] - point).sqrMagnitude > PreviewPointEpsilon * PreviewPointEpsilon)
+            {
+                points.Add(point);
+            }
+        }
+
+        private static void RemoveCollinearPreviewPoints(List<Vector2> points)
+        {
+            for (var i = points.Count - 2; i >= 1; i--)
+            {
+                var previous = points[i - 1];
+                var current = points[i];
+                var next = points[i + 1];
+                var sameX = Mathf.Abs(previous.x - current.x) <= PreviewPointEpsilon && Mathf.Abs(current.x - next.x) <= PreviewPointEpsilon;
+                var sameY = Mathf.Abs(previous.y - current.y) <= PreviewPointEpsilon && Mathf.Abs(current.y - next.y) <= PreviewPointEpsilon;
+                if (sameX || sameY)
+                {
+                    points.RemoveAt(i);
+                }
+            }
+        }
+
+        private bool IsWorkspaceBlankClick(PointerEventData eventData)
+        {
+            if (eventData == null)
+            {
+                return false;
+            }
+
+            var target = eventData.pointerCurrentRaycast.gameObject;
+            if (target == null)
+            {
+                target = eventData.pointerPressRaycast.gameObject;
+            }
+
+            if (target == null)
+            {
+                return false;
+            }
+
+            return target == gameObject ||
+                workspaceRect != null && (target == workspaceRect.gameObject || target.transform == workspaceRect);
         }
 
         private void UpdatePreviewLine()
@@ -1120,6 +1316,18 @@ namespace ElectricalSim.Core
             }
 
             RectTransformUtility.ScreenPointToLocalPointInRectangle(wireLayer, RectTransformUtility.WorldToScreenPoint(null, pendingTerminal.WorldPosition), null, out var start);
+
+            if (CurrentWireStyle == WireStyle.Orthogonal && pendingWaypoints.Count > 0)
+            {
+                var route = BuildPendingPreviewRoute(start, mouseLocal);
+                EnsurePreviewSegments(Mathf.Max(1, route.Count - 1));
+                for (var i = 0; i < route.Count - 1; i++)
+                {
+                    DrawPreviewSegment(previewSegments[i].rectTransform, route[i], route[i + 1]);
+                }
+
+                return;
+            }
 
             EnsurePreviewSegments(CurrentWireStyle == WireStyle.Orthogonal ? 3 : 1);
 
