@@ -68,6 +68,7 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardWidth = 120f;
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
+        private const float AssistantSectionHeaderHeight = 42f;
 
         public static void Apply(SpiceWorkspaceViewBindings bindings)
         {
@@ -83,6 +84,8 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Capacitor, "电容", "1 μF", 0, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
+
+            StyleAssistant(bindings);
         }
 
         private static void StyleToolbarButton(Button button, string label, bool primary, bool danger, float left, float right)
@@ -243,6 +246,282 @@ namespace ElectricalSim.Spice.Workspace
             if (child != null) UnityEngine.Object.Destroy(child.gameObject);
         }
 
+        private static void StyleAssistant(SpiceWorkspaceViewBindings bindings)
+        {
+            var root = bindings.AssistantRoot;
+            if (root == null) return;
+
+            var image = root.GetComponent<Image>() ?? root.gameObject.AddComponent<Image>();
+            image.color = MainUiTheme.PanelBackground;
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+            image.raycastTarget = true;
+
+            var outline = root.GetComponent<Outline>() ?? root.gameObject.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Divider;
+            outline.effectDistance = new Vector2(-1f, 0f);
+
+            var title = root.Find("AssistantTitle") as RectTransform;
+            if (title != null)
+            {
+                Anchor(title, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -48f), new Vector2(-18f, -8f));
+                var titleText = title.GetComponent<Text>();
+                if (titleText != null)
+                {
+                    titleText.text = "仿真助手";
+                    MainUiTheme.ApplyTextRole(titleText, MainUiTheme.UiTextRole.InspectorTitle);
+                    titleText.color = MainUiTheme.DeepText;
+                    titleText.alignment = TextAnchor.MiddleLeft;
+                }
+            }
+
+            StyleParameterSection(bindings.ParameterRoot);
+            StyleTextSection(bindings.ResultRoot, "ResultHeader", "计算结果", "ResultScrollView", "ResultText", "尚无计算结果\n完成接线后点击运行计算", false, MainUiTheme.NormalText);
+            StyleNetlistSection(bindings.NetlistRoot);
+            StyleTextSection(bindings.DiagnosticRoot, "DiagnosticHeader", "诊断信息", "DiagnosticScrollView", "DiagnosticText", "暂无诊断信息", false, MainUiTheme.DangerRed);
+        }
+
+        private static void StyleParameterSection(RectTransform section)
+        {
+            if (section == null) return;
+
+            StyleSectionPanel(section);
+            var header = EnsureHeader(section, "ParameterHeader", "参数设置");
+            var title = section.Find("ParameterTitle") as RectTransform;
+            if (title != null)
+            {
+                title.SetParent(header, false);
+                Stretch(title, new Vector2(14f, 0f), new Vector2(-14f, 0f));
+                var titleText = title.GetComponent<Text>();
+                if (titleText != null)
+                {
+                    titleText.text = "参数设置";
+                    MainUiTheme.ApplyTextRole(titleText, MainUiTheme.UiTextRole.InspectorCardTitle);
+                    titleText.alignment = TextAnchor.MiddleLeft;
+                    titleText.color = MainUiTheme.SecondaryText;
+                }
+            }
+
+            var subtitle = EnsureText(section, "ParameterSubtitle", "请选择画布中的元件以编辑参数", MainUiTheme.MutedText, MainUiTheme.UiTextRole.InspectorBody);
+            Anchor(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -80f), new Vector2(-14f, -48f));
+
+            var input = section.Find("ParameterInput") as RectTransform;
+            var unit = section.Find("Unit") as RectTransform;
+            var apply = section.Find("Apply") as RectTransform;
+            if (input != null)
+            {
+                Anchor(input, new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -120f), new Vector2(-4f, -84f));
+                StyleInput(input.GetComponent<InputField>());
+            }
+            if (unit != null)
+            {
+                Anchor(unit, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -120f), new Vector2(-14f, -84f));
+                StyleSmallButton(unit.GetComponent<Button>(), false);
+            }
+            if (apply != null)
+            {
+                Anchor(apply, Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 44f));
+                StyleSmallButton(apply.GetComponent<Button>(), true);
+            }
+
+            var presenter = section.GetComponent<SpiceAssistantParameterPresentation>() ?? section.gameObject.AddComponent<SpiceAssistantParameterPresentation>();
+            presenter.Initialize(title != null ? title.GetComponent<Text>() : null, subtitle, input != null ? input.GetComponent<InputField>() : null, unit != null ? unit.GetComponent<Button>() : null, apply != null ? apply.gameObject : null);
+        }
+
+        private static void StyleNetlistSection(RectTransform section)
+        {
+            if (section == null) return;
+
+            StyleSectionPanel(section);
+            var header = section.Find("NetlistHeader") as RectTransform;
+            if (header != null)
+            {
+                StyleHeader(header, "生成网表");
+                var title = header.Find("Title") as RectTransform;
+                if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-142f, -4f));
+                var status = header.Find("Status") as RectTransform;
+                if (status != null)
+                {
+                    Anchor(status, Vector2.zero, new Vector2(1f, 0.5f), new Vector2(14f, 4f), new Vector2(-14f, 0f));
+                    var text = status.GetComponent<Text>();
+                    if (text != null)
+                    {
+                        MainUiTheme.ApplyTextRole(text, MainUiTheme.UiTextRole.MetaText);
+                        text.color = MainUiTheme.MutedText;
+                    }
+                }
+
+                StyleSmallButton((header.Find("Toggle") as RectTransform)?.GetComponent<Button>(), false);
+                StyleSmallButton((header.Find("Copy") as RectTransform)?.GetComponent<Button>(), false);
+            }
+
+            var view = StyleScrollableText(section, "NetlistScrollView", "NetlistText", true, MainUiTheme.NormalText);
+            if (view != null && string.IsNullOrWhiteSpace(view.text)) view.text = "尚未生成网表";
+        }
+
+        private static void StyleTextSection(RectTransform section, string headerName, string title, string scrollName, string textName, string emptyText, bool monospace, Color color)
+        {
+            if (section == null) return;
+
+            StyleSectionPanel(section);
+            var header = section.Find(headerName) as RectTransform;
+            if (header != null) StyleHeader(header, title);
+
+            var text = StyleScrollableText(section, scrollName, textName, monospace, color);
+            if (text != null && string.IsNullOrWhiteSpace(text.text)) text.text = emptyText;
+        }
+
+        private static void StyleSectionPanel(RectTransform section)
+        {
+            var image = section.GetComponent<Image>() ?? section.gameObject.AddComponent<Image>();
+            image.color = Color.white;
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+
+            var outline = section.GetComponent<Outline>() ?? section.gameObject.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Divider;
+            outline.effectDistance = new Vector2(1f, -1f);
+        }
+
+        private static RectTransform EnsureHeader(RectTransform section, string name, string title)
+        {
+            var header = section.Find(name) as RectTransform;
+            if (header == null)
+            {
+                header = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
+                header.SetParent(section, false);
+            }
+
+            StyleHeader(header, title);
+            header.SetAsFirstSibling();
+            return header;
+        }
+
+        private static void StyleHeader(RectTransform header, string title)
+        {
+            Anchor(header, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -AssistantSectionHeaderHeight), new Vector2(-10f, 0f));
+            var image = header.GetComponent<Image>() ?? header.gameObject.AddComponent<Image>();
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+            image.color = MainUiTheme.Hex("F8FBFF");
+
+            var text = header.Find("Title") as RectTransform;
+            if (text == null)
+            {
+                text = new GameObject("Title", typeof(RectTransform), typeof(Text)).GetComponent<RectTransform>();
+                text.SetParent(header, false);
+            }
+            Stretch(text, new Vector2(14f, 0f), new Vector2(-14f, 0f));
+            var label = text.GetComponent<Text>();
+            if (label != null)
+            {
+                label.text = title;
+                MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.InspectorCardTitle);
+                label.alignment = TextAnchor.MiddleLeft;
+                label.color = MainUiTheme.SecondaryText;
+            }
+        }
+
+        private static Text StyleScrollableText(RectTransform section, string scrollName, string textName, bool monospace, Color color)
+        {
+            var scrollRect = section.Find(scrollName) as RectTransform;
+            if (scrollRect == null) return null;
+
+            Anchor(scrollRect, Vector2.zero, Vector2.one, new Vector2(10f, 8f), new Vector2(-10f, -50f));
+            var scrollImage = scrollRect.GetComponent<Image>() ?? scrollRect.gameObject.AddComponent<Image>();
+            scrollImage.color = MainUiTheme.Hex("FBFDFF");
+            scrollImage.sprite = UiThemeTokens.GetRoundedSprite(6);
+            scrollImage.type = Image.Type.Sliced;
+
+            var scroll = scrollRect.GetComponent<ScrollRect>();
+            if (scroll != null)
+            {
+                scroll.horizontal = false;
+                scroll.vertical = true;
+                scroll.movementType = ScrollRect.MovementType.Clamped;
+            }
+
+            var textRect = scrollRect.Find("Viewport/Content/" + textName) as RectTransform;
+            var text = textRect != null ? textRect.GetComponent<Text>() : null;
+            if (text != null)
+            {
+                if (monospace)
+                {
+                    text.font = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Cascadia Mono", "Courier New" }, 12);
+                    text.fontSize = 12;
+                    text.fontStyle = FontStyle.Normal;
+                }
+                else
+                {
+                    MainUiTheme.ApplyTextRole(text, MainUiTheme.UiTextRole.InspectorBody);
+                }
+                text.color = color;
+                text.alignment = TextAnchor.UpperLeft;
+                text.lineSpacing = 1.28f;
+                text.horizontalOverflow = HorizontalWrapMode.Wrap;
+                text.verticalOverflow = VerticalWrapMode.Overflow;
+            }
+
+            return text;
+        }
+
+        private static Text EnsureText(RectTransform parent, string name, string value, Color color, MainUiTheme.UiTextRole role)
+        {
+            var rect = parent.Find(name) as RectTransform;
+            if (rect == null)
+            {
+                rect = new GameObject(name, typeof(RectTransform), typeof(Text)).GetComponent<RectTransform>();
+                rect.SetParent(parent, false);
+            }
+
+            var text = rect.GetComponent<Text>();
+            text.text = value;
+            MainUiTheme.ApplyTextRole(text, role);
+            text.color = color;
+            text.alignment = TextAnchor.MiddleLeft;
+            return text;
+        }
+
+        private static void StyleInput(InputField input)
+        {
+            if (input == null) return;
+            var image = input.GetComponent<Image>() ?? input.gameObject.AddComponent<Image>();
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+            image.color = Color.white;
+            var outline = input.GetComponent<Outline>() ?? input.gameObject.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Hex("D8DEE8");
+            outline.effectDistance = new Vector2(1f, -1f);
+            if (input.textComponent != null)
+            {
+                MainUiTheme.ApplyTextRole(input.textComponent, MainUiTheme.UiTextRole.SearchInputText);
+                input.textComponent.alignment = TextAnchor.MiddleLeft;
+                input.textComponent.color = MainUiTheme.NormalText;
+            }
+        }
+
+        private static void StyleSmallButton(Button button, bool primary)
+        {
+            if (button == null) return;
+            var image = button.GetComponent<Image>() ?? button.gameObject.AddComponent<Image>();
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
+            image.color = primary ? MainUiTheme.PrimaryBlue : MainUiTheme.FilterButton;
+            button.targetGraphic = image;
+            var outline = button.GetComponent<Outline>() ?? button.gameObject.AddComponent<Outline>();
+            outline.effectColor = primary ? MainUiTheme.PrimaryBlue : MainUiTheme.Divider;
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var text = button.GetComponentInChildren<Text>();
+            if (text != null)
+            {
+                MainUiTheme.ApplyTextRole(text, primary ? MainUiTheme.UiTextRole.InspectorButton : MainUiTheme.UiTextRole.FilterText);
+                text.alignment = TextAnchor.MiddleCenter;
+                text.color = primary ? Color.white : MainUiTheme.SecondaryText;
+                Stretch(text.rectTransform, new Vector2(8f, 0f), new Vector2(-8f, 0f));
+            }
+        }
+
         private static void Stretch(RectTransform rect, Vector2 min, Vector2 max)
         {
             rect.anchorMin = Vector2.zero;
@@ -303,6 +582,63 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (image == null) return;
             image.color = pressed ? MainUiTheme.Hex("DBEAFE") : hovered ? MainUiTheme.Hex("F8FBFF") : Color.white;
+        }
+    }
+
+    internal sealed class SpiceAssistantParameterPresentation : MonoBehaviour
+    {
+        private Text title;
+        private Text subtitle;
+        private InputField input;
+        private Button unitButton;
+        private GameObject applyButton;
+        private string lastTitle;
+        private bool lastInteractable;
+
+        public void Initialize(Text titleText, Text subtitleText, InputField parameterInput, Button unit, GameObject apply)
+        {
+            title = titleText;
+            subtitle = subtitleText;
+            input = parameterInput;
+            unitButton = unit;
+            applyButton = apply;
+            lastTitle = null;
+            Apply();
+        }
+
+        private void LateUpdate()
+        {
+            if (title == null) return;
+            var interactable = input != null && input.interactable;
+            if (lastTitle == title.text && lastInteractable == interactable) return;
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (title == null) return;
+
+            var rawTitle = string.IsNullOrWhiteSpace(title.text) ? "参数设置" : title.text;
+            var hasSelection = input != null && input.interactable;
+            var componentText = rawTitle.EndsWith(" 参数设置", StringComparison.Ordinal)
+                ? rawTitle.Substring(0, rawTitle.Length - " 参数设置".Length)
+                : string.Empty;
+
+            title.text = "参数设置";
+            if (subtitle != null)
+            {
+                subtitle.text = hasSelection && !string.IsNullOrEmpty(componentText)
+                    ? "元件：" + componentText
+                    : "请选择画布中的元件以编辑参数";
+                subtitle.color = hasSelection ? MainUiTheme.SecondaryText : MainUiTheme.MutedText;
+            }
+
+            if (input != null) input.gameObject.SetActive(hasSelection);
+            if (unitButton != null) unitButton.gameObject.SetActive(hasSelection);
+            if (applyButton != null) applyButton.SetActive(hasSelection);
+
+            lastTitle = title.text;
+            lastInteractable = hasSelection;
         }
     }
 }
