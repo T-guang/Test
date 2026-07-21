@@ -286,7 +286,7 @@ namespace ElectricalSim.Core
             var wire = wireManager.CreateWire(pendingTerminal, terminal, ResolveWireColor(pendingTerminal, terminal), CurrentWireStyle);
             if (wire != null && pendingWaypoints.Count > 0 && CurrentWireStyle == WireStyle.Orthogonal)
             {
-                wire.SetManualRoutePoints(BuildCommittedManualRoute(pendingTerminal, terminal));
+                wire.SetManualRoutePointsAsFullPath(BuildCommittedManualRoute(pendingTerminal, terminal));
             }
 
             pendingTerminal.SetSelected(false);
