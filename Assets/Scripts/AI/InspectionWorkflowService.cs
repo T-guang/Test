@@ -16,6 +16,7 @@ namespace ElectricalSim.AI
         private readonly IInspectionWorkflowRuntimeAdapter runtimeAdapter;
         private readonly bool showDeveloperDebugInfo;
         private readonly CircuitSummaryBuilder summaryBuilder;
+        private readonly CircuitTopologyRecognitionService recognitionService;
 
         public InspectionWorkflowService(
             WorkspaceController workspace,
@@ -26,6 +27,7 @@ namespace ElectricalSim.AI
             this.runtimeAdapter = runtimeAdapter;
             this.showDeveloperDebugInfo = showDeveloperDebugInfo;
             summaryBuilder = workspace == null ? null : new CircuitSummaryBuilder(workspace);
+            recognitionService = new CircuitTopologyRecognitionService();
         }
 
         public InspectionWorkflowResult CreateCheckReport()
@@ -35,6 +37,8 @@ namespace ElectricalSim.AI
             {
                 return InspectionWorkflowResult.Failure("电路检查失败：未能读取当前画布。");
             }
+
+            var recognition = recognitionService.Recognize(workspace);
 
             if (IndustrialCircuitRuleAnalyzer.TryAnalyze(workspace, out var industrialResult) && industrialResult.IsIndustrial)
             {
@@ -74,8 +78,10 @@ namespace ElectricalSim.AI
                     industrialStatus += "未发现严重错误。";
                 }
 
+                var industrialReport = InspectionReportComposer.ComposeCheckReport(industrialSummaryReport, industrialNotices, industrialValidationIssues);
+                industrialReport.AddRange(BuildRecognitionReport(recognition));
                 return InspectionWorkflowResult.Success(
-                    InspectionReportComposer.ComposeCheckReport(industrialSummaryReport, industrialNotices, industrialValidationIssues),
+                    industrialReport,
                     industrialStatus);
             }
 
@@ -108,8 +114,10 @@ namespace ElectricalSim.AI
                 status += "未发现明显接线错误。";
             }
 
+            var report = InspectionReportComposer.ComposeCheckReport(summaryReport, notices, validationIssues);
+            report.AddRange(BuildRecognitionReport(recognition));
             return InspectionWorkflowResult.Success(
-                InspectionReportComposer.ComposeCheckReport(summaryReport, notices, validationIssues),
+                report,
                 status);
         }
 
@@ -152,6 +160,17 @@ namespace ElectricalSim.AI
         {
             var name = runtimeAdapter.ResolveCurrentCircuitName();
             return string.IsNullOrWhiteSpace(name) ? "未识别模板" : name;
+        }
+
+        private static InspectionReportData BuildRecognitionReport(CircuitRecognitionResult recognition)
+        {
+            if (recognition == null) return new InspectionReportData();
+            var source = recognition.Source == CircuitRecognitionSource.LoadedTemplate ? "系统模板" :
+                recognition.Source == CircuitRecognitionSource.TopologyMatch ? "自由搭建（拓扑匹配）" : "自由搭建";
+            var text = recognition.Status == CircuitRecognitionStatus.ExactMatch
+                ? "识别电路：" + recognition.MatchedTemplateName + "\n搭建来源：" + source + "\n匹配方式：精确静态拓扑"
+                : "搭建来源：" + source + "\n模板匹配：" + recognition.Reason;
+            return InspectionReportComposer.CreateTeaching(text);
         }
     }
 }
