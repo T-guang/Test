@@ -1,6 +1,7 @@
 using System;
 using ElectricalSim.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
@@ -22,6 +23,8 @@ namespace ElectricalSim.Spice.Workspace
         [SerializeField] private Canvas popupCanvas;
 
         private bool initialized;
+        private SimulationModeOptionVisual controlOptionVisual;
+        private SimulationModeOptionVisual spiceOptionVisual;
 
         public void Configure(
             TopNavigationController navigation,
@@ -62,6 +65,7 @@ namespace ElectricalSim.Spice.Workspace
             topNavigation.TabSelected += HandleTabSelected;
             outsideClickBlocker.gameObject.SetActive(false);
             menuPanel.SetActive(false);
+            RefreshOptionPresentation();
             initialized = true;
         }
 
@@ -106,6 +110,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             topNavigation.SelectTab(0);
             modeController.SetMode(mode);
+            RefreshOptionPresentation();
             CloseMenu();
         }
 
@@ -115,6 +120,7 @@ namespace ElectricalSim.Spice.Workspace
             transform.SetAsLastSibling();
             outsideClickBlocker.gameObject.SetActive(true);
             menuPanel.SetActive(true);
+            RefreshOptionPresentation();
         }
 
         private void CloseMenu()
@@ -168,10 +174,25 @@ namespace ElectricalSim.Spice.Workspace
             menuRect.anchorMin = new Vector2(.5f, .5f);
             menuRect.anchorMax = new Vector2(.5f, .5f);
             menuRect.pivot = new Vector2(0f, 1f);
-            menuRect.sizeDelta = new Vector2(208f, 92f);
+            menuRect.sizeDelta = new Vector2(196f, 100f);
 
-            AnchorOption(controlCircuitOption.GetComponent<RectTransform>(), -44f, -6f);
-            AnchorOption(spiceDcOption.GetComponent<RectTransform>(), -86f, -48f);
+            var menuImage = menuPanel.GetComponent<Image>();
+            menuImage.color = Color.white;
+            menuImage.sprite = UiThemeTokens.GetRoundedSprite(8);
+            menuImage.type = Image.Type.Sliced;
+            var menuOutline = menuPanel.GetComponent<Outline>();
+            if (menuOutline == null) menuOutline = menuPanel.AddComponent<Outline>();
+            menuOutline.effectColor = MainUiTheme.Divider;
+            menuOutline.effectDistance = new Vector2(1f, -1f);
+            var menuShadow = menuPanel.GetComponent<Shadow>();
+            if (menuShadow == null) menuShadow = menuPanel.AddComponent<Shadow>();
+            menuShadow.effectColor = new Color(0f, 0f, 0f, 0.14f);
+            menuShadow.effectDistance = new Vector2(0f, -3f);
+
+            AnchorOption(controlCircuitOption.GetComponent<RectTransform>(), -48f, -8f);
+            AnchorOption(spiceDcOption.GetComponent<RectTransform>(), -92f, -52f);
+            controlOptionVisual = ConfigureOption(controlCircuitOption);
+            spiceOptionVisual = ConfigureOption(spiceDcOption);
         }
 
         private static void AnchorOption(RectTransform option, float bottom, float top)
@@ -182,12 +203,127 @@ namespace ElectricalSim.Spice.Workspace
             option.offsetMax = new Vector2(-6f, top);
         }
 
+        private static SimulationModeOptionVisual ConfigureOption(Button option)
+        {
+            var text = option.GetComponentInChildren<Text>();
+            text.alignment = TextAnchor.MiddleLeft;
+            text.color = MainUiTheme.DeepText;
+            var textRect = text.rectTransform;
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(18f, 0f);
+            textRect.offsetMax = new Vector2(-12f, 0f);
+
+            option.transition = Selectable.Transition.None;
+            var visual = option.GetComponent<SimulationModeOptionVisual>();
+            if (visual == null) visual = option.gameObject.AddComponent<SimulationModeOptionVisual>();
+            visual.Initialize(option.GetComponent<Image>(), text);
+            return visual;
+        }
+
+        private void RefreshOptionPresentation()
+        {
+            if (controlOptionVisual == null || spiceOptionVisual == null)
+            {
+                return;
+            }
+
+            controlOptionVisual.SetSelected(modeController.CurrentMode == SimulationWorkspaceMode.ControlCircuit);
+            spiceOptionVisual.SetSelected(modeController.CurrentMode == SimulationWorkspaceMode.SpiceDc);
+        }
+
         private void ValidateBindings()
         {
             if (topNavigation == null || modeController == null || dropdownButton == null || menuPanel == null || controlCircuitOption == null || spiceDcOption == null || outsideClickBlocker == null || popupLayer == null || popupCanvas == null)
             {
                 throw new InvalidOperationException("Simulation mode dropdown is missing serialized navigation or menu bindings.");
             }
+        }
+    }
+
+    /// <summary>Visual-only interaction feedback for an explicitly bound mode option.</summary>
+    internal sealed class SimulationModeOptionVisual : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
+    {
+        private Image background;
+        private Image indicator;
+        private Text label;
+        private bool selected;
+        private bool hovered;
+        private bool pressed;
+        private bool initialized;
+
+        public void Initialize(Image optionBackground, Text optionLabel)
+        {
+            if (initialized)
+            {
+                return;
+            }
+
+            background = optionBackground;
+            label = optionLabel;
+            background.sprite = UiThemeTokens.GetRoundedSprite(6);
+            background.type = Image.Type.Sliced;
+            var outline = background.GetComponent<Outline>();
+            if (outline != null) outline.enabled = false;
+
+            var indicatorObject = new GameObject("ActiveIndicator", typeof(RectTransform), typeof(Image));
+            indicatorObject.transform.SetParent(transform, false);
+            indicator = indicatorObject.GetComponent<Image>();
+            indicator.color = MainUiTheme.PrimaryBlue;
+            indicator.raycastTarget = false;
+            var indicatorRect = indicator.rectTransform;
+            indicatorRect.anchorMin = new Vector2(0f, 0.5f);
+            indicatorRect.anchorMax = new Vector2(0f, 0.5f);
+            indicatorRect.pivot = new Vector2(0f, 0.5f);
+            indicatorRect.sizeDelta = new Vector2(4f, 22f);
+            indicatorRect.anchoredPosition = new Vector2(5f, 0f);
+            initialized = true;
+            Refresh();
+        }
+
+        public void SetSelected(bool value)
+        {
+            selected = value;
+            Refresh();
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            hovered = true;
+            Refresh();
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            hovered = false;
+            pressed = false;
+            Refresh();
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            pressed = true;
+            Refresh();
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            pressed = false;
+            Refresh();
+        }
+
+        private void Refresh()
+        {
+            if (!initialized)
+            {
+                return;
+            }
+
+            background.color = selected ? MainUiTheme.Hex("E8F1FF") :
+                pressed ? MainUiTheme.Hex("DCEBFF") :
+                hovered ? MainUiTheme.Hex("F1F6FF") : Color.white;
+            label.color = MainUiTheme.DeepText;
+            indicator.gameObject.SetActive(selected);
         }
     }
 }
