@@ -129,6 +129,7 @@ namespace ElectricalSim.Spice.Workspace
 
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Resistor, "电阻", "1 kΩ", 1, 0);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Capacitor, "电容", "1 μF", 0, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
@@ -235,6 +236,11 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "ArrowB", new Vector2(58f, -6f), new Vector2(64f, 0f), 3f);
                     AddLine(symbol, "ArrowC", new Vector2(58f, 6f), new Vector2(64f, 0f), 3f);
                     AddLine(symbol, "LeadRight", new Vector2(64f, 0f), new Vector2(94f, 0f));
+                    break;
+                case SpiceComponentKind.IdealSwitch:
+                    AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(42f, 0f));
+                    AddLine(symbol, "Blade", new Vector2(42f, 0f), new Vector2(62f, 14f));
+                    AddLine(symbol, "LeadRight", new Vector2(66f, 0f), new Vector2(94f, 0f));
                     break;
                 case SpiceComponentKind.Resistor:
                     AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(28f, 0f));

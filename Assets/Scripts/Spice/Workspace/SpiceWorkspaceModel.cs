@@ -106,6 +106,7 @@ namespace ElectricalSim.Spice.Workspace
         public static bool IsValidParameter(SpiceComponentKind kind, double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
+            if (kind == SpiceComponentKind.IdealSwitch) return value == 0d || value == 1d;
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
                 (kind != SpiceComponentKind.Ground && value > 0d);
         }
@@ -114,6 +115,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var prefix = kind == SpiceComponentKind.DcVoltageSource ? "source" :
                 kind == SpiceComponentKind.DcCurrentSource ? "current-source" :
+                kind == SpiceComponentKind.IdealSwitch ? "switch" :
                 kind == SpiceComponentKind.Resistor ? "resistor" :
                 kind == SpiceComponentKind.Capacitor ? "capacitor" :
                 kind == SpiceComponentKind.Inductor ? "inductor" : "ground";
@@ -124,6 +126,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource ? 10d :
                 kind == SpiceComponentKind.DcCurrentSource ? 0.001d :
+                kind == SpiceComponentKind.IdealSwitch ? 0d :
                 kind == SpiceComponentKind.Resistor ? 1000d :
                 kind == SpiceComponentKind.Capacitor ? 1e-6d :
                 kind == SpiceComponentKind.Inductor ? 0.01d : 0d;
@@ -156,6 +159,7 @@ namespace ElectricalSim.Spice.Workspace
             {
                 case SpiceComponentKind.DcVoltageSource: return SpiceComponentModel.DcVoltageSource(InstanceId, SiValue);
                 case SpiceComponentKind.DcCurrentSource: return SpiceComponentModel.DcCurrentSource(InstanceId, SiValue);
+                case SpiceComponentKind.IdealSwitch: return SpiceComponentModel.IdealSwitch(InstanceId, SiValue > 0.5d);
                 case SpiceComponentKind.Resistor: return SpiceComponentModel.Resistor(InstanceId, SiValue);
                 case SpiceComponentKind.Capacitor: return SpiceComponentModel.Capacitor(InstanceId, SiValue);
                 case SpiceComponentKind.Inductor: return SpiceComponentModel.Inductor(InstanceId, SiValue);

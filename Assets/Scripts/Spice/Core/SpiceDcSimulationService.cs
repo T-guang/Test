@@ -88,6 +88,13 @@ namespace ElectricalSim.Spice.Core
                     componentResult.CurrentDirection = "P-to-N";
                     componentResult.Notes = "设定电流：P → N";
                 }
+                else if (component.Kind == SpiceComponentKind.IdealSwitch)
+                {
+                    componentResult.Current = voltage / SpiceNetlistBuilder.SwitchResistance(component);
+                    componentResult.VoltageDirection = "A-to-B";
+                    componentResult.CurrentDirection = "A-to-B";
+                    componentResult.Notes = component.GetRequiredParameter(SpiceParameterKey.SwitchClosed) > 0.5d ? "状态：闭合" : "状态：断开";
+                }
                 else if (component.Kind == SpiceComponentKind.Capacitor)
                 {
                     componentResult.Current = 0d;

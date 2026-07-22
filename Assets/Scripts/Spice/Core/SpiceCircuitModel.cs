@@ -10,6 +10,7 @@ namespace ElectricalSim.Spice.Core
     {
         DcVoltageSource,
         DcCurrentSource,
+        IdealSwitch,
         Resistor,
         Capacitor,
         Inductor,
@@ -20,6 +21,7 @@ namespace ElectricalSim.Spice.Core
     {
         DcVoltage,
         DcCurrent,
+        SwitchClosed,
         Resistance,
         Capacitance,
         Inductance
@@ -60,6 +62,11 @@ namespace ElectricalSim.Spice.Core
         public static SpiceComponentModel DcCurrentSource(string instanceId, double amps)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.DcCurrentSource).With(SpiceParameterKey.DcCurrent, amps);
+        }
+
+        public static SpiceComponentModel IdealSwitch(string instanceId, bool closed)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.IdealSwitch).With(SpiceParameterKey.SwitchClosed, closed ? 1d : 0d);
         }
 
         public static SpiceComponentModel Capacitor(string instanceId, double farads)

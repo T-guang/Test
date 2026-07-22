@@ -41,6 +41,20 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        public static SpiceCircuitModel SwitchAndResistor(bool closed)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.IdealSwitch("switch", closed));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "switch", "positive");
+            Wire(circuit, "switch", "negative", "r1", "positive");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
         public static SpiceCircuitModel Divider(double r2Resistance = 1000d)
         {
             var circuit = new SpiceCircuitModel();

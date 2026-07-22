@@ -33,6 +33,7 @@ namespace ElectricalSim.Spice.Workspace
         private int unitIndex;
         private bool initialized;
         private bool applying;
+        private bool switchState;
 
         public bool IsOpen => panel != null && panel.gameObject.activeSelf;
 
@@ -54,22 +55,29 @@ namespace ElectricalSim.Spice.Workspace
             }
 
             currentComponent = component;
+            switchState = component.Kind == SpiceComponentKind.IdealSwitch && component.SiValue > 0.5d;
             units = SpiceParameterUnits.UnitsFor(component.Kind);
+            if (component.Kind == SpiceComponentKind.IdealSwitch) units = new[] { "状态" };
             if (units.Length == 0) return;
 
             unitIndex = 0;
             title.text = DialogTitle(component.Kind);
             componentLabel.text = "元件：" + component.InstanceId;
             parameterLabel.text = ParameterName(component.Kind);
-            unitLabel.text = units[unitIndex];
-            input.text = SpiceParameterUnits.FromSi(component.Kind, component.SiValue, units[unitIndex]).ToString("G6", CultureInfo.InvariantCulture);
+            unitLabel.text = component.Kind == SpiceComponentKind.IdealSwitch ? (switchState ? "闭合" : "断开") : units[unitIndex];
+            input.gameObject.SetActive(component.Kind != SpiceComponentKind.IdealSwitch);
+            input.text = component.Kind == SpiceComponentKind.IdealSwitch ? string.Empty : SpiceParameterUnits.FromSi(component.Kind, component.SiValue, units[unitIndex]).ToString("G6", CultureInfo.InvariantCulture);
+            parameterLabel.text = component.Kind == SpiceComponentKind.IdealSwitch ? "状态（点击右侧切换）" : ParameterName(component.Kind);
             SetError(null);
             blocker.gameObject.SetActive(true);
             panel.gameObject.SetActive(true);
             panel.rectTransform.SetAsLastSibling();
-            input.ActivateInputField();
-            input.selectionAnchorPosition = 0;
-            input.selectionFocusPosition = input.text.Length;
+            if (component.Kind != SpiceComponentKind.IdealSwitch)
+            {
+                input.ActivateInputField();
+                input.selectionAnchorPosition = 0;
+                input.selectionFocusPosition = input.text.Length;
+            }
         }
 
         public void CloseWithoutApply()
@@ -163,6 +171,12 @@ namespace ElectricalSim.Spice.Workspace
         private void CycleUnit()
         {
             if (currentComponent == null || units.Length == 0) return;
+            if (currentComponent.Kind == SpiceComponentKind.IdealSwitch)
+            {
+                switchState = !switchState;
+                unitLabel.text = switchState ? "闭合" : "断开";
+                return;
+            }
             unitIndex = (unitIndex + 1) % units.Length;
             unitLabel.text = units[unitIndex];
             input.text = SpiceParameterUnits.FromSi(currentComponent.Kind, currentComponent.SiValue, units[unitIndex]).ToString("G6", CultureInfo.InvariantCulture);
@@ -173,6 +187,17 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (applying || currentComponent == null || units.Length == 0) return;
             applying = true;
+            if (currentComponent.Kind == SpiceComponentKind.IdealSwitch)
+            {
+                if (!workspace.TrySetSwitchState(currentComponent.InstanceId, switchState))
+                {
+                    applying = false;
+                    SetError("开关状态未能更新。");
+                    return;
+                }
+                CloseWithoutApply();
+                return;
+            }
             if (!workspace.TryApplyParameterText(currentComponent.InstanceId, input.text, units[unitIndex], out var error))
             {
                 applying = false;
@@ -204,6 +229,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "编辑直流电压源参数" :
                 kind == SpiceComponentKind.DcCurrentSource ? "编辑直流电流源参数" :
+                kind == SpiceComponentKind.IdealSwitch ? "编辑理想开关状态" :
                 kind == SpiceComponentKind.Resistor ? "编辑电阻参数" :
                 kind == SpiceComponentKind.Capacitor ? "编辑电容参数" : "编辑电感参数";
         }
@@ -212,6 +238,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "电压" :
                 kind == SpiceComponentKind.DcCurrentSource ? "电流" :
+                kind == SpiceComponentKind.IdealSwitch ? "状态" :
                 kind == SpiceComponentKind.Resistor ? "阻值" :
                 kind == SpiceComponentKind.Capacitor ? "电容量" : "电感量";
         }

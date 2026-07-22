@@ -39,7 +39,7 @@ namespace ElectricalSim.Spice.Netlist
                 var component = componentById[pair.Key];
                 var a = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var b = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
-                builder.Append(pair.Value).Append(' ').Append(a).Append(' ').Append(b).Append(' ')
+                builder.Append(GetElementName(component, pair.Value)).Append(' ').Append(a).Append(' ').Append(b).Append(' ')
                     .Append(GetValue(component).ToString("R", CultureInfo.InvariantCulture)).AppendLine();
             }
 
@@ -60,11 +60,23 @@ namespace ElectricalSim.Spice.Netlist
             {
                 case SpiceComponentKind.DcVoltageSource: return component.GetRequiredParameter(SpiceParameterKey.DcVoltage);
                 case SpiceComponentKind.DcCurrentSource: return component.GetRequiredParameter(SpiceParameterKey.DcCurrent);
+                case SpiceComponentKind.IdealSwitch: return SwitchResistance(component);
                 case SpiceComponentKind.Resistor: return component.GetRequiredParameter(SpiceParameterKey.Resistance);
                 case SpiceComponentKind.Capacitor: return component.GetRequiredParameter(SpiceParameterKey.Capacitance);
                 case SpiceComponentKind.Inductor: return component.GetRequiredParameter(SpiceParameterKey.Inductance);
                 default: throw new InvalidOperationException("Ground has no SPICE element line.");
             }
+        }
+
+        private static string GetElementName(SpiceComponentModel component, string graphName)
+        {
+            // The manual switch is represented by a deterministic RON/ROFF resistor.
+            return component.Kind == SpiceComponentKind.IdealSwitch ? "R" + graphName : graphName;
+        }
+
+        public static double SwitchResistance(SpiceComponentModel component)
+        {
+            return component.GetRequiredParameter(SpiceParameterKey.SwitchClosed) > 0.5d ? 1e-3d : 1e12d;
         }
     }
 }

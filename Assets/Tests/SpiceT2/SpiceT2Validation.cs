@@ -33,6 +33,8 @@ namespace ElectricalSim.Spice.T2
             results.Add(await VerifySingleResistor(service, 2000d, 0.005d).ConfigureAwait(false));
             results.Add(await VerifyReversedSingleResistor(service).ConfigureAwait(false));
             results.Add(await VerifyCurrentSource(service).ConfigureAwait(false));
+            results.Add(await VerifySwitch(service, false).ConfigureAwait(false));
+            results.Add(await VerifySwitch(service, true).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 1000d, 5d, 0.005d).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 3000d, 7.5d, 0.0025d).ConfigureAwait(false));
             results.Add(await VerifyParallel(service).ConfigureAwait(false));
@@ -76,6 +78,23 @@ namespace ElectricalSim.Spice.T2
             ExpectNear(result.ComponentResults["r1"].Current, 0.001d, CurrentTolerance, "current source resistor current");
             ExpectNear(result.ComponentResults["current"].Current, 0.001d, CurrentTolerance, "current source configured current");
             if (!result.GeneratedNetlistContent.Contains("I1")) throw new InvalidOperationException("DC current source was not emitted as an I-element.");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifySwitch(SpiceDcSimulationService service, bool closed)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.SwitchAndResistor(closed)).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var current = result.ComponentResults["r1"].Current;
+            if (closed)
+            {
+                ExpectNear(current, 0.01d, CurrentTolerance, "closed switch current");
+            }
+            else if (Math.Abs(current) > 1e-9d)
+            {
+                throw new InvalidOperationException("Open switch did not block normal load current.");
+            }
+            if (!result.GeneratedNetlistContent.Contains("RSW1")) throw new InvalidOperationException("Manual switch did not use its deterministic RON/ROFF netlist element.");
             return result;
         }
 

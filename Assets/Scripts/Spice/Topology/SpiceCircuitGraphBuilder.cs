@@ -237,12 +237,14 @@ namespace ElectricalSim.Spice.Topology
             {
                 SpiceParameterKey? key = component.Kind == SpiceComponentKind.DcVoltageSource ? SpiceParameterKey.DcVoltage :
                     component.Kind == SpiceComponentKind.DcCurrentSource ? SpiceParameterKey.DcCurrent :
+                    component.Kind == SpiceComponentKind.IdealSwitch ? SpiceParameterKey.SwitchClosed :
                     component.Kind == SpiceComponentKind.Resistor ? SpiceParameterKey.Resistance :
                     component.Kind == SpiceComponentKind.Capacitor ? SpiceParameterKey.Capacitance :
                     component.Kind == SpiceComponentKind.Inductor ? SpiceParameterKey.Inductance : (SpiceParameterKey?)null;
                 if (!key.HasValue) continue;
                 if (!component.TryGetParameter(key.Value, out var value) || double.IsNaN(value) || double.IsInfinity(value) ||
-                    (key.Value != SpiceParameterKey.DcVoltage && key.Value != SpiceParameterKey.DcCurrent && value <= 0d))
+                    (key.Value == SpiceParameterKey.SwitchClosed ? value != 0d && value != 1d :
+                     key.Value != SpiceParameterKey.DcVoltage && key.Value != SpiceParameterKey.DcCurrent && value <= 0d))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_INVALID_PARAMETER", SpiceDiagnosticSeverity.Error, "Component parameter is missing or outside the supported DC range.", component.InstanceId));
                 }
@@ -255,6 +257,7 @@ namespace ElectricalSim.Spice.Topology
             {
                 case SpiceComponentKind.DcVoltageSource: return "V";
                 case SpiceComponentKind.DcCurrentSource: return "I";
+                case SpiceComponentKind.IdealSwitch: return "SW";
                 case SpiceComponentKind.Resistor: return "R";
                 case SpiceComponentKind.Capacitor: return "C";
                 case SpiceComponentKind.Inductor: return "L";
