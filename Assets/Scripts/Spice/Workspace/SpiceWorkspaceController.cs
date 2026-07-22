@@ -371,6 +371,12 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
 
+            if (component.Kind == SpiceComponentKind.IdealSwitch)
+            {
+                TrySetSwitchState(component.InstanceId, component.Data.SiValue <= 0.5d);
+                return;
+            }
+
             if (component.Kind == SpiceComponentKind.Ground)
             {
                 if (statusText != null) statusText.text = "该器件无可编辑参数。";
