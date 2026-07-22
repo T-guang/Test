@@ -1553,30 +1553,29 @@ namespace ElectricalSim.Core
                 return;
             }
 
-            var phases = new HashSet<string> { u, v, w };
-            if (phases.Count != 3)
+            var direction = MotorPhaseSequenceEvaluator.Evaluate(
+                new[] { u },
+                new[] { v },
+                new[] { w });
+            switch (direction.Direction)
             {
-                info.State = "Fault";
-                info.Judgement = "电机三相输入存在重复相，U/V/W 未获得完整的 L1/L2/L3，电机不能正常运行。";
-                info.MotorIssues.Add(info.Judgement);
-                AnalyzeMotorPe(motor, info, result);
-                return;
-            }
-
-            if (IsForwardSequence(u, v, w))
-            {
-                info.State = "Forward";
-                info.Judgement = "电机获得完整三相，当前相序为正向相序，判断为正转。";
-            }
-            else if (IsReverseSequence(u, v, w))
-            {
-                info.State = "Reverse";
-                info.Judgement = "电机获得完整三相，但相序与正转相反，判断为反转。";
-            }
-            else
-            {
-                info.State = "Unknown";
-                info.Judgement = "电机获得三相标签，但当前相序暂无法识别。";
+                case MotorDirectionState.Forward:
+                    info.State = "Forward";
+                    info.Judgement = "电机获得完整三相，当前相序为正向相序，判断为正转。";
+                    break;
+                case MotorDirectionState.Reverse:
+                    info.State = "Reverse";
+                    info.Judgement = "电机获得完整三相，但相序与正转相反，判断为反转。";
+                    break;
+                case MotorDirectionState.Invalid:
+                    info.State = "Fault";
+                    info.Judgement = direction.Reason;
+                    info.MotorIssues.Add(info.Judgement);
+                    break;
+                default:
+                    info.State = "Unknown";
+                    info.Judgement = direction.Reason;
+                    break;
             }
 
             AnalyzeMotorPe(motor, info, result);
@@ -2004,16 +2003,18 @@ namespace ElectricalSim.Core
 
         private static bool IsForwardSequence(string u, string v, string w)
         {
-            return u == VoltageL1 && v == VoltageL2 && w == VoltageL3 ||
-                u == VoltageL2 && v == VoltageL3 && w == VoltageL1 ||
-                u == VoltageL3 && v == VoltageL1 && w == VoltageL2;
+            return MotorPhaseSequenceEvaluator.Evaluate(
+                new[] { u },
+                new[] { v },
+                new[] { w }).Direction == MotorDirectionState.Forward;
         }
 
         private static bool IsReverseSequence(string u, string v, string w)
         {
-            return u == VoltageL1 && v == VoltageL3 && w == VoltageL2 ||
-                u == VoltageL3 && v == VoltageL2 && w == VoltageL1 ||
-                u == VoltageL2 && v == VoltageL1 && w == VoltageL3;
+            return MotorPhaseSequenceEvaluator.Evaluate(
+                new[] { u },
+                new[] { v },
+                new[] { w }).Direction == MotorDirectionState.Reverse;
         }
 
         private static bool IsPhaseLabel(string label)

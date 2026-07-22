@@ -910,18 +910,7 @@ namespace ElectricalSim.Core
                 return false;
             }
 
-            var uPhases = GetReachablePowerPhaseKeys(u);
-            var vPhases = GetReachablePowerPhaseKeys(v);
-            var wPhases = GetReachablePowerPhaseKeys(w);
-            if (uPhases.Count == 0 || vPhases.Count == 0 || wPhases.Count == 0)
-            {
-                return false;
-            }
-
-            var allPhases = new HashSet<string>(uPhases);
-            allPhases.UnionWith(vPhases);
-            allPhases.UnionWith(wPhases);
-            return allPhases.Count >= 3;
+            return EvaluateThreePhaseMotorDirection(motor).IsRunning;
         }
 
         private static bool IsStarDeltaMotorComponent(CircuitComponent component)
@@ -1150,9 +1139,16 @@ namespace ElectricalSim.Core
                 return;
             }
 
-            var rotationDirection = active ? ResolveThreePhaseMotorDirection(component) : 0f;
+            var directionResult = EvaluateThreePhaseMotorDirection(component);
+            var motorState = RuntimeStateManager.Shared.GetOrCreateMotorState(component.InstanceId);
+            motorState?.Update(directionResult, active);
+
+            // Old templates may carry this presentation parameter. Keep it synchronized,
+            // but the runtime state above is the authority for all ordinary motors.
+            var rotationDirection = directionResult.Direction == MotorDirectionState.Forward ? 1f :
+                directionResult.Direction == MotorDirectionState.Reverse ? -1f : 0f;
             SetParameterIfPresent(component, "rotationDirection", rotationDirection);
-            UpdateAutoReciprocatingMotionDirection(component, active, rotationDirection);
+            UpdateAutoReciprocatingMotionDirection(component, motorState != null && motorState.IsRunning, rotationDirection);
         }
 
         private void UpdateAutoReciprocatingMotionDirection(CircuitComponent component, bool active, float rotationDirection)
@@ -1220,32 +1216,22 @@ namespace ElectricalSim.Core
             return false;
         }
 
-        private float ResolveThreePhaseMotorDirection(CircuitComponent motor)
+        private MotorDirectionResult EvaluateThreePhaseMotorDirection(CircuitComponent motor)
         {
-            var u = SingleReachablePowerTerminalId(motor.GetTerminal("U"));
-            var v = SingleReachablePowerTerminalId(motor.GetTerminal("V"));
-            var w = SingleReachablePowerTerminalId(motor.GetTerminal("W"));
-
-            if ((u == "L1" && v == "L2" && w == "L3") ||
-                (u == "L2" && v == "L3" && w == "L1") ||
-                (u == "L3" && v == "L1" && w == "L2"))
-            {
-                return 1f;
-            }
-
-            if ((u == "L1" && v == "L3" && w == "L2") ||
-                (u == "L3" && v == "L2" && w == "L1") ||
-                (u == "L2" && v == "L1" && w == "L3"))
-            {
-                return -1f;
-            }
-
-            return 0f;
+            return MotorPhaseSequenceEvaluator.Evaluate(
+                GetReachablePowerTerminalIds(motor != null ? motor.GetTerminal("U") : null),
+                GetReachablePowerTerminalIds(motor != null ? motor.GetTerminal("V") : null),
+                GetReachablePowerTerminalIds(motor != null ? motor.GetTerminal("W") : null));
         }
 
-        private string SingleReachablePowerTerminalId(TerminalView terminal)
+        private HashSet<string> GetReachablePowerTerminalIds(TerminalView terminal)
         {
             var ids = new HashSet<string>();
+            if (terminal == null)
+            {
+                return ids;
+            }
+
             foreach (var reachable in Flood(new List<TerminalView> { terminal }))
             {
                 if (IsPowerTerminal(reachable, TerminalRole.Phase))
@@ -1254,7 +1240,7 @@ namespace ElectricalSim.Core
                 }
             }
 
-            return ids.Count == 1 ? ids.First() : string.Empty;
+            return ids;
         }
 
         private bool UpdateThermalRelays()

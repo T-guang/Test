@@ -1073,7 +1073,8 @@ namespace ElectricalSim.Core
                     HasManualRoute = wire.HasManualRoute,
                     ManualRouteHorizontal = wire.ManualRouteHorizontal,
                     ManualRouteAxis = wire.ManualRouteAxis,
-                    ManualRoutePoints = new List<Vector2>(wire.ManualRoutePoints)
+                    ManualRoutePoints = new List<Vector2>(wire.ManualRoutePoints),
+                    PreservesManualRoutePoints = wire.PreservesManualRoutePoints
                 });
             }
 
@@ -1120,7 +1121,14 @@ namespace ElectricalSim.Core
                 {
                     if (wireState.ManualRoutePoints != null && wireState.ManualRoutePoints.Count >= 2)
                     {
-                        wire.SetManualRoutePoints(wireState.ManualRoutePoints);
+                        if (wireState.PreservesManualRoutePoints)
+                        {
+                            wire.SetManualRoutePointsAsFullPath(wireState.ManualRoutePoints);
+                        }
+                        else
+                        {
+                            wire.SetManualRoutePoints(wireState.ManualRoutePoints);
+                        }
                     }
                     else
                     {
@@ -1586,6 +1594,7 @@ namespace ElectricalSim.Core
             public bool ManualRouteHorizontal;
             public float ManualRouteAxis;
             public List<Vector2> ManualRoutePoints = new List<Vector2>();
+            public bool PreservesManualRoutePoints;
         }
     }
 }

@@ -877,9 +877,46 @@ namespace ElectricalSim.AI
                 return;
             }
 
-            if (info.IsThreePhaseMotor || info.SummaryGroup == ComponentStateInfo.GroupLoad)
+            if (info.IsThreePhaseMotor)
+            {
+                ApplyOrdinaryMotorRuntimeDisplay(info, component);
+                return;
+            }
+
+            if (info.SummaryGroup == ComponentStateInfo.GroupLoad)
             {
                 info.State = component.IsEnergized ? "Running" : "Stopped";
+            }
+        }
+
+        private static void ApplyOrdinaryMotorRuntimeDisplay(ComponentStateInfo info, CircuitComponent component)
+        {
+            if (info == null || component == null ||
+                !RuntimeStateManager.Shared.TryGetMotorState(component.InstanceId, out var motorState) ||
+                motorState == null)
+            {
+                return;
+            }
+
+            switch (motorState.Direction)
+            {
+                case MotorDirectionState.Forward:
+                    info.State = motorState.IsRunning ? "Forward" : "Stopped";
+                    break;
+                case MotorDirectionState.Reverse:
+                    info.State = motorState.IsRunning ? "Reverse" : "Stopped";
+                    break;
+                case MotorDirectionState.Invalid:
+                    info.State = "Fault";
+                    info.Judgement = string.IsNullOrWhiteSpace(motorState.Reason) ? "电机相序无效。" : motorState.Reason;
+                    break;
+                case MotorDirectionState.Unknown:
+                    info.State = "Unknown";
+                    info.Judgement = string.IsNullOrWhiteSpace(motorState.Reason) ? "电机相序无法识别。" : motorState.Reason;
+                    break;
+                default:
+                    info.State = "Stopped";
+                    break;
             }
         }
 
@@ -1130,19 +1167,37 @@ namespace ElectricalSim.AI
                     continue;
                 }
 
-                if (!component.IsEnergized)
+                var dirText = "运行";
+                var directionReason = string.Empty;
+                if (RuntimeStateManager.Shared.TryGetMotorState(component.InstanceId, out var motorState) && motorState != null)
                 {
-                    builder.AppendLine("- " + component.Definition.displayName + "当前未运行，估算运行电流为 0A。");
-                    count++;
-                    continue;
+                    directionReason = motorState.Reason;
+                    switch (motorState.Direction)
+                    {
+                        case MotorDirectionState.Forward:
+                            dirText = motorState.IsRunning ? "正转运行" : "停止";
+                            break;
+                        case MotorDirectionState.Reverse:
+                            dirText = motorState.IsRunning ? "反转运行" : "停止";
+                            break;
+                        case MotorDirectionState.Invalid:
+                            dirText = "相序无效/故障";
+                            break;
+                        case MotorDirectionState.Unknown:
+                            dirText = "相序无法识别";
+                            break;
+                        default:
+                            dirText = "停止";
+                            break;
+                    }
                 }
 
-                var dirText = "运行";
-                var rotParam = component.GetParameter("rotationDirection");
-                if (rotParam != null)
+                if (!component.IsEnergized)
                 {
-                    if (rotParam.value > 0.5f) dirText = "正转运行";
-                    else if (rotParam.value < -0.5f) dirText = "反转运行";
+                    builder.AppendLine("- " + component.Definition.displayName + "当前" + dirText + "，估算运行电流为 0A。" +
+                        (string.IsNullOrWhiteSpace(directionReason) ? string.Empty : "原因：" + directionReason));
+                    count++;
+                    continue;
                 }
 
                 builder.AppendLine("- " + component.Definition.displayName + "当前" + dirText + "。线电压：" +

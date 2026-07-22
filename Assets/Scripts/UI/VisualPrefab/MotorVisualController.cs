@@ -5,7 +5,7 @@ namespace ElectricalSim.UI.VisualPrefab
 {
     /// <summary>
     /// 驱动电机 Visual Prefab 中风扇转轴的显示动画。
-    /// 视觉状态只读取父级 CircuitComponent 的得电状态和 rotationDirection 参数；旋转不反向影响
+    /// 普通三相电机优先读取 RuntimeStateManager 的相序方向；旧 rotationDirection 仅作兼容回退。
     /// 仿真、Analyzer 或 RuntimeStateManager。Prefab 子节点缺失时保守地停止显示更新。
     /// 修改后需回归普通电机、正反转、自动往返和星三角的启动/停止显示。
     /// </summary>
@@ -41,17 +41,42 @@ namespace ElectricalSim.UI.VisualPrefab
 
             if (component.IsEnergized)
             {
-                var dir = 1f;
-                var param = component.GetParameter("rotationDirection");
-                if (param != null)
+                if (RuntimeStateManager.Shared.TryGetMotorState(component.InstanceId, out var motorState) && motorState != null)
                 {
-                    if (param.value < -0.5f) dir = -1f;
-                    else if (param.value > -0.5f && param.value < 0.5f) dir = 0f;
+                    if (!motorState.IsRunning)
+                    {
+                        return;
+                    }
+
+                    var runtimeDirection = motorState.Direction == MotorDirectionState.Forward ? 1f :
+                        motorState.Direction == MotorDirectionState.Reverse ? -1f : 0f;
+                    if (runtimeDirection != 0f)
+                    {
+                        fanPivot.Rotate(0, 0, runtimeDirection * rotationSpeed * Time.deltaTime);
+                    }
+
+                    return;
                 }
 
-                if (dir != 0f)
+                // Compatibility fallback for old ordinary-motor template instances before a simulation pass.
+                var parameter = component.GetParameter("rotationDirection");
+                if (parameter != null)
                 {
-                    fanPivot.Rotate(0, 0, dir * rotationSpeed * Time.deltaTime);
+                    var parameterDirection = parameter.value > 0.5f ? 1f : parameter.value < -0.5f ? -1f : 0f;
+                    if (parameterDirection != 0f)
+                    {
+                        fanPivot.Rotate(0, 0, parameterDirection * rotationSpeed * Time.deltaTime);
+                    }
+
+                    return;
+                }
+
+                // M1 deliberately leaves star-delta motor behavior unchanged.
+                var isOrdinaryThreePhaseMotor = component.GetTerminal("U") != null &&
+                    component.GetTerminal("V") != null && component.GetTerminal("W") != null;
+                if (!isOrdinaryThreePhaseMotor)
+                {
+                    fanPivot.Rotate(0, 0, rotationSpeed * Time.deltaTime);
                 }
             }
         }
