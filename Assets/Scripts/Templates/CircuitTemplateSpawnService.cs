@@ -285,6 +285,14 @@ namespace ElectricalSim.Templates
                     var previous = points[i - 1];
                     if (!Mathf.Approximately(previous.x, point.x) && !Mathf.Approximately(previous.y, point.y))
                     {
+                        // Legacy six-point routes persisted terminal-exit positions. Their
+                        // first or last segment can be slightly diagonal after terminal
+                        // layout changes; WireView rebuilds this legacy format on load.
+                        if (points.Count == 6 && (i == 1 || i == points.Count - 1))
+                        {
+                            continue;
+                        }
+
                         error = "manualRoutePoints 必须为水平/垂直折线。";
                         return false;
                     }
