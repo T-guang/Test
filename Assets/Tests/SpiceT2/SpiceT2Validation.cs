@@ -36,6 +36,11 @@ namespace ElectricalSim.Spice.T2
             ExpectVoltageProbeComponentOrderDoesNotAffectNetlist();
             ExpectVoltageProbeSameNodeNoShortDiagnostic();
             ExpectVoltageProbeDoesNotBridgeFloatingSubcircuit();
+            ExpectCurrentProbeNetlistStable();
+            ExpectCurrentProbeWireOrderDoesNotAffectNetlist();
+            ExpectCurrentProbeWireDirectionDoesNotAffectNetlist();
+            ExpectCurrentProbeNotParameterEditable();
+            ExpectCurrentProbeConstraintConflict();
         }
 
         public static async System.Threading.Tasks.Task<List<SpiceSimulationResult>> RunIntegrationChecksAsync()
@@ -68,6 +73,10 @@ namespace ElectricalSim.Spice.T2
             await VerifyVoltageProbeBothDisconnectedAsync(service).ConfigureAwait(false);
             await VerifyVoltageProbeOnFloatingSubcircuitAsync(service).ConfigureAwait(false);
             await VerifyVoltageProbeWithoutGroundAsync(service).ConfigureAwait(false);
+            results.Add(await VerifyCurrentProbeSeries(service).ConfigureAwait(false));
+            results.Add(await VerifyReversedCurrentProbe(service).ConfigureAwait(false));
+            results.Add(await VerifyTwoCurrentProbes(service).ConfigureAwait(false));
+            await VerifyCurrentProbeOnlyInConnectedAsync(service).ConfigureAwait(false);
             return results;
         }
 
@@ -520,6 +529,99 @@ namespace ElectricalSim.Spice.T2
             var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
             if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Probe fixture without GND reached ngspice instead of being rejected before execution.");
             if (result.ComponentResults.ContainsKey("vprobe-1")) throw new InvalidOperationException("Probe without GND must not produce a fabricated voltage result.");
+        }
+
+        private static void ExpectCurrentProbeNetlistStable()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.CurrentProbeSeries());
+            if (!graph.IsValid) throw new InvalidOperationException("Current probe series fixture should produce a valid graph.");
+            if (graph.SpiceNameByComponentId["iprobe-1"] != "VPROBE1") throw new InvalidOperationException("Current probe must use a stable VPROBE1 branch name.");
+            var netlist = SpiceNetlistBuilder.BuildDcOperatingPoint(SpiceT2Fixtures.CurrentProbeSeries(), graph).Content;
+            if (!netlist.Split('\n').Any(line => line.Trim().StartsWith("VPROBE1 ", StringComparison.Ordinal) && line.TrimEnd().EndsWith(" 0", StringComparison.Ordinal)) || !netlist.Contains("print i(VPROBE1)"))
+            {
+                throw new InvalidOperationException("Current probe must emit a 0 V VPROBE branch and request its current.");
+            }
+        }
+
+        private static void ExpectCurrentProbeWireOrderDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.CurrentProbeSeries();
+            var reordered = SpiceT2Fixtures.CurrentProbeSeries();
+            var wires = reordered.Wires.AsEnumerable().Reverse().ToList();
+            reordered.Wires.Clear();
+            reordered.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reordered, "Current probe wire order");
+        }
+
+        private static void ExpectCurrentProbeWireDirectionDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.CurrentProbeSeries();
+            var reversedEndpoints = SpiceT2Fixtures.CurrentProbeSeries();
+            var wires = reversedEndpoints.Wires.Select(wire => new SpiceWireModel(wire.End, wire.Start)).ToList();
+            reversedEndpoints.Wires.Clear();
+            reversedEndpoints.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reversedEndpoints, "Current probe wire direction");
+        }
+
+        private static void ExpectCurrentProbeNotParameterEditable()
+        {
+            if (SpiceParameterUnits.UnitsFor(SpiceComponentKind.CurrentProbe).Length != 0) throw new InvalidOperationException("Current probe must expose no editable parameter units.");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.CurrentProbe, 0d) || SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.CurrentProbe, 1d))
+            {
+                throw new InvalidOperationException("Current probe must reject parameter writes.");
+            }
+        }
+
+        private static void ExpectCurrentProbeConstraintConflict()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.CurrentProbeParallelSource());
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT" && diagnostic.ComponentId == "iprobe-1"))
+            {
+                throw new InvalidOperationException("Current probe parallel to an ideal voltage source must be rejected before ngspice.");
+            }
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyCurrentProbeSeries(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.CurrentProbeSeries()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var probe = result.ComponentResults["iprobe-1"];
+            if (probe == null) throw new InvalidOperationException("Current probe result is missing.");
+            ExpectNear(probe.Current, 0.01d, CurrentTolerance, "current probe series current");
+            if (probe.CurrentDirection != "IN-to-OUT" || probe.VoltageDirection != "IN-to-OUT") throw new InvalidOperationException("Current probe direction must be IN-to-OUT.");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyReversedCurrentProbe(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.ReversedCurrentProbeSeries()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            ExpectNear(result.ComponentResults["iprobe-1"].Current, -0.01d, CurrentTolerance, "reversed current probe current");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyTwoCurrentProbes(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.TwoCurrentProbesSeries()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            ExpectNear(result.ComponentResults["iprobe-1"].Current, 0.01d, CurrentTolerance, "first current probe current");
+            ExpectNear(result.ComponentResults["iprobe-2"].Current, 0.01d, CurrentTolerance, "second current probe current");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task VerifyCurrentProbeOnlyInConnectedAsync(SpiceDcSimulationService service)
+        {
+            var circuit = SpiceT2Fixtures.CurrentProbeOnlyInConnected();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_TERMINAL" && diagnostic.ComponentId == "iprobe-1"))
+            {
+                throw new InvalidOperationException("Current probe with only IN connected must be rejected by SPICE_FLOATING_TERMINAL.");
+            }
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null || result.ComponentResults.ContainsKey("iprobe-1"))
+            {
+                throw new InvalidOperationException("Incomplete current probe must be rejected before ngspice and produce no fabricated measurement.");
+            }
         }
 
         private static async System.Threading.Tasks.Task VerifyDeletedWireBlocksSimulationAsync(SpiceDcSimulationService service)

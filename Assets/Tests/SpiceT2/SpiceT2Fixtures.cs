@@ -154,6 +154,70 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        // 电流探针串联在 10 V / 1 kOhm 支路：IN -> OUT 为实际电流方向。
+        public static SpiceCircuitModel CurrentProbeSeries()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "iprobe-1", "positive");
+            Wire(circuit, "iprobe-1", "negative", "r1", "positive");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 探针反向串联：实际电流由 OUT 流向 IN，读数应为负。
+        public static SpiceCircuitModel ReversedCurrentProbeSeries()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "r1", "negative", "iprobe-1", "negative");
+            Wire(circuit, "iprobe-1", "positive", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        public static SpiceCircuitModel TwoCurrentProbesSeries()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-2"));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "iprobe-1", "positive");
+            Wire(circuit, "iprobe-1", "negative", "iprobe-2", "positive");
+            Wire(circuit, "iprobe-2", "negative", "r1", "positive");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 电流探针并联到电压源会形成理想电压约束冲突，必须在调用 ngspice 前拦截。
+        public static SpiceCircuitModel CurrentProbeParallelSource()
+        {
+            var circuit = SingleResistor();
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            Wire(circuit, "iprobe-1", "positive", "source", "positive");
+            Wire(circuit, "iprobe-1", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        public static SpiceCircuitModel CurrentProbeOnlyInConnected()
+        {
+            var circuit = SingleResistor();
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            Wire(circuit, "iprobe-1", "positive", "source", "positive");
+            return circuit;
+        }
+
         public static SpiceCircuitModel FloatingClosedLoop()
         {
             var circuit = new SpiceCircuitModel();

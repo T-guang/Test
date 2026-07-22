@@ -107,9 +107,9 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
             if (kind == SpiceComponentKind.IdealSwitch) return value == 0d || value == 1d;
-            // 二极管使用固定 D_GENERIC 模型，GND 无参数，电压探针为纯测量器件；三者均不允许通过参数区写入内部值。
+            // 二极管使用固定 D_GENERIC 模型，GND 与两类探针无参数；均不允许通过参数区写入内部值。
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
-                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && value > 0d);
+                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && value > 0d);
         }
 
         private static string BuildInstanceId(SpiceComponentKind kind, int number)
@@ -121,7 +121,8 @@ namespace ElectricalSim.Spice.Workspace
                 kind == SpiceComponentKind.Resistor ? "resistor" :
                 kind == SpiceComponentKind.Capacitor ? "capacitor" :
                 kind == SpiceComponentKind.Inductor ? "inductor" :
-                kind == SpiceComponentKind.VoltageProbe ? "voltage-probe" : "ground";
+                kind == SpiceComponentKind.VoltageProbe ? "voltage-probe" :
+                kind == SpiceComponentKind.CurrentProbe ? "current-probe" : "ground";
             return prefix + "-" + number.ToString("D3", CultureInfo.InvariantCulture);
         }
 
@@ -134,7 +135,8 @@ namespace ElectricalSim.Spice.Workspace
                 kind == SpiceComponentKind.Resistor ? 1000d :
                 kind == SpiceComponentKind.Capacitor ? 1e-6d :
                 kind == SpiceComponentKind.Inductor ? 0.01d :
-                kind == SpiceComponentKind.VoltageProbe ? 0d : 0d;
+                kind == SpiceComponentKind.VoltageProbe ? 0d :
+                kind == SpiceComponentKind.CurrentProbe ? 0d : 0d;
         }
     }
 
@@ -171,6 +173,7 @@ namespace ElectricalSim.Spice.Workspace
                 case SpiceComponentKind.Inductor: return SpiceComponentModel.Inductor(InstanceId, SiValue);
                 case SpiceComponentKind.Ground: return SpiceComponentModel.Ground(InstanceId);
                 case SpiceComponentKind.VoltageProbe: return SpiceComponentModel.VoltageProbe(InstanceId);
+                case SpiceComponentKind.CurrentProbe: return SpiceComponentModel.CurrentProbe(InstanceId);
                 default: throw new ArgumentOutOfRangeException();
             }
         }

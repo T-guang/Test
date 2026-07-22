@@ -116,6 +116,13 @@ namespace ElectricalSim.Spice.Core
                     componentResult.CurrentDirection = "V-plus-to-V-minus";
                     componentResult.Notes = "差分电压测量";
                 }
+                else if (component.Kind == SpiceComponentKind.CurrentProbe)
+                {
+                    componentResult.Current = currents[graph.SpiceNameByComponentId[component.InstanceId]];
+                    componentResult.VoltageDirection = "IN-to-OUT";
+                    componentResult.CurrentDirection = "IN-to-OUT";
+                    componentResult.Notes = "串联电流测量";
+                }
                 else
                 {
                     var spiceName = graph.SpiceNameByComponentId[component.InstanceId];

@@ -54,7 +54,7 @@ namespace ElectricalSim.Spice.Netlist
             }
 
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();
-            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode)
+            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode)
                 .Select(pair => pair.Value).ToList();
             // 只打印后续结果层需要的向量，并用唯一标记隔离 ngspice 自身日志。
             builder.AppendLine().AppendLine(".control").AppendLine("set noaskquit").AppendLine("op").AppendLine("echo " + BeginMarker);
@@ -73,6 +73,7 @@ namespace ElectricalSim.Spice.Netlist
             switch (component.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return component.GetRequiredParameter(SpiceParameterKey.DcVoltage);
+                case SpiceComponentKind.CurrentProbe: return 0d;
                 case SpiceComponentKind.DcCurrentSource: return component.GetRequiredParameter(SpiceParameterKey.DcCurrent);
                 case SpiceComponentKind.IdealSwitch: return SwitchResistance(component);
                 case SpiceComponentKind.Resistor: return component.GetRequiredParameter(SpiceParameterKey.Resistance);

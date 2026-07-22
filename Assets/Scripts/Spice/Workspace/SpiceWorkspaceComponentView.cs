@@ -158,8 +158,8 @@ namespace ElectricalSim.Spice.Workspace
             {
                 CreateTerminal(SpiceComponentModel.PositiveTerminalId, new Vector2(-82f, 0f));
                 CreateTerminal(SpiceComponentModel.NegativeTerminalId, new Vector2(82f, 0f));
-                CreateReferenceLabel("PositiveReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "P" : data.Kind == SpiceComponentKind.IdealSwitch ? "A" : data.Kind == SpiceComponentKind.SiliconDiode ? "A" : data.Kind == SpiceComponentKind.VoltageProbe ? "V+" : "+", new Vector2(-62f, 18f));
-                CreateReferenceLabel("NegativeReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "N" : data.Kind == SpiceComponentKind.IdealSwitch ? "B" : data.Kind == SpiceComponentKind.SiliconDiode ? "K" : data.Kind == SpiceComponentKind.VoltageProbe ? "V-" : "-", new Vector2(62f, 18f));
+                CreateReferenceLabel("PositiveReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "P" : data.Kind == SpiceComponentKind.IdealSwitch ? "A" : data.Kind == SpiceComponentKind.SiliconDiode ? "A" : data.Kind == SpiceComponentKind.VoltageProbe ? "V+" : data.Kind == SpiceComponentKind.CurrentProbe ? "IN" : "+", new Vector2(data.Kind == SpiceComponentKind.CurrentProbe ? -58f : -62f, 18f));
+                CreateReferenceLabel("NegativeReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "N" : data.Kind == SpiceComponentKind.IdealSwitch ? "B" : data.Kind == SpiceComponentKind.SiliconDiode ? "K" : data.Kind == SpiceComponentKind.VoltageProbe ? "V-" : data.Kind == SpiceComponentKind.CurrentProbe ? "OUT" : "-", new Vector2(data.Kind == SpiceComponentKind.CurrentProbe ? 52f : 62f, 18f));
             }
         }
 
@@ -249,6 +249,15 @@ namespace ElectricalSim.Spice.Workspace
                     vLabel.rectTransform.anchoredPosition = Vector2.zero;
                     vLabel.raycastTarget = false;
                     break;
+                case SpiceComponentKind.CurrentProbe:
+                    CreateCircle(symbol.transform, 18f, Vector2.zero);
+                    CreateLine(symbol.transform, new Vector2(-34f, 0f), new Vector2(-18f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(18f, 0f), new Vector2(34f, 0f), 3f);
+                    var aLabel = SpiceWorkspaceUi.CreateText(symbol.transform, "ALabel", "A", 16, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.PrimaryBlue);
+                    aLabel.rectTransform.sizeDelta = new Vector2(28f, 28f);
+                    aLabel.rectTransform.anchoredPosition = Vector2.zero;
+                    aLabel.raycastTarget = false;
+                    break;
                 case SpiceComponentKind.Ground:
                     CreateLine(symbol.transform, new Vector2(0f, 34f), new Vector2(0f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(-28f, 0f), new Vector2(28f, 0f), 3f);
@@ -295,7 +304,7 @@ namespace ElectricalSim.Spice.Workspace
         private void CreateReferenceLabel(string name, string value, Vector2 position)
         {
             var label = SpiceWorkspaceUi.CreateText(symbolRoot, name, value, 12, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.MutedText);
-            label.rectTransform.sizeDelta = new Vector2(18f, 18f);
+            label.rectTransform.sizeDelta = new Vector2(value == "OUT" ? 28f : 18f, 18f);
             label.rectTransform.anchoredPosition = position;
             label.raycastTarget = false;
         }
@@ -304,7 +313,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
             var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
-            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : "GND";
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : "GND";
             return prefix + index.ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -318,6 +327,7 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.IdealSwitch) return value > 0.5d ? "闭合" : "断开";
             if (kind == SpiceComponentKind.SiliconDiode) return "D_GENERIC";
             if (kind == SpiceComponentKind.VoltageProbe) return "V+ - V-";
+            if (kind == SpiceComponentKind.CurrentProbe) return "IN → OUT";
             if (kind == SpiceComponentKind.Resistor) return value >= 1000000d ? Format(value / 1000000d) + " MΩ" : value >= 1000d ? Format(value / 1000d) + " kΩ" : Format(value) + " Ω";
             if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
             if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";

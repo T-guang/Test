@@ -16,7 +16,8 @@ namespace ElectricalSim.Spice.Core
         Capacitor,
         Inductor,
         Ground,
-        VoltageProbe
+        VoltageProbe,
+        CurrentProbe
     }
 
     public enum SpiceParameterKey
@@ -98,6 +99,14 @@ namespace ElectricalSim.Spice.Core
         public static SpiceComponentModel VoltageProbe(string instanceId)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.VoltageProbe);
+        }
+
+        /// <summary>
+        /// 串联电流探针。positive=IN、negative=OUT；网表使用 0 V 电压源并读取 i(VPROBE)。
+        /// </summary>
+        public static SpiceComponentModel CurrentProbe(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.CurrentProbe);
         }
 
         public SpiceComponentModel With(SpiceParameterKey key, double value)

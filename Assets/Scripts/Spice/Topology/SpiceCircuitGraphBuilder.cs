@@ -141,16 +141,18 @@ namespace ElectricalSim.Spice.Topology
 
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
-                if (positive == negative && component.Kind == SpiceComponentKind.DcVoltageSource)
+                if (positive == negative && (component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.CurrentProbe))
                 {
-                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_SHORTED", SpiceDiagnosticSeverity.Error, "A DC voltage source cannot have both terminals on the same node.", component.InstanceId));
+                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_SHORTED", SpiceDiagnosticSeverity.Error, "An ideal voltage source or current probe cannot have both terminals on the same node.", component.InstanceId));
                 }
 
-                if (positive == negative && component.Kind != SpiceComponentKind.DcVoltageSource)
+                if (positive == negative && component.Kind != SpiceComponentKind.DcVoltageSource && component.Kind != SpiceComponentKind.CurrentProbe)
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_COMPONENT_SHORTED", SpiceDiagnosticSeverity.Warning, "Both component terminals resolve to the same node.", component.InstanceId));
                 }
             }
+
+            ValidateCurrentProbeConstraints(components, graph);
 
             if (!components.Values.Any(component => component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.DcCurrentSource))
             {
@@ -263,7 +265,33 @@ namespace ElectricalSim.Spice.Topology
                 case SpiceComponentKind.Resistor: return "R";
                 case SpiceComponentKind.Capacitor: return "C";
                 case SpiceComponentKind.Inductor: return "L";
+                case SpiceComponentKind.CurrentProbe: return "VPROBE";
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private static void ValidateCurrentProbeConstraints(Dictionary<string, SpiceComponentModel> components, SpiceCircuitGraph graph)
+        {
+            var constrainedByNodePair = new Dictionary<string, List<SpiceComponentModel>>(StringComparer.Ordinal);
+            foreach (var component in components.Values.Where(component => component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.CurrentProbe))
+            {
+                var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
+                var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
+                var pair = string.CompareOrdinal(positive, negative) <= 0 ? positive + "|" + negative : negative + "|" + positive;
+                if (!constrainedByNodePair.TryGetValue(pair, out var constrained))
+                {
+                    constrained = new List<SpiceComponentModel>();
+                    constrainedByNodePair.Add(pair, constrained);
+                }
+                constrained.Add(component);
+            }
+
+            foreach (var constrained in constrainedByNodePair.Values.Where(group => group.Count > 1 && group.Any(component => component.Kind == SpiceComponentKind.CurrentProbe)))
+            {
+                foreach (var probe in constrained.Where(component => component.Kind == SpiceComponentKind.CurrentProbe))
+                {
+                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT", SpiceDiagnosticSeverity.Error, "A current probe cannot be placed in parallel with an ideal voltage constraint.", probe.InstanceId));
+                }
             }
         }
 

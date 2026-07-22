@@ -136,6 +136,7 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
             StyleAssistant(bindings);
         }
@@ -280,6 +281,15 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "BoxLeft", new Vector2(38f, -14f), new Vector2(38f, 14f));
                     AddLine(symbol, "BoxRight", new Vector2(62f, -14f), new Vector2(62f, 14f));
                     AddText(symbol, "V", "V", new Vector2(50f, 0f), 14);
+                    break;
+                case SpiceComponentKind.CurrentProbe:
+                    AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(38f, 0f));
+                    AddLine(symbol, "LeadRight", new Vector2(62f, 0f), new Vector2(92f, 0f));
+                    AddLine(symbol, "CircleTop", new Vector2(42f, -14f), new Vector2(58f, -14f));
+                    AddLine(symbol, "CircleBottom", new Vector2(42f, 14f), new Vector2(58f, 14f));
+                    AddLine(symbol, "CircleLeft", new Vector2(42f, -14f), new Vector2(42f, 14f));
+                    AddLine(symbol, "CircleRight", new Vector2(58f, -14f), new Vector2(58f, 14f));
+                    AddText(symbol, "ALabel", "A", new Vector2(50f, 0f), 13);
                     break;
                 default:
                     AddLine(symbol, "Stem", new Vector2(51f, 20f), new Vector2(51f, -4f));
