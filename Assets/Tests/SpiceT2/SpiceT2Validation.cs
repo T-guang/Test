@@ -29,6 +29,13 @@ namespace ElectricalSim.Spice.T2
             ExpectDiodeWireOrderDoesNotAffectNetlist();
             ExpectDiodeWireDirectionDoesNotAffectNetlist();
             ExpectDiodeNotParameterEditable();
+            ExpectVoltageProbeNotInNetlist();
+            ExpectVoltageProbeNotParameterEditable();
+            ExpectVoltageProbeWireOrderDoesNotAffectNetlist();
+            ExpectVoltageProbeWireDirectionDoesNotAffectNetlist();
+            ExpectVoltageProbeComponentOrderDoesNotAffectNetlist();
+            ExpectVoltageProbeSameNodeNoShortDiagnostic();
+            ExpectVoltageProbeDoesNotBridgeFloatingSubcircuit();
         }
 
         public static async System.Threading.Tasks.Task<List<SpiceSimulationResult>> RunIntegrationChecksAsync()
@@ -51,6 +58,16 @@ namespace ElectricalSim.Spice.T2
             await VerifyDeletedWireBlocksSimulationAsync(service).ConfigureAwait(false);
             await VerifyFloatingSubcircuitsBlockSimulationAsync(service).ConfigureAwait(false);
             await VerifyMultipleGroundSimulationAsync(service).ConfigureAwait(false);
+            // 电压探针：基础差分、非侵入、双探针、无效连接四组。
+            results.Add(await VerifyVoltageProbeAcrossSource(service).ConfigureAwait(false));
+            results.Add(await VerifyReversedVoltageProbe(service).ConfigureAwait(false));
+            results.Add(await VerifyVoltageProbeSameNode(service).ConfigureAwait(false));
+            results.Add(await VerifyVoltageProbeNonInvasive(service).ConfigureAwait(false));
+            results.Add(await VerifyTwoVoltageProbes(service).ConfigureAwait(false));
+            await VerifyVoltageProbeOnlyPositiveConnectedAsync(service).ConfigureAwait(false);
+            await VerifyVoltageProbeBothDisconnectedAsync(service).ConfigureAwait(false);
+            await VerifyVoltageProbeOnFloatingSubcircuitAsync(service).ConfigureAwait(false);
+            await VerifyVoltageProbeWithoutGroundAsync(service).ConfigureAwait(false);
             return results;
         }
 
@@ -289,6 +306,220 @@ namespace ElectricalSim.Spice.T2
             if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 0.7d)) throw new InvalidOperationException("Silicon diode must not accept parameter writes (0.7 V伪造值).");
             if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 1d)) throw new InvalidOperationException("Silicon diode must not accept any positive parameter write.");
             if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 0d)) throw new InvalidOperationException("Silicon diode must not accept zero parameter write.");
+        }
+
+        // 电压探针不得在网表中输出 R/V/I/D/L/C 元件行，也不得分配 SPICE 名称。
+        private static void ExpectVoltageProbeNotInNetlist()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.VoltageProbeAcrossSource());
+            if (!graph.IsValid) throw new InvalidOperationException("Voltage probe fixture should produce a valid graph.");
+            if (graph.SpiceNameByComponentId.ContainsKey("vprobe-1")) throw new InvalidOperationException("Voltage probe must not be assigned a SPICE element name.");
+            if (graph.ComponentIdBySpiceName.Values.Contains("vprobe-1")) throw new InvalidOperationException("Voltage probe instance id must not appear in the SPICE name reverse map.");
+
+            var netlist = SpiceNetlistBuilder.BuildDcOperatingPoint(SpiceT2Fixtures.VoltageProbeAcrossSource(), graph).Content;
+            // 探针不得产生独立元件行：网表中不得出现以 VP 开头的 SPICE 实例名。
+            foreach (var line in netlist.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith("*", StringComparison.Ordinal) || trimmed.StartsWith(".", StringComparison.Ordinal)) continue;
+                if (trimmed.StartsWith("VP", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Voltage probe must not emit a VP element line in the netlist: " + trimmed);
+            }
+            // 探针不得注入电流，网表不得为其输出 print @VP[id] / print i(VP...) 之类的支路请求。
+            if (netlist.Contains("print @VP") || netlist.Contains("print i(VP")) throw new InvalidOperationException("Voltage probe must not request a branch current from ngspice.");
+        }
+
+        // 电压探针不得接受任何参数写入（含伪造 SiValue）。
+        private static void ExpectVoltageProbeNotParameterEditable()
+        {
+            if (SpiceParameterUnits.UnitsFor(SpiceComponentKind.VoltageProbe).Length != 0) throw new InvalidOperationException("Voltage probe must expose an empty parameter unit array.");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.VoltageProbe, 10d)) throw new InvalidOperationException("Voltage probe must not accept parameter writes (10 V伪造值).");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.VoltageProbe, 1d)) throw new InvalidOperationException("Voltage probe must not accept any positive parameter write.");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.VoltageProbe, 0d)) throw new InvalidOperationException("Voltage probe must not accept zero parameter write.");
+        }
+
+        private static void ExpectVoltageProbeWireOrderDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.VoltageProbeAcrossSource();
+            var reordered = SpiceT2Fixtures.VoltageProbeAcrossSource();
+            var wires = reordered.Wires.AsEnumerable().Reverse().ToList();
+            reordered.Wires.Clear();
+            reordered.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reordered, "Voltage probe wire order");
+        }
+
+        private static void ExpectVoltageProbeWireDirectionDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.VoltageProbeAcrossSource();
+            var reversedEndpoints = SpiceT2Fixtures.VoltageProbeAcrossSource();
+            var wires = reversedEndpoints.Wires.Select(wire => new SpiceWireModel(wire.End, wire.Start)).ToList();
+            reversedEndpoints.Wires.Clear();
+            reversedEndpoints.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reversedEndpoints, "Voltage probe wire direction");
+        }
+
+        // 元件创建顺序变化不得改变图/网表语义（图构建器按 Kind+InstanceId 排序分配 SPICE 名称）。
+        private static void ExpectVoltageProbeComponentOrderDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.VoltageProbeAcrossSource();
+            var reordered = new SpiceCircuitModel();
+            // 故意把探针放到最前面，电源/电阻/地放到最后。
+            reordered.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            reordered.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            reordered.Components.Add(SpiceComponentModel.Ground("ground"));
+            reordered.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            SpiceT2Fixtures.Wire(reordered, "source", "positive", "r1", "positive");
+            SpiceT2Fixtures.Wire(reordered, "source", "negative", "ground", "ground");
+            SpiceT2Fixtures.Wire(reordered, "r1", "negative", "ground", "ground");
+            SpiceT2Fixtures.Wire(reordered, "vprobe-1", "positive", "source", "positive");
+            SpiceT2Fixtures.Wire(reordered, "vprobe-1", "negative", "ground", "ground");
+            ExpectEquivalentGraphAndNetlist(first, reordered, "Voltage probe component order");
+        }
+
+        // 探针两端接同一节点是合法的 0 V 测量场景，不得触发 SPICE_COMPONENT_SHORTED 警告。
+        private static void ExpectVoltageProbeSameNodeNoShortDiagnostic()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.VoltageProbeSameNode());
+            if (!graph.IsValid) throw new InvalidOperationException("Voltage probe across the same node should produce a valid graph.");
+            if (graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_COMPONENT_SHORTED" && diagnostic.ComponentId == "vprobe-1"))
+            {
+                throw new InvalidOperationException("Voltage probe across the same node must not raise a short diagnostic.");
+            }
+        }
+
+        // 探针不得把浮空子回路桥接到地：浮空子回路仍须被 SPICE_FLOATING_SUBCIRCUIT 拦截。
+        private static void ExpectVoltageProbeDoesNotBridgeFloatingSubcircuit()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.VoltageProbeOnFloatingSubcircuit());
+            if (graph.IsValid) throw new InvalidOperationException("Voltage probe must not bridge a floating subcircuit to ground.");
+            if (!graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT"))
+            {
+                throw new InvalidOperationException("Floating subcircuit diagnostic must remain when a probe is attached.");
+            }
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyVoltageProbeAcrossSource(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.VoltageProbeAcrossSource()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var probe = result.ComponentResults["vprobe-1"];
+            if (probe == null) throw new InvalidOperationException("Voltage probe result is missing the vprobe-1 entry.");
+            ExpectNear(probe.Voltage, 10d, VoltageTolerance, "voltage probe differential voltage (+10 V)");
+            ExpectNear(probe.Current, 0d, CurrentTolerance, "voltage probe current must be zero");
+            if (probe.VoltageDirection != "V-plus-to-V-minus") throw new InvalidOperationException("Voltage probe direction must read V-plus-to-V-minus.");
+            if (!result.GeneratedNetlistContent.Contains("print v(")) throw new InvalidOperationException("Voltage probe fixture must still rely on ngspice node voltage prints.");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyReversedVoltageProbe(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.ReversedVoltageProbeAcrossSource()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var probe = result.ComponentResults["vprobe-1"];
+            if (probe == null) throw new InvalidOperationException("Reversed voltage probe result is missing the vprobe-1 entry.");
+            ExpectNear(probe.Voltage, -10d, VoltageTolerance, "reversed voltage probe differential voltage (-10 V)");
+            ExpectNear(probe.Current, 0d, CurrentTolerance, "reversed voltage probe current must be zero");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyVoltageProbeSameNode(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.VoltageProbeSameNode()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var probe = result.ComponentResults["vprobe-1"];
+            if (probe == null) throw new InvalidOperationException("Same-node voltage probe result is missing the vprobe-1 entry.");
+            ExpectNear(probe.Voltage, 0d, VoltageTolerance, "same-node voltage probe differential voltage (0 V)");
+            return result;
+        }
+
+        // 非侵入性：加入探针后电阻电流和节点电压必须保持不变，且网表与无探针基线字节一致。
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyVoltageProbeNonInvasive(SpiceDcSimulationService service)
+        {
+            var baseline = await service.SimulateAsync(SpiceT2Fixtures.SingleResistor(1000d)).ConfigureAwait(false);
+            ExpectSuccess(baseline);
+            var baselineCurrent = baseline.ComponentResults["r1"].Current;
+            var baselineNodeVoltage = GetOnlyPositiveNode(baseline);
+
+            var withProbe = await service.SimulateAsync(SpiceT2Fixtures.VoltageProbeAcrossSource()).ConfigureAwait(false);
+            ExpectSuccess(withProbe);
+            ExpectNear(withProbe.ComponentResults["r1"].Current, baselineCurrent, CurrentTolerance, "resistor current must not change when probe is added");
+            ExpectNear(GetOnlyPositiveNode(withProbe), baselineNodeVoltage, VoltageTolerance, "node voltage must not change when probe is added");
+            ExpectNear(withProbe.ComponentResults["source"].Current, baseline.ComponentResults["source"].Current, CurrentTolerance, "source current must not change when probe is added");
+
+            // 网表语义稳定：探针不得新增元件行或支路请求，与基线网表字节一致。
+            if (baseline.GeneratedNetlistContent != withProbe.GeneratedNetlistContent)
+            {
+                throw new InvalidOperationException("Voltage probe must not alter the generated netlist content.");
+            }
+            return withProbe;
+        }
+
+        // 双探针：两只探针同时跨接在同一电源两端，结果互不冲突且实例名稳定。
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyTwoVoltageProbes(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.TwoVoltageProbesAcrossSource()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var probe1 = result.ComponentResults["vprobe-1"];
+            var probe2 = result.ComponentResults["vprobe-2"];
+            if (probe1 == null || probe2 == null) throw new InvalidOperationException("Both voltage probe results must be present.");
+            ExpectNear(probe1.Voltage, 10d, VoltageTolerance, "first probe differential voltage");
+            ExpectNear(probe2.Voltage, 10d, VoltageTolerance, "second probe differential voltage");
+            // 实例名稳定：探针不分配 SPICE 名称，结果键仍为用户 instanceId。
+            if (!result.ComponentResults.ContainsKey("vprobe-1") || !result.ComponentResults.ContainsKey("vprobe-2"))
+            {
+                throw new InvalidOperationException("Voltage probe result keys must remain stable instance ids.");
+            }
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task VerifyVoltageProbeOnlyPositiveConnectedAsync(SpiceDcSimulationService service)
+        {
+            var circuit = SpiceT2Fixtures.VoltageProbeOnlyPositiveConnected();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_TERMINAL" && diagnostic.ComponentId == "vprobe-1"))
+            {
+                throw new InvalidOperationException("Probe with only V+ connected must be rejected by SPICE_FLOATING_TERMINAL on the probe.");
+            }
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Probe with only V+ connected reached ngspice instead of being rejected before execution.");
+            if (result.ComponentResults.ContainsKey("vprobe-1")) throw new InvalidOperationException("Probe with only V+ connected must not produce a fabricated voltage result.");
+        }
+
+        private static async System.Threading.Tasks.Task VerifyVoltageProbeBothDisconnectedAsync(SpiceDcSimulationService service)
+        {
+            var circuit = SpiceT2Fixtures.VoltageProbeBothTerminalsDisconnected();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_TERMINAL" && diagnostic.ComponentId == "vprobe-1"))
+            {
+                throw new InvalidOperationException("Probe with both terminals disconnected must be rejected by SPICE_FLOATING_TERMINAL on the probe.");
+            }
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Probe with both terminals disconnected reached ngspice instead of being rejected before execution.");
+            if (result.ComponentResults.ContainsKey("vprobe-1")) throw new InvalidOperationException("Probe with both terminals disconnected must not produce a fabricated voltage result.");
+        }
+
+        private static async System.Threading.Tasks.Task VerifyVoltageProbeOnFloatingSubcircuitAsync(SpiceDcSimulationService service)
+        {
+            var circuit = SpiceT2Fixtures.VoltageProbeOnFloatingSubcircuit();
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Probe attached to a floating subcircuit reached ngspice instead of being rejected before execution.");
+            if (!result.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT"))
+            {
+                throw new InvalidOperationException("Floating subcircuit diagnostic must remain when a probe is attached.");
+            }
+            if (result.ComponentResults.ContainsKey("vprobe-1")) throw new InvalidOperationException("Probe on a floating subcircuit must not produce a fabricated voltage result.");
+        }
+
+        private static async System.Threading.Tasks.Task VerifyVoltageProbeWithoutGroundAsync(SpiceDcSimulationService service)
+        {
+            var circuit = SpiceT2Fixtures.VoltageProbeWithoutGround();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (graph.IsValid || !graph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_GROUND_MISSING"))
+            {
+                throw new InvalidOperationException("Probe fixture without GND must be rejected by SPICE_GROUND_MISSING.");
+            }
+            var result = await service.SimulateAsync(circuit).ConfigureAwait(false);
+            if (result.Success || result.RawNgspiceResult != null) throw new InvalidOperationException("Probe fixture without GND reached ngspice instead of being rejected before execution.");
+            if (result.ComponentResults.ContainsKey("vprobe-1")) throw new InvalidOperationException("Probe without GND must not produce a fabricated voltage result.");
         }
 
         private static async System.Threading.Tasks.Task VerifyDeletedWireBlocksSimulationAsync(SpiceDcSimulationService service)

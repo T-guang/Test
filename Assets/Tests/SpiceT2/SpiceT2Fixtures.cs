@@ -165,6 +165,137 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        // 电压探针跨接在 10 V 电源两端：V+ -> source+、V- -> ground。期望差分电压约 +10 V。
+        public static SpiceCircuitModel VoltageProbeAcrossSource()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "source", "positive");
+            Wire(circuit, "vprobe-1", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 电压探针反接：V+ -> ground、V- -> source+。期望差分电压约 -10 V。
+        public static SpiceCircuitModel ReversedVoltageProbeAcrossSource()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "ground", "ground");
+            Wire(circuit, "vprobe-1", "negative", "source", "positive");
+            return circuit;
+        }
+
+        // 电压探针两端接在同一节点（source+ 与 r1+ 同属一个电气节点）。期望差分电压约 0 V。
+        public static SpiceCircuitModel VoltageProbeSameNode()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "source", "positive");
+            Wire(circuit, "vprobe-1", "negative", "r1", "positive");
+            return circuit;
+        }
+
+        // 两只电压探针同时跨接在电源两端，用于校验双探针结果不冲突且实例名稳定。
+        public static SpiceCircuitModel TwoVoltageProbesAcrossSource()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-2"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "source", "positive");
+            Wire(circuit, "vprobe-1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-2", "positive", "source", "positive");
+            Wire(circuit, "vprobe-2", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 电压探针仅 V+ 连接，V- 浮空。应被 SPICE_FLOATING_TERMINAL 拦截。
+        public static SpiceCircuitModel VoltageProbeOnlyPositiveConnected()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "source", "positive");
+            return circuit;
+        }
+
+        // 电压探针两端均未接。应被 SPICE_FLOATING_TERMINAL 拦截。
+        public static SpiceCircuitModel VoltageProbeBothTerminalsDisconnected()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 电压探针接入浮空子回路。探针不得把浮空子回路桥接到地。
+        public static SpiceCircuitModel VoltageProbeOnFloatingSubcircuit()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            // 浮空子回路
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("v2", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r2", 1000d));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            Wire(circuit, "v2", "positive", "r2", "positive");
+            Wire(circuit, "r2", "negative", "v2", "negative");
+            Wire(circuit, "vprobe-1", "positive", "v2", "positive");
+            Wire(circuit, "vprobe-1", "negative", "v2", "negative");
+            return circuit;
+        }
+
+        // 电压探针跨接在电源两端，但电路缺少 GND。应被 SPICE_GROUND_MISSING 拦截。
+        public static SpiceCircuitModel VoltageProbeWithoutGround()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 10d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "r1", "negative", "source", "negative");
+            Wire(circuit, "vprobe-1", "positive", "source", "positive");
+            Wire(circuit, "vprobe-1", "negative", "source", "negative");
+            return circuit;
+        }
+
         public static SpiceCircuitModel GroundedAndFloatingCircuits()
         {
             var circuit = SingleResistor();

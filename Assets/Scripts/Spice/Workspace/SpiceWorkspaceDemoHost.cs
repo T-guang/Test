@@ -135,6 +135,7 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Capacitor, "电容", "1 μF", 0, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
 
             StyleAssistant(bindings);
         }
@@ -270,6 +271,15 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "CoilC", new Vector2(48f, -12f), new Vector2(60f, 12f));
                     AddLine(symbol, "CoilD", new Vector2(60f, 12f), new Vector2(72f, 0f));
                     AddLine(symbol, "LeadRight", new Vector2(72f, 0f), new Vector2(94f, 0f));
+                    break;
+                case SpiceComponentKind.VoltageProbe:
+                    AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(38f, 0f));
+                    AddLine(symbol, "LeadRight", new Vector2(62f, 0f), new Vector2(92f, 0f));
+                    AddLine(symbol, "BoxTop", new Vector2(38f, -14f), new Vector2(62f, -14f));
+                    AddLine(symbol, "BoxBottom", new Vector2(38f, 14f), new Vector2(62f, 14f));
+                    AddLine(symbol, "BoxLeft", new Vector2(38f, -14f), new Vector2(38f, 14f));
+                    AddLine(symbol, "BoxRight", new Vector2(62f, -14f), new Vector2(62f, 14f));
+                    AddText(symbol, "V", "V", new Vector2(50f, 0f), 14);
                     break;
                 default:
                     AddLine(symbol, "Stem", new Vector2(51f, 20f), new Vector2(51f, -4f));

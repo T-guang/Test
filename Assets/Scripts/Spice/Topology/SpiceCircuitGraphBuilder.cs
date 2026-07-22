@@ -129,9 +129,10 @@ namespace ElectricalSim.Spice.Topology
             }
 
             // 内部 SPICE 名称与用户 instanceId 分离，以避免中文、空格或特殊字符进入网表。
+            // 电压探针不参与网表，不分配 SPICE 名称，也不参与同节点短路诊断（两端同节点是正常的 0V 测量场景）。
             foreach (var component in components.Values.OrderBy(component => component.Kind).ThenBy(component => component.InstanceId, StringComparer.Ordinal))
             {
-                if (component.Kind == SpiceComponentKind.Ground) continue;
+                if (component.Kind == SpiceComponentKind.Ground || component.Kind == SpiceComponentKind.VoltageProbe) continue;
                 var prefix = GetPrefix(component.Kind);
                 var number = graph.SpiceNameByComponentId.Count(existing => existing.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) + 1;
                 var name = prefix + number;
@@ -171,7 +172,7 @@ namespace ElectricalSim.Spice.Topology
             // so traversal from the ground root can reject a complete but ungrounded subcircuit.
             var neighbors = roots.ToDictionary(group => group.Root, group => new HashSet<int>());
             var componentIdsByRoot = roots.ToDictionary(group => group.Root, group => new HashSet<string>(StringComparer.Ordinal));
-            foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground))
+            foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground && component.Kind != SpiceComponentKind.VoltageProbe))
             {
                 var positiveRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)]);
                 var negativeRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)]);

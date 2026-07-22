@@ -108,6 +108,14 @@ namespace ElectricalSim.Spice.Core
                     componentResult.ResultStatus = SpiceResultStatus.DcSteadyStateOpenCircuit;
                     componentResult.Notes = "DcSteadyStateOpenCircuit";
                 }
+                else if (component.Kind == SpiceComponentKind.VoltageProbe)
+                {
+                    // 电压探针不注入电流，Vprobe = V(V+) - V(V-) 已由通用 voltage 计算得到。
+                    componentResult.Current = 0d;
+                    componentResult.VoltageDirection = "V-plus-to-V-minus";
+                    componentResult.CurrentDirection = "V-plus-to-V-minus";
+                    componentResult.Notes = "差分电压测量";
+                }
                 else
                 {
                     var spiceName = graph.SpiceNameByComponentId[component.InstanceId];

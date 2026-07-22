@@ -15,7 +15,8 @@ namespace ElectricalSim.Spice.Core
         Resistor,
         Capacitor,
         Inductor,
-        Ground
+        Ground,
+        VoltageProbe
     }
 
     public enum SpiceParameterKey
@@ -88,6 +89,15 @@ namespace ElectricalSim.Spice.Core
         public static SpiceComponentModel Ground(string instanceId)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.Ground);
+        }
+
+        /// <summary>
+        /// 两端差分电压探针。positive=V+、negative=V-；测量定义为 Vprobe = V(V+) - V(V-)。
+        /// 探针不产生 SPICE 元件行，不注入电流，不参与 component-graph 连通性判断。
+        /// </summary>
+        public static SpiceComponentModel VoltageProbe(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.VoltageProbe);
         }
 
         public SpiceComponentModel With(SpiceParameterKey key, double value)

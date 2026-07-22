@@ -383,6 +383,12 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
 
+            if (component.Kind == SpiceComponentKind.VoltageProbe)
+            {
+                if (statusText != null) statusText.text = "电压探针无可编辑参数。";
+                return;
+            }
+
             if (component.Kind == SpiceComponentKind.Ground)
             {
                 if (statusText != null) statusText.text = "该器件无可编辑参数。";
@@ -628,6 +634,7 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.Capacitor, "电容", "1 uF", 0, 1);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
+            CreatePaletteCard(palette.transform, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
 
             var workspace = bindings.WorkspaceViewport;
             WorkspaceRect = workspace;
@@ -906,6 +913,14 @@ namespace ElectricalSim.Spice.Workspace
                 unitButton.interactable = false;
                 return;
             }
+            if (selectedComponent.Kind == SpiceComponentKind.VoltageProbe)
+            {
+                parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
+                parameterInput.text = "差分电压测量";
+                parameterInput.interactable = false;
+                unitButton.interactable = false;
+                return;
+            }
             if (selectedComponent.Kind == SpiceComponentKind.IdealSwitch)
             {
                 parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
@@ -968,7 +983,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string PaletteLabel(SpiceComponentKind kind)
         {
-            return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : "接地";
+            return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : kind == SpiceComponentKind.VoltageProbe ? "电压探针" : "接地";
         }
 
         private static string FormatResult(SpiceSimulationResult result)
@@ -980,8 +995,8 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string VoltageLabel(SpiceComponentResult value)
         {
-            // 二极管电压按 A→K 报告为 VAK，避免与“正端 → 负端”通用文案混淆极性。
-            return value.ComponentKind == "SiliconDiode" ? "VAK" : "电压";
+            // 二极管电压按 A→K 报告为 VAK，电压探针按 V+→V- 报告为差分电压，避免与“正端 → 负端”通用文案混淆极性。
+            return value.ComponentKind == "SiliconDiode" ? "VAK" : value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
         }
 
         private static string DirectionLabel(string direction)
@@ -989,6 +1004,7 @@ namespace ElectricalSim.Spice.Workspace
             return direction == "A-to-K" ? "A → K"
                 : direction == "P-to-N" ? "P → N"
                 : direction == "A-to-B" ? "A → B"
+                : direction == "V-plus-to-V-minus" ? "V+ → V-"
                 : "正端 → 负端";
         }
 
