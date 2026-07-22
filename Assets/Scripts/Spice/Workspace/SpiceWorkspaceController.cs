@@ -989,7 +989,7 @@ namespace ElectricalSim.Spice.Workspace
         private static string FormatResult(SpiceSimulationResult result)
         {
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
-                value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n参考方向：" + DirectionLabel(value.CurrentDirection) +
+                value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n" + FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
                 (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
         }
 
@@ -997,6 +997,13 @@ namespace ElectricalSim.Spice.Workspace
         {
             // 二极管电压按 A→K 报告为 VAK，电压探针按 V+→V- 报告为差分电压，避免与“正端 → 负端”通用文案混淆极性。
             return value.ComponentKind == "SiliconDiode" ? "VAK" : value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
+        }
+
+        private static string FormatCurrentLine(SpiceComponentResult value)
+        {
+            // 电压探针不注入电流，内部 Current=0 仅为占位值，不得作为测量值展示，故整行省略。
+            if (value.ComponentKind == "VoltageProbe") return string.Empty;
+            return "电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n";
         }
 
         private static string DirectionLabel(string direction)
