@@ -53,6 +53,7 @@ namespace ElectricalSim.Spice.Workspace
         private void Awake()
         {
             ValidateBindings();
+            modeController.ConfigurePopupLayer(popupLayer);
             ApplyMenuLayout();
             dropdownButton.onClick.AddListener(ToggleMenu);
             controlCircuitOption.onClick.AddListener(SelectControlCircuit);

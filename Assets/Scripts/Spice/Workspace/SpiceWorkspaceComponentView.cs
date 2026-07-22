@@ -14,7 +14,7 @@ namespace ElectricalSim.Spice.Workspace
     /// AnnotationRoot 保持水平显示设计编号和工程单位参数。旋转只改变视觉位置，
     /// 不写入 SpiceCircuitModel，也不会使 DC 结果过期。
     /// </summary>
-    public sealed class SpiceWorkspaceComponentView : MonoBehaviour, IBeginDragHandler, IDragHandler, IPointerClickHandler
+    public sealed class SpiceWorkspaceComponentView : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
     {
         private readonly Dictionary<string, RectTransform> terminalRects = new Dictionary<string, RectTransform>();
         private readonly Dictionary<string, Image> terminalImages = new Dictionary<string, Image>();
@@ -28,6 +28,7 @@ namespace ElectricalSim.Spice.Workspace
         private Text summaryText;
         private Vector2 dragOffset;
         private int rotationQuarterTurns;
+        private bool dragOccurred;
 
         public string InstanceId => data.InstanceId;
         public SpiceComponentKind Kind => data.Kind;
@@ -91,10 +92,25 @@ namespace ElectricalSim.Spice.Workspace
 
         public void SelectTerminal(string terminalId) => owner.HandleTerminalClick(this, terminalId);
         public void HoverTerminal(string terminalId, bool entered) => owner.HandleTerminalHover(this, terminalId, entered);
-        public void OnPointerClick(PointerEventData eventData) => owner.SelectComponent(this);
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            dragOccurred = false;
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (dragOccurred || eventData.dragging)
+            {
+                return;
+            }
+
+            owner.HandleComponentPointerClick(this, eventData);
+        }
 
         public void OnBeginDrag(PointerEventData eventData)
         {
+            dragOccurred = true;
             owner.SelectComponent(this);
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(owner.WorkspaceRect, eventData.position, eventData.pressEventCamera, out var pointer)) return;
             dragOffset = rectTransform.anchoredPosition - pointer;
@@ -110,6 +126,10 @@ namespace ElectricalSim.Spice.Workspace
             position.y = Mathf.Clamp(position.y, bounds.yMin + half.y, bounds.yMax - half.y);
             rectTransform.anchoredPosition = position;
             owner.MoveComponent(data.InstanceId, position);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
         }
 
         private void BuildSelectionFrame()

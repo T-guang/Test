@@ -22,9 +22,12 @@ namespace ElectricalSim.Spice.Workspace
         [SerializeField] private GameObject controlWorkspace;
         [SerializeField] private GameObject localInspectorPanel;
         [SerializeField] private GameObject spiceModeRoot;
+        private RectTransform popupLayer;
         private bool initialized;
 
         public SimulationWorkspaceMode CurrentMode { get; private set; } = SimulationWorkspaceMode.ControlCircuit;
+        public RectTransform PopupLayer => popupLayer;
+        public event Action<SimulationWorkspaceMode> ModeChanged;
 
         /// <summary>仅供场景装配器写入显式内容 Root；不会查询或创建页面对象。</summary>
         public void Configure(
@@ -46,6 +49,11 @@ namespace ElectricalSim.Spice.Workspace
             controlWorkspace = workspace;
             localInspectorPanel = inspector;
             spiceModeRoot = spiceRoot;
+        }
+
+        public void ConfigurePopupLayer(RectTransform layer)
+        {
+            popupLayer = layer ?? throw new ArgumentNullException(nameof(layer));
         }
 
         private void Awake()
@@ -104,6 +112,7 @@ namespace ElectricalSim.Spice.Workspace
             localInspectorPanel.SetActive(!useSpice);
             spiceModeRoot.SetActive(useSpice);
             CurrentMode = mode;
+            ModeChanged?.Invoke(mode);
         }
 
         private void EnsureInitialized()

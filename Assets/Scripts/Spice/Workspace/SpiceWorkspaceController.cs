@@ -68,6 +68,8 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform WorkspaceRect { get; private set; }
         public RectTransform WireLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
+        public bool HasPendingWire => pendingComponent != null;
+        public event Action<SpiceWorkspaceComponentData> ParameterDialogRequested;
 
         /// <summary>绑定外部宿主后初始化。本控制器不创建 Canvas、EventSystem 或 Camera。</summary>
         public void Initialize(SpiceWorkspaceViewBindings hostBindings)
@@ -205,6 +207,34 @@ namespace ElectricalSim.Spice.Workspace
             if (component == null || !SpiceParameterUnits.TryToSi(component.Kind, displayValue, unit, out var siValue)) return false;
             if (!Model.TrySetParameter(instanceId, siValue)) return false;
             componentViews[instanceId].RefreshAnnotation();
+            if (selectedComponent != null && string.Equals(selectedComponent.InstanceId, instanceId, StringComparison.Ordinal))
+            {
+                RefreshParameterPanel();
+            }
+            return true;
+        }
+
+        public bool TryApplyParameterText(string instanceId, string rawValue, string unit, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                error = "请输入参数值。";
+                return false;
+            }
+
+            if (!double.TryParse(rawValue.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ||
+                !TrySetParameter(instanceId, value, unit))
+            {
+                error = "参数无效，请输入当前器件支持范围内的数值。";
+                return false;
+            }
+
+            if (statusText != null)
+            {
+                statusText.text = "参数已更新，请重新运行计算。";
+            }
+
             return true;
         }
 
@@ -300,6 +330,40 @@ namespace ElectricalSim.Spice.Workspace
                 RefreshParameterPanel();
             }
             UpdateRotateAvailability();
+        }
+
+        public void HandleComponentPointerClick(SpiceWorkspaceComponentView component, PointerEventData eventData)
+        {
+            if (component == null || eventData == null || eventData.button != PointerEventData.InputButton.Left)
+            {
+                return;
+            }
+
+            if (HasPendingWire)
+            {
+                if (statusText != null) statusText.text = "请先完成或取消当前接线。";
+                return;
+            }
+
+            SelectComponent(component);
+            if (eventData.clickCount < 2 || eventData.dragging)
+            {
+                return;
+            }
+
+            if (ResultState == SpiceWorkspaceResultState.Running)
+            {
+                if (statusText != null) statusText.text = "仿真计算进行中，请稍后编辑参数。";
+                return;
+            }
+
+            if (component.Kind == SpiceComponentKind.Ground)
+            {
+                if (statusText != null) statusText.text = "该器件无可编辑参数。";
+                return;
+            }
+
+            ParameterDialogRequested?.Invoke(component.Data);
         }
 
         public void SelectWire(SpiceWorkspaceWireView wire)
@@ -832,7 +896,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void ApplyParameter()
         {
-            if (selectedComponent == null || !double.TryParse(parameterInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !TrySetParameter(selectedComponent.InstanceId, value, currentUnits[unitIndex]))
+            if (selectedComponent == null || currentUnits.Length == 0 || !TryApplyParameterText(selectedComponent.InstanceId, parameterInput.text, currentUnits[unitIndex], out _))
             {
                 statusText.text = "参数无效";
                 return;

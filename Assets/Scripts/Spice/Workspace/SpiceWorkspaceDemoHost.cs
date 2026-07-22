@@ -17,6 +17,8 @@ namespace ElectricalSim.Spice.Workspace
         [SerializeField] private SpiceWorkspaceController workspaceController;
 
         private bool initialized;
+        private SimulationModeController modeController;
+        private SpiceComponentParameterDialog parameterDialog;
 
         public SpiceWorkspaceController Controller => workspaceController;
         public bool IsInitialized => initialized;
@@ -36,6 +38,45 @@ namespace ElectricalSim.Spice.Workspace
         private void Awake()
         {
             Initialize();
+        }
+
+        private void Start()
+        {
+            modeController = GetComponent<SimulationModeController>();
+            if (modeController == null || modeController.PopupLayer == null)
+            {
+                throw new InvalidOperationException("Spice Demo host requires the configured simulation mode popup layer.");
+            }
+
+            var dialogRoot = new GameObject("SpiceParameterDialog", typeof(RectTransform), typeof(SpiceComponentParameterDialog));
+            dialogRoot.transform.SetParent(modeController.PopupLayer, false);
+            parameterDialog = dialogRoot.GetComponent<SpiceComponentParameterDialog>();
+            parameterDialog.Initialize(modeController.PopupLayer, workspaceController);
+            workspaceController.ParameterDialogRequested += parameterDialog.Open;
+            modeController.ModeChanged += HandleModeChanged;
+        }
+
+        private void OnDestroy()
+        {
+            if (workspaceController != null && parameterDialog != null)
+            {
+                workspaceController.ParameterDialogRequested -= parameterDialog.Open;
+            }
+
+            if (modeController != null)
+            {
+                modeController.ModeChanged -= HandleModeChanged;
+            }
+
+            parameterDialog?.Dispose();
+        }
+
+        private void HandleModeChanged(SimulationWorkspaceMode mode)
+        {
+            if (mode != SimulationWorkspaceMode.SpiceDc)
+            {
+                parameterDialog?.CloseWithoutApply();
+            }
         }
 
         /// <summary>
