@@ -31,6 +31,8 @@ namespace ElectricalSim.Core
         public bool ManualRouteHorizontal => manualRouteHorizontal;
         public float ManualRouteAxis => manualRouteAxis;
         public IReadOnlyList<Vector2> ManualRoutePoints => manualPoints;
+        // Full paths are persisted verbatim; legacy six-point routes retain their axis-based behavior.
+        public bool PreservesManualRoutePoints => preserveManualRoutePoints;
 
         private RectTransform rectTransform;
         private WorkspaceController workspace;

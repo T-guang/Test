@@ -379,7 +379,8 @@ namespace ElectricalSim.UI
                     hasManualRoute = wire.HasManualRoute,
                     manualRouteHorizontal = wire.ManualRouteHorizontal,
                     manualRouteAxis = wire.ManualRouteAxis,
-                    manualRoutePoints = new List<Vector2>(wire.ManualRoutePoints)
+                    manualRoutePoints = new List<Vector2>(wire.ManualRoutePoints),
+                    manualRoutePointsAreFullPath = wire.PreservesManualRoutePoints
                 });
             }
 
@@ -424,7 +425,14 @@ namespace ElectricalSim.UI
                 {
                     if (item.manualRoutePoints != null && item.manualRoutePoints.Count >= 2)
                     {
-                        wire.SetManualRoutePoints(item.manualRoutePoints);
+                        if (item.manualRoutePointsAreFullPath)
+                        {
+                            wire.SetManualRoutePointsAsFullPath(item.manualRoutePoints);
+                        }
+                        else
+                        {
+                            wire.SetManualRoutePoints(item.manualRoutePoints);
+                        }
                     }
                     else
                     {
@@ -710,6 +718,8 @@ namespace ElectricalSim.UI
             public bool manualRouteHorizontal;
             public float manualRouteAxis;
             public List<Vector2> manualRoutePoints = new List<Vector2>();
+            // Missing in historical JSON, which deliberately keeps the legacy route interpretation.
+            public bool manualRoutePointsAreFullPath;
         }
     }
 }
