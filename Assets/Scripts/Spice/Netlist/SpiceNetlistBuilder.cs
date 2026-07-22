@@ -59,6 +59,7 @@ namespace ElectricalSim.Spice.Netlist
             switch (component.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return component.GetRequiredParameter(SpiceParameterKey.DcVoltage);
+                case SpiceComponentKind.DcCurrentSource: return component.GetRequiredParameter(SpiceParameterKey.DcCurrent);
                 case SpiceComponentKind.Resistor: return component.GetRequiredParameter(SpiceParameterKey.Resistance);
                 case SpiceComponentKind.Capacitor: return component.GetRequiredParameter(SpiceParameterKey.Capacitance);
                 case SpiceComponentKind.Inductor: return component.GetRequiredParameter(SpiceParameterKey.Inductance);

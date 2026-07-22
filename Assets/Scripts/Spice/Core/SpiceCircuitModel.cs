@@ -9,6 +9,7 @@ namespace ElectricalSim.Spice.Core
     public enum SpiceComponentKind
     {
         DcVoltageSource,
+        DcCurrentSource,
         Resistor,
         Capacitor,
         Inductor,
@@ -18,6 +19,7 @@ namespace ElectricalSim.Spice.Core
     public enum SpiceParameterKey
     {
         DcVoltage,
+        DcCurrent,
         Resistance,
         Capacitance,
         Inductance
@@ -53,6 +55,11 @@ namespace ElectricalSim.Spice.Core
         public static SpiceComponentModel Resistor(string instanceId, double ohms)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.Resistor).With(SpiceParameterKey.Resistance, ohms);
+        }
+
+        public static SpiceComponentModel DcCurrentSource(string instanceId, double amps)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.DcCurrentSource).With(SpiceParameterKey.DcCurrent, amps);
         }
 
         public static SpiceComponentModel Capacitor(string instanceId, double farads)

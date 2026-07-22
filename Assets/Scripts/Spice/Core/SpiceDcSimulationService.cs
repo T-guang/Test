@@ -81,6 +81,13 @@ namespace ElectricalSim.Spice.Core
                 {
                     componentResult.Current = voltage / component.GetRequiredParameter(SpiceParameterKey.Resistance);
                 }
+                else if (component.Kind == SpiceComponentKind.DcCurrentSource)
+                {
+                    componentResult.Current = component.GetRequiredParameter(SpiceParameterKey.DcCurrent);
+                    componentResult.VoltageDirection = "P-to-N";
+                    componentResult.CurrentDirection = "P-to-N";
+                    componentResult.Notes = "设定电流：P → N";
+                }
                 else if (component.Kind == SpiceComponentKind.Capacitor)
                 {
                     componentResult.Current = 0d;

@@ -151,9 +151,9 @@ namespace ElectricalSim.Spice.Topology
                 }
             }
 
-            if (!components.Values.Any(component => component.Kind == SpiceComponentKind.DcVoltageSource))
+            if (!components.Values.Any(component => component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.DcCurrentSource))
             {
-                graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_MISSING", SpiceDiagnosticSeverity.Error, "The circuit contains no DC voltage source."));
+                graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_MISSING", SpiceDiagnosticSeverity.Error, "The circuit contains no independent DC source."));
             }
 
             return graph;
@@ -236,11 +236,13 @@ namespace ElectricalSim.Spice.Topology
             foreach (var component in components.Values)
             {
                 SpiceParameterKey? key = component.Kind == SpiceComponentKind.DcVoltageSource ? SpiceParameterKey.DcVoltage :
+                    component.Kind == SpiceComponentKind.DcCurrentSource ? SpiceParameterKey.DcCurrent :
                     component.Kind == SpiceComponentKind.Resistor ? SpiceParameterKey.Resistance :
                     component.Kind == SpiceComponentKind.Capacitor ? SpiceParameterKey.Capacitance :
                     component.Kind == SpiceComponentKind.Inductor ? SpiceParameterKey.Inductance : (SpiceParameterKey?)null;
                 if (!key.HasValue) continue;
-                if (!component.TryGetParameter(key.Value, out var value) || double.IsNaN(value) || double.IsInfinity(value) || (key.Value != SpiceParameterKey.DcVoltage && value <= 0d))
+                if (!component.TryGetParameter(key.Value, out var value) || double.IsNaN(value) || double.IsInfinity(value) ||
+                    (key.Value != SpiceParameterKey.DcVoltage && key.Value != SpiceParameterKey.DcCurrent && value <= 0d))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_INVALID_PARAMETER", SpiceDiagnosticSeverity.Error, "Component parameter is missing or outside the supported DC range.", component.InstanceId));
                 }
@@ -252,6 +254,7 @@ namespace ElectricalSim.Spice.Topology
             switch (kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return "V";
+                case SpiceComponentKind.DcCurrentSource: return "I";
                 case SpiceComponentKind.Resistor: return "R";
                 case SpiceComponentKind.Capacitor: return "C";
                 case SpiceComponentKind.Inductor: return "L";

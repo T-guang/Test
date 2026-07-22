@@ -32,6 +32,7 @@ namespace ElectricalSim.Spice.T2
             results.Add(await VerifySingleResistor(service, 1000d, 0.01d).ConfigureAwait(false));
             results.Add(await VerifySingleResistor(service, 2000d, 0.005d).ConfigureAwait(false));
             results.Add(await VerifyReversedSingleResistor(service).ConfigureAwait(false));
+            results.Add(await VerifyCurrentSource(service).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 1000d, 5d, 0.005d).ConfigureAwait(false));
             results.Add(await VerifyDivider(service, 3000d, 7.5d, 0.0025d).ConfigureAwait(false));
             results.Add(await VerifyParallel(service).ConfigureAwait(false));
@@ -64,6 +65,17 @@ namespace ElectricalSim.Spice.T2
             ExpectNear(result.ComponentResults["r1"].Voltage, -10d, VoltageTolerance, "reversed resistor voltage");
             ExpectNear(result.ComponentResults["r1"].Current, -0.005d, CurrentTolerance, "reversed resistor current");
             ExpectNear(result.ComponentResults["source"].Current, -0.005d, CurrentTolerance, "reversed resistor source current");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyCurrentSource(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.CurrentSourceAndResistor()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            ExpectNear(result.ComponentResults["r1"].Voltage, 1d, VoltageTolerance, "current source resistor voltage");
+            ExpectNear(result.ComponentResults["r1"].Current, 0.001d, CurrentTolerance, "current source resistor current");
+            ExpectNear(result.ComponentResults["current"].Current, 0.001d, CurrentTolerance, "current source configured current");
+            if (!result.GeneratedNetlistContent.Contains("I1")) throw new InvalidOperationException("DC current source was not emitted as an I-element.");
             return result;
         }
 

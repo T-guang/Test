@@ -203,6 +203,7 @@ namespace ElectricalSim.Spice.Workspace
         private static string DialogTitle(SpiceComponentKind kind)
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "编辑直流电压源参数" :
+                kind == SpiceComponentKind.DcCurrentSource ? "编辑直流电流源参数" :
                 kind == SpiceComponentKind.Resistor ? "编辑电阻参数" :
                 kind == SpiceComponentKind.Capacitor ? "编辑电容参数" : "编辑电感参数";
         }
@@ -210,6 +211,7 @@ namespace ElectricalSim.Spice.Workspace
         private static string ParameterName(SpiceComponentKind kind)
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "电压" :
+                kind == SpiceComponentKind.DcCurrentSource ? "电流" :
                 kind == SpiceComponentKind.Resistor ? "阻值" :
                 kind == SpiceComponentKind.Capacitor ? "电容量" : "电感量";
         }

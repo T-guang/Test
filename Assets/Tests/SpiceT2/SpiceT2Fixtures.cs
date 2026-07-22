@@ -28,6 +28,19 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        public static SpiceCircuitModel CurrentSourceAndResistor(double current = 0.001d)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcCurrentSource("current", current));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            // P -> N injects the configured current into the resistor node.
+            Wire(circuit, "current", "positive", "ground", "ground");
+            Wire(circuit, "current", "negative", "r1", "positive");
+            Wire(circuit, "r1", "negative", "ground", "ground");
+            return circuit;
+        }
+
         public static SpiceCircuitModel Divider(double r2Resistance = 1000d)
         {
             var circuit = new SpiceCircuitModel();

@@ -106,12 +106,14 @@ namespace ElectricalSim.Spice.Workspace
         public static bool IsValidParameter(SpiceComponentKind kind, double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
-            return kind == SpiceComponentKind.DcVoltageSource || (kind != SpiceComponentKind.Ground && value > 0d);
+            return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
+                (kind != SpiceComponentKind.Ground && value > 0d);
         }
 
         private static string BuildInstanceId(SpiceComponentKind kind, int number)
         {
             var prefix = kind == SpiceComponentKind.DcVoltageSource ? "source" :
+                kind == SpiceComponentKind.DcCurrentSource ? "current-source" :
                 kind == SpiceComponentKind.Resistor ? "resistor" :
                 kind == SpiceComponentKind.Capacitor ? "capacitor" :
                 kind == SpiceComponentKind.Inductor ? "inductor" : "ground";
@@ -121,6 +123,7 @@ namespace ElectricalSim.Spice.Workspace
         private static double DefaultValue(SpiceComponentKind kind)
         {
             return kind == SpiceComponentKind.DcVoltageSource ? 10d :
+                kind == SpiceComponentKind.DcCurrentSource ? 0.001d :
                 kind == SpiceComponentKind.Resistor ? 1000d :
                 kind == SpiceComponentKind.Capacitor ? 1e-6d :
                 kind == SpiceComponentKind.Inductor ? 0.01d : 0d;
@@ -152,6 +155,7 @@ namespace ElectricalSim.Spice.Workspace
             switch (Kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return SpiceComponentModel.DcVoltageSource(InstanceId, SiValue);
+                case SpiceComponentKind.DcCurrentSource: return SpiceComponentModel.DcCurrentSource(InstanceId, SiValue);
                 case SpiceComponentKind.Resistor: return SpiceComponentModel.Resistor(InstanceId, SiValue);
                 case SpiceComponentKind.Capacitor: return SpiceComponentModel.Capacitor(InstanceId, SiValue);
                 case SpiceComponentKind.Inductor: return SpiceComponentModel.Inductor(InstanceId, SiValue);
@@ -212,6 +216,7 @@ namespace ElectricalSim.Spice.Workspace
     public static class SpiceParameterUnits
     {
         public static readonly string[] VoltageUnits = { "V" };
+        public static readonly string[] CurrentUnits = { "A", "mA", "uA" };
         public static readonly string[] ResistanceUnits = { "Ohm", "kOhm", "MOhm" };
         public static readonly string[] CapacitanceUnits = { "F", "mF", "uF", "nF", "pF" };
         public static readonly string[] InductanceUnits = { "H", "mH", "uH" };
@@ -230,6 +235,7 @@ namespace ElectricalSim.Spice.Workspace
         public static string[] UnitsFor(SpiceComponentKind kind)
         {
             return kind == SpiceComponentKind.DcVoltageSource ? VoltageUnits :
+                kind == SpiceComponentKind.DcCurrentSource ? CurrentUnits :
                 kind == SpiceComponentKind.Resistor ? ResistanceUnits :
                 kind == SpiceComponentKind.Capacitor ? CapacitanceUnits :
                 kind == SpiceComponentKind.Inductor ? InductanceUnits : Array.Empty<string>();
@@ -238,6 +244,7 @@ namespace ElectricalSim.Spice.Workspace
         private static double Multiplier(SpiceComponentKind kind, string unit)
         {
             if (kind == SpiceComponentKind.Resistor) return unit == "kOhm" ? 1e3d : unit == "MOhm" ? 1e6d : 1d;
+            if (kind == SpiceComponentKind.DcCurrentSource) return unit == "mA" ? 1e-3d : unit == "uA" ? 1e-6d : 1d;
             if (kind == SpiceComponentKind.Capacitor) return unit == "mF" ? 1e-3d : unit == "uF" ? 1e-6d : unit == "nF" ? 1e-9d : unit == "pF" ? 1e-12d : 1d;
             if (kind == SpiceComponentKind.Inductor) return unit == "mH" ? 1e-3d : unit == "uH" ? 1e-6d : 1d;
             return 1d;
