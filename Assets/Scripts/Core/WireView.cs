@@ -304,15 +304,16 @@ namespace ElectricalSim.Core
             {
                 if (preserveManualRoutePoints && manualPoints.Count >= 2)
                 {
-                    manualPoints[0] = start;
-                    manualPoints[manualPoints.Count - 1] = end;
+                    // Full-path routes from templates and saved drawings include historical
+                    // endpoint positions. Keep those persisted points intact and compose a
+                    // fresh render path so moved terminals remain anchored.
+                    currentPoints.AddRange(BuildAnchoredManualRoute(start, end, manualPoints, manualRouteHorizontal));
                 }
                 else
                 {
                     RebuildManualRouteAsSixPoints(start, end, startExit.Point, endExit.Point, manualRouteHorizontal, manualRouteAxis);
+                    currentPoints.AddRange(manualPoints);
                 }
-
-                currentPoints.AddRange(manualPoints);
                 return;
             }
 
@@ -331,6 +332,64 @@ namespace ElectricalSim.Core
             currentPoints.Add(endExit.Point);
             currentPoints.Add(end);
             NormalizeOrthogonalPoints(currentPoints, false);
+        }
+
+        private static List<Vector2> BuildAnchoredManualRoute(
+            Vector2 start,
+            Vector2 end,
+            IReadOnlyList<Vector2> persistedFullPath,
+            bool fallbackHorizontal)
+        {
+            var route = new List<Vector2> { start };
+            if (persistedFullPath == null || persistedFullPath.Count < 2)
+            {
+                AppendAnchoredOrthogonalPoint(route, end, fallbackHorizontal);
+                return route;
+            }
+
+            if (persistedFullPath.Count == 2)
+            {
+                AppendAnchoredOrthogonalPoint(route, end, fallbackHorizontal);
+                return route;
+            }
+
+            AppendAnchoredOrthogonalPoint(route, persistedFullPath[1], IsHorizontalSegment(persistedFullPath, 0));
+            for (var i = 2; i < persistedFullPath.Count - 1; i++)
+            {
+                AddAnchoredRoutePoint(route, persistedFullPath[i]);
+            }
+
+            AppendAnchoredOrthogonalPoint(
+                route,
+                end,
+                IsHorizontalSegment(persistedFullPath, persistedFullPath.Count - 2));
+            return route;
+        }
+
+        private static void AppendAnchoredOrthogonalPoint(List<Vector2> route, Vector2 target, bool horizontalFirst)
+        {
+            var from = route[route.Count - 1];
+            if ((from - target).sqrMagnitude <= PointEpsilon * PointEpsilon)
+            {
+                return;
+            }
+
+            if (!NearlySame(from.x, target.x) && !NearlySame(from.y, target.y))
+            {
+                AddAnchoredRoutePoint(route, horizontalFirst
+                    ? new Vector2(target.x, from.y)
+                    : new Vector2(from.x, target.y));
+            }
+
+            AddAnchoredRoutePoint(route, target);
+        }
+
+        private static void AddAnchoredRoutePoint(List<Vector2> route, Vector2 point)
+        {
+            if (route.Count == 0 || (route[route.Count - 1] - point).sqrMagnitude > PointEpsilon * PointEpsilon)
+            {
+                route.Add(point);
+            }
         }
 
         private void AddSameComponentJumperMiddlePoints(TerminalExit startExit, TerminalExit endExit)
