@@ -6,6 +6,7 @@ using ElectricalSim.Spice.Infrastructure;
 using ElectricalSim.Spice.Netlist;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
+using ElectricalSim.Spice.Workspace;
 
 namespace ElectricalSim.Spice.T2
 {
@@ -13,6 +14,7 @@ namespace ElectricalSim.Spice.T2
     {
         public const double VoltageTolerance = 1e-6d;
         public const double CurrentTolerance = 1e-8d;
+        public const double DiodeCurrentTolerance = 1e-6d;
 
         public static void RunPureCoreChecks()
         {
@@ -23,6 +25,10 @@ namespace ElectricalSim.Spice.T2
             ExpectWireOrderDoesNotAffectNodeNames();
             ExpectWireDirectionDoesNotAffectNodeNames();
             ExpectMultipleGroundsMapToZero();
+            ExpectDiodeNetlistStable();
+            ExpectDiodeWireOrderDoesNotAffectNetlist();
+            ExpectDiodeWireDirectionDoesNotAffectNetlist();
+            ExpectDiodeNotParameterEditable();
         }
 
         public static async System.Threading.Tasks.Task<List<SpiceSimulationResult>> RunIntegrationChecksAsync()
@@ -40,6 +46,8 @@ namespace ElectricalSim.Spice.T2
             results.Add(await VerifyParallel(service).ConfigureAwait(false));
             results.Add(await VerifyCapacitor(service).ConfigureAwait(false));
             results.Add(await VerifyInductor(service).ConfigureAwait(false));
+            results.Add(await VerifyForwardDiode(service).ConfigureAwait(false));
+            results.Add(await VerifyReverseDiode(service).ConfigureAwait(false));
             await VerifyDeletedWireBlocksSimulationAsync(service).ConfigureAwait(false);
             await VerifyFloatingSubcircuitsBlockSimulationAsync(service).ConfigureAwait(false);
             await VerifyMultipleGroundSimulationAsync(service).ConfigureAwait(false);
@@ -136,6 +144,33 @@ namespace ElectricalSim.Spice.T2
             return result;
         }
 
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyForwardDiode(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.ForwardDiode()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var diode = result.ComponentResults["d1"];
+            if (diode == null) throw new InvalidOperationException("Forward diode result is missing the d1 component entry.");
+            // 二极管电流来自 ngspice 的 @D[id] 真实输出，不得使用 C# 固定 0.7 V 近似。
+            if (diode.Current <= DiodeCurrentTolerance) throw new InvalidOperationException("Forward-biased diode current must be positive: " + diode.Current);
+            if (diode.Voltage <= 0d) throw new InvalidOperationException("Forward VAK (A->K) must be positive: " + diode.Voltage);
+            if (!diode.Notes.Contains("正向导通")) throw new InvalidOperationException("Forward diode status must read 正向导通, got: " + diode.Notes);
+            if (diode.CurrentDirection != "A-to-K" || diode.VoltageDirection != "A-to-K") throw new InvalidOperationException("Diode direction labels must use A-to-K.");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyReverseDiode(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.ReverseDiode()).ConfigureAwait(false);
+            ExpectSuccess(result);
+            var diode = result.ComponentResults["d1"];
+            if (diode == null) throw new InvalidOperationException("Reverse diode result is missing the d1 component entry.");
+            if (diode.Notes.Contains("正向导通")) throw new InvalidOperationException("Reverse-biased diode must not report forward conduction.");
+            // 反偏时电流应接近零（仅 IS 量级漏电流），VAK 为负。
+            if (Math.Abs(diode.Current) > 1e-6d) throw new InvalidOperationException("Reverse diode current must be near zero: " + diode.Current);
+            if (diode.Voltage >= -0.05d) throw new InvalidOperationException("Reverse VAK (A->K) must be negative: " + diode.Voltage);
+            return result;
+        }
+
         private static void ExpectInvalidParameter()
         {
             var invalid = SpiceT2Fixtures.SingleResistor(0d);
@@ -197,6 +232,63 @@ namespace ElectricalSim.Spice.T2
             var baselineNodes = DescribeNodes(baseline, includeGrounds: false);
             var multipleGroundNodes = DescribeNodes(multipleGrounds, includeGrounds: false);
             if (baselineNodes != multipleGroundNodes) throw new InvalidOperationException("Additional ground symbols changed non-ground node names.");
+        }
+
+        private static void ExpectDiodeNetlistStable()
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.ForwardDiode());
+            if (!graph.IsValid) throw new InvalidOperationException("Forward diode fixture should produce a valid graph.");
+            if (graph.SpiceNameByComponentId["d1"] != "D1") throw new InvalidOperationException("Diode SPICE element name should be the stable D1.");
+
+            var netlist = SpiceNetlistBuilder.BuildDcOperatingPoint(SpiceT2Fixtures.ForwardDiode(), graph).Content;
+            if (CountModelDirectives(netlist) != 1) throw new InvalidOperationException("D_GENERIC .model directive must be emitted exactly once for a single diode.");
+            if (!netlist.Contains("print @D1[id]")) throw new InvalidOperationException("Netlist must request the real ngspice diode current via print @D1[id].");
+            if (!netlist.Contains("D1 ")) throw new InvalidOperationException("Netlist must emit the D1 diode instance line.");
+
+            // 两只二极管串联时，.model 段仍只生成一次。
+            var twoDiodeGraph = SpiceCircuitGraphBuilder.Build(SpiceT2Fixtures.TwoForwardDiodes());
+            if (!twoDiodeGraph.IsValid) throw new InvalidOperationException("Two-diode fixture should produce a valid graph.");
+            var twoDiodeNetlist = SpiceNetlistBuilder.BuildDcOperatingPoint(SpiceT2Fixtures.TwoForwardDiodes(), twoDiodeGraph).Content;
+            if (CountModelDirectives(twoDiodeNetlist) != 1) throw new InvalidOperationException("D_GENERIC .model directive must be emitted exactly once even with multiple diodes.");
+            if (!twoDiodeNetlist.Contains("print @D1[id]") || !twoDiodeNetlist.Contains("print @D2[id]")) throw new InvalidOperationException("Each diode must request its own ngspice current.");
+        }
+
+        private static int CountModelDirectives(string netlist)
+        {
+            var count = 0;
+            foreach (var line in netlist.Split('\n'))
+            {
+                if (line.Trim().StartsWith(".model D_GENERIC", StringComparison.Ordinal)) count++;
+            }
+            return count;
+        }
+
+        private static void ExpectDiodeWireOrderDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.ForwardDiode();
+            var reordered = SpiceT2Fixtures.ForwardDiode();
+            var wires = reordered.Wires.AsEnumerable().Reverse().ToList();
+            reordered.Wires.Clear();
+            reordered.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reordered, "Diode wire order");
+        }
+
+        private static void ExpectDiodeWireDirectionDoesNotAffectNetlist()
+        {
+            var first = SpiceT2Fixtures.ForwardDiode();
+            var reversedEndpoints = SpiceT2Fixtures.ForwardDiode();
+            var wires = reversedEndpoints.Wires.Select(wire => new SpiceWireModel(wire.End, wire.Start)).ToList();
+            reversedEndpoints.Wires.Clear();
+            reversedEndpoints.Wires.AddRange(wires);
+            ExpectEquivalentGraphAndNetlist(first, reversedEndpoints, "Diode wire direction");
+        }
+
+        private static void ExpectDiodeNotParameterEditable()
+        {
+            if (SpiceParameterUnits.UnitsFor(SpiceComponentKind.SiliconDiode).Length != 0) throw new InvalidOperationException("Silicon diode must expose an empty parameter unit array.");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 0.7d)) throw new InvalidOperationException("Silicon diode must not accept parameter writes (0.7 V伪造值).");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 1d)) throw new InvalidOperationException("Silicon diode must not accept any positive parameter write.");
+            if (SpiceWorkspaceModel.IsValidParameter(SpiceComponentKind.SiliconDiode, 0d)) throw new InvalidOperationException("Silicon diode must not accept zero parameter write.");
         }
 
         private static async System.Threading.Tasks.Task VerifyDeletedWireBlocksSimulationAsync(SpiceDcSimulationService service)

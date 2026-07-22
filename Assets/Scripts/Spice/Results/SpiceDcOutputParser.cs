@@ -12,6 +12,7 @@ namespace ElectricalSim.Spice.Results
     public static class SpiceDcOutputParser
     {
         private static readonly Regex ValuePattern = new Regex(@"^\s*(?<kind>[vi])\s*\(\s*(?<id>[^)]+)\s*\)\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex DiodeCurrentPattern = new Regex(@"^\s*@(?<id>[^\[]+)\[id\]\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         public static bool TryParse(string standardOutput, out Dictionary<string, double> nodeVoltages, out Dictionary<string, double> branchCurrents, out string failure)
         {
@@ -29,6 +30,12 @@ namespace ElectricalSim.Spice.Results
                 var id = match.Groups["id"].Value.Trim();
                 if (string.Equals(match.Groups["kind"].Value, "v", StringComparison.OrdinalIgnoreCase)) nodeVoltages[id] = value;
                 else branchCurrents[id] = value;
+            }
+            foreach (Match match in DiodeCurrentPattern.Matches(marked))
+            {
+                var number = match.Groups["value"].Value.Replace('D', 'E').Replace('d', 'e');
+                if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) { failure = "Unable to parse diode current."; return false; }
+                branchCurrents[match.Groups["id"].Value.Trim()] = value;
             }
             return true;
         }

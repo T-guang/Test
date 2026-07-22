@@ -107,6 +107,53 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
+        // 正偏二极管回路：5 V -> 1 kOhm -> 二极管阳极(A=positive) -> 阴极(K=negative) -> GND。
+        public static SpiceCircuitModel ForwardDiode(double volts = 5d, double resistance = 1000d)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", volts));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", resistance));
+            circuit.Components.Add(SpiceComponentModel.SiliconDiode("d1"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "r1", "negative", "d1", "positive");
+            Wire(circuit, "d1", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 反偏二极管回路：5 V -> 1 kOhm -> 二极管阴极(K=negative)；阳极(A=positive) -> GND。
+        public static SpiceCircuitModel ReverseDiode(double volts = 5d, double resistance = 1000d)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", volts));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", resistance));
+            circuit.Components.Add(SpiceComponentModel.SiliconDiode("d1"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "r1", "negative", "d1", "negative");
+            Wire(circuit, "d1", "positive", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // 两只二极管串联，用于校验 .model D_GENERIC 只生成一次。
+        public static SpiceCircuitModel TwoForwardDiodes()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 5d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.SiliconDiode("d1"));
+            circuit.Components.Add(SpiceComponentModel.SiliconDiode("d2"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "r1", "positive");
+            Wire(circuit, "r1", "negative", "d1", "positive");
+            Wire(circuit, "d1", "negative", "d2", "positive");
+            Wire(circuit, "d2", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            return circuit;
+        }
+
         public static SpiceCircuitModel FloatingClosedLoop()
         {
             var circuit = new SpiceCircuitModel();

@@ -95,6 +95,13 @@ namespace ElectricalSim.Spice.Core
                     componentResult.CurrentDirection = "A-to-B";
                     componentResult.Notes = component.GetRequiredParameter(SpiceParameterKey.SwitchClosed) > 0.5d ? "状态：闭合" : "状态：断开";
                 }
+                else if (component.Kind == SpiceComponentKind.SiliconDiode)
+                {
+                    componentResult.Current = currents[graph.SpiceNameByComponentId[component.InstanceId]];
+                    componentResult.VoltageDirection = "A-to-K";
+                    componentResult.CurrentDirection = "A-to-K";
+                    componentResult.Notes = componentResult.Current > 1e-6d ? "状态：正向导通" : componentResult.Voltage < -0.05d ? "状态：反向偏置/近似截止" : "状态：工作点接近零或不确定";
+                }
                 else if (component.Kind == SpiceComponentKind.Capacitor)
                 {
                     componentResult.Current = 0d;

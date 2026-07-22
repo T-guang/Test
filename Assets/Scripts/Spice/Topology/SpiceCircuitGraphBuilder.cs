@@ -258,6 +258,7 @@ namespace ElectricalSim.Spice.Topology
                 case SpiceComponentKind.DcVoltageSource: return "V";
                 case SpiceComponentKind.DcCurrentSource: return "I";
                 case SpiceComponentKind.IdealSwitch: return "SW";
+                case SpiceComponentKind.SiliconDiode: return "D";
                 case SpiceComponentKind.Resistor: return "R";
                 case SpiceComponentKind.Capacitor: return "C";
                 case SpiceComponentKind.Inductor: return "L";

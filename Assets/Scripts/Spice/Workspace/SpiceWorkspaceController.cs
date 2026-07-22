@@ -377,6 +377,12 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
 
+            if (component.Kind == SpiceComponentKind.SiliconDiode)
+            {
+                if (statusText != null) statusText.text = "通用硅二极管使用固定模型，无可编辑参数。";
+                return;
+            }
+
             if (component.Kind == SpiceComponentKind.Ground)
             {
                 if (statusText != null) statusText.text = "该器件无可编辑参数。";
@@ -617,6 +623,7 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
             CreatePaletteCard(palette.transform, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
             CreatePaletteCard(palette.transform, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
+            CreatePaletteCard(palette.transform, SpiceComponentKind.SiliconDiode, "通用硅二极管", "D_GENERIC", 1, 3);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Resistor, "电阻", "1 kOhm", 1, 0);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Capacitor, "电容", "1 uF", 0, 1);
             CreatePaletteCard(palette.transform, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
@@ -891,6 +898,14 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
             currentUnits = SpiceParameterUnits.UnitsFor(selectedComponent.Kind);
+            if (selectedComponent.Kind == SpiceComponentKind.SiliconDiode)
+            {
+                parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
+                parameterInput.text = "固定通用硅模型";
+                parameterInput.interactable = false;
+                unitButton.interactable = false;
+                return;
+            }
             if (selectedComponent.Kind == SpiceComponentKind.IdealSwitch)
             {
                 parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
@@ -953,14 +968,28 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string PaletteLabel(SpiceComponentKind kind)
         {
-            return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : "接地";
+            return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : "接地";
         }
 
         private static string FormatResult(SpiceSimulationResult result)
         {
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
-                value.ComponentId + "  " + value.ComponentKind + "\n电压  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n参考方向：正端 → 负端" +
+                value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n参考方向：" + DirectionLabel(value.CurrentDirection) +
                 (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
+        }
+
+        private static string VoltageLabel(SpiceComponentResult value)
+        {
+            // 二极管电压按 A→K 报告为 VAK，避免与“正端 → 负端”通用文案混淆极性。
+            return value.ComponentKind == "SiliconDiode" ? "VAK" : "电压";
+        }
+
+        private static string DirectionLabel(string direction)
+        {
+            return direction == "A-to-K" ? "A → K"
+                : direction == "P-to-N" ? "P → N"
+                : direction == "A-to-B" ? "A → B"
+                : "正端 → 负端";
         }
 
         private static string FormatDiagnostics(SpiceSimulationResult result)

@@ -11,6 +11,7 @@ namespace ElectricalSim.Spice.Core
         DcVoltageSource,
         DcCurrentSource,
         IdealSwitch,
+        SiliconDiode,
         Resistor,
         Capacitor,
         Inductor,
@@ -67,6 +68,11 @@ namespace ElectricalSim.Spice.Core
         public static SpiceComponentModel IdealSwitch(string instanceId, bool closed)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.IdealSwitch).With(SpiceParameterKey.SwitchClosed, closed ? 1d : 0d);
+        }
+
+        public static SpiceComponentModel SiliconDiode(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.SiliconDiode);
         }
 
         public static SpiceComponentModel Capacitor(string instanceId, double farads)

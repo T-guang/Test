@@ -39,17 +39,31 @@ namespace ElectricalSim.Spice.Netlist
                 var component = componentById[pair.Key];
                 var a = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var b = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
+                if (component.Kind == SpiceComponentKind.SiliconDiode)
+                {
+                    builder.Append(pair.Value).Append(' ').Append(a).Append(' ').Append(b).Append(" D_GENERIC").AppendLine();
+                    continue;
+                }
                 builder.Append(GetElementName(component, pair.Value)).Append(' ').Append(a).Append(' ').Append(b).Append(' ')
                     .Append(GetValue(component).ToString("R", CultureInfo.InvariantCulture)).AppendLine();
             }
 
+            if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode))
+            {
+                builder.AppendLine(".model D_GENERIC D(IS=2.52e-9 N=1.752 RS=0.568)");
+            }
+
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();
-            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.Inductor)
+            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode)
                 .Select(pair => pair.Value).ToList();
             // 只打印后续结果层需要的向量，并用唯一标记隔离 ngspice 自身日志。
             builder.AppendLine().AppendLine(".control").AppendLine("set noaskquit").AppendLine("op").AppendLine("echo " + BeginMarker);
             foreach (var node in nodes) builder.AppendLine("print v(" + node + ")");
-            foreach (var branch in branches) builder.AppendLine("print i(" + branch + ")");
+            foreach (var branch in branches)
+            {
+                var componentId = graph.ComponentIdBySpiceName[branch];
+                builder.AppendLine(componentById[componentId].Kind == SpiceComponentKind.SiliconDiode ? "print @" + branch + "[id]" : "print i(" + branch + ")");
+            }
             builder.AppendLine("echo " + EndMarker).AppendLine("quit").AppendLine(".endc").AppendLine().AppendLine(".end");
             return new SpiceNetlistDocument { Content = builder.ToString(), PrintedNodes = nodes, PrintedBranchNames = branches };
         }

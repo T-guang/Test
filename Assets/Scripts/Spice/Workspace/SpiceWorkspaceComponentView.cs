@@ -158,8 +158,8 @@ namespace ElectricalSim.Spice.Workspace
             {
                 CreateTerminal(SpiceComponentModel.PositiveTerminalId, new Vector2(-82f, 0f));
                 CreateTerminal(SpiceComponentModel.NegativeTerminalId, new Vector2(82f, 0f));
-                CreateReferenceLabel("PositiveReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "P" : data.Kind == SpiceComponentKind.IdealSwitch ? "A" : "+", new Vector2(-62f, 18f));
-                CreateReferenceLabel("NegativeReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "N" : data.Kind == SpiceComponentKind.IdealSwitch ? "B" : "-", new Vector2(62f, 18f));
+                CreateReferenceLabel("PositiveReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "P" : data.Kind == SpiceComponentKind.IdealSwitch ? "A" : data.Kind == SpiceComponentKind.SiliconDiode ? "A" : "+", new Vector2(-62f, 18f));
+                CreateReferenceLabel("NegativeReference", data.Kind == SpiceComponentKind.DcCurrentSource ? "N" : data.Kind == SpiceComponentKind.IdealSwitch ? "B" : data.Kind == SpiceComponentKind.SiliconDiode ? "K" : "-", new Vector2(62f, 18f));
             }
         }
 
@@ -216,6 +216,14 @@ namespace ElectricalSim.Spice.Workspace
                     CreateLine(symbol.transform, new Vector2(-34f, 0f), new Vector2(-4f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(4f, 0f), new Vector2(34f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(-4f, 0f), new Vector2(16f, data.SiValue > 0.5d ? 0f : 16f), 3f);
+                    break;
+                case SpiceComponentKind.SiliconDiode:
+                    CreateLine(symbol.transform, new Vector2(-34f, 0f), new Vector2(-8f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-8f, -16f), new Vector2(-8f, 16f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-8f, -16f), new Vector2(12f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-8f, 16f), new Vector2(12f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(16f, -18f), new Vector2(16f, 18f), 3f);
+                    CreateLine(symbol.transform, new Vector2(16f, 0f), new Vector2(34f, 0f), 3f);
                     break;
                 case SpiceComponentKind.Resistor:
                     var resistor = SpiceWorkspaceUi.CreateImage(symbol.transform, "Resistor", Color.white);
@@ -287,7 +295,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
             var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
-            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : "GND";
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : "GND";
             return prefix + index.ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -299,6 +307,7 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.DcVoltageSource) return Format(value) + " V";
             if (kind == SpiceComponentKind.DcCurrentSource) return value >= 1d ? Format(value) + " A" : value >= 1e-3d ? Format(value / 1e-3d) + " mA" : Format(value / 1e-6d) + " μA";
             if (kind == SpiceComponentKind.IdealSwitch) return value > 0.5d ? "闭合" : "断开";
+            if (kind == SpiceComponentKind.SiliconDiode) return "D_GENERIC";
             if (kind == SpiceComponentKind.Resistor) return value >= 1000000d ? Format(value / 1000000d) + " MΩ" : value >= 1000d ? Format(value / 1000d) + " kΩ" : Format(value) + " Ω";
             if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
             if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";
