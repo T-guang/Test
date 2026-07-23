@@ -471,12 +471,12 @@ namespace ElectricalSim.Spice.Workspace
 
             // 调整标题右边距，为复制按钮留出空间
             var title = header.Find("Title") as RectTransform;
-            if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-90f, -4f));
+            if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-106f, -4f));
 
             var buttonTransform = header.Find("CopyResult") as RectTransform;
             if (buttonTransform == null) return;
             StyleSmallButton(buttonTransform.GetComponent<Button>(), false, "复制结果");
-            Anchor(buttonTransform, new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-78f, 2f), new Vector2(-14f, -2f));
+            Anchor(buttonTransform, new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-94f, 2f), new Vector2(-14f, -2f));
         }
 
         private static void StyleNetlistSection(RectTransform section)

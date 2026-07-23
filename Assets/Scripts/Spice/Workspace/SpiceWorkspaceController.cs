@@ -797,7 +797,7 @@ namespace ElectricalSim.Spice.Workspace
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
             var resultHeader = resultRoot.Find("ResultHeader") as RectTransform;
             copyResultButton = SpiceWorkspaceUi.CreateButton(resultHeader, "CopyResult", "复制结果", MainUiTheme.FilterButton, CopyResult);
-            SpiceWorkspaceUi.Anchor(copyResultButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-78f, 2f), new Vector2(-14f, -2f));
+            SpiceWorkspaceUi.Anchor(copyResultButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-94f, 2f), new Vector2(-14f, -2f));
             resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 38f);
             resultText = resultView.Text;
 
