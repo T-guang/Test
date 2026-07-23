@@ -791,7 +791,7 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Stretch(text.rectTransform, new Vector2(14f, 0f), new Vector2(-14f, 0f));
         }
 
-        // 每个助手信息区各自裁剪并滚动，长文本不会越过相邻 Panel 的边界。
+        // Each assistant section owns an independent standard UGUI scroll hierarchy.
         private static SpiceScrollableTextView CreateScrollableTextView(RectTransform panel, string scrollName, string textName, int fontSize, Color color, float topInset)
         {
             var scroll = new GameObject(scrollName, typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<ScrollRect>();
@@ -801,6 +801,8 @@ namespace ElectricalSim.Spice.Workspace
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = true;
+            scroll.scrollSensitivity = SpiceScrollableTextLayout.ScrollSensitivity;
 
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
             viewport.SetParent(scroll.transform, false);
@@ -810,36 +812,27 @@ namespace ElectricalSim.Spice.Workspace
             content.SetParent(viewport, false);
             content.anchorMin = new Vector2(0f, 1f);
             content.anchorMax = new Vector2(1f, 1f);
-            content.pivot = new Vector2(0f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
             content.anchoredPosition = Vector2.zero;
             content.sizeDelta = new Vector2(0f, 0f);
+            SpiceScrollableTextLayout.ConfigureContent(content);
             var text = SpiceWorkspaceUi.CreateText(content, textName, string.Empty, fontSize, FontStyle.Normal, TextAnchor.UpperLeft, color);
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.rectTransform.anchorMin = Vector2.zero;
-            text.rectTransform.anchorMax = Vector2.one;
-            text.rectTransform.pivot = new Vector2(0f, 1f);
-            SpiceWorkspaceUi.Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(6f, 6f), new Vector2(-6f, -6f));
+            text.raycastTarget = false;
+            text.rectTransform.anchorMin = new Vector2(0f, 1f);
+            text.rectTransform.anchorMax = new Vector2(1f, 1f);
+            text.rectTransform.pivot = new Vector2(0.5f, 1f);
             text.rectTransform.anchoredPosition = Vector2.zero;
+            text.rectTransform.sizeDelta = Vector2.zero;
             scroll.viewport = viewport;
             scroll.content = content;
             return new SpiceScrollableTextView(scroll, viewport, content, text);
         }
 
-        // Content 高度只在文本或布局发生实际变化时按 preferredHeight 刷新，不在 Update 中轮询。
-        private static void RefreshScrollableText(SpiceScrollableTextView view, string value)
+        private static void RefreshScrollableText(SpiceScrollableTextView view, string value, bool resetToTop = true)
         {
-            view.Text.text = value;
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(view.Text.rectTransform);
-            var height = Mathf.Max(view.Viewport.rect.height, view.Text.preferredHeight + 12f);
-            view.Content.sizeDelta = new Vector2(0f, height);
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(view.Content);
-            view.ScrollRect.StopMovement();
-            view.Content.anchoredPosition = Vector2.zero;
-            view.ScrollRect.horizontalNormalizedPosition = 0f;
-            view.ScrollRect.verticalNormalizedPosition = 1f;
+            SpiceScrollableTextLayout.Refresh(view.ScrollRect, view.Text, value, resetToTop);
         }
 
         private void SetResultText(string value) => RefreshScrollableText(resultView, string.IsNullOrEmpty(value) ? "尚无结果" : value);
@@ -1074,6 +1067,49 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform Viewport { get; }
         public RectTransform Content { get; }
         public Text Text { get; }
+    }
+
+    /// <summary>
+    /// Standard UGUI layout for the assistant's independent text scroll views.
+    /// Content height is owned by the layout system, never by result or diagnostic business code.
+    /// </summary>
+    internal static class SpiceScrollableTextLayout
+    {
+        public const float ScrollSensitivity = 28f;
+
+        public static void ConfigureContent(RectTransform content)
+        {
+            var layout = content.GetComponent<VerticalLayoutGroup>() ?? content.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(6, 6, 6, 6);
+            layout.spacing = 0f;
+            layout.childAlignment = TextAnchor.UpperLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            var fitter = content.GetComponent<ContentSizeFitter>() ?? content.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+
+        public static bool Refresh(ScrollRect scrollRect, Text text, string value, bool resetToTop)
+        {
+            if (text == null) return false;
+            if (text.text == value) return false;
+
+            text.text = value;
+            // Result content is authoritative; a temporarily unavailable scroll view must not hide diagnostics.
+            // Hidden diagnostic sinks carry data only and must not force UGUI layout work during lifecycle changes.
+            if (scrollRect == null || scrollRect.content == null || !scrollRect.isActiveAndEnabled || !scrollRect.content.gameObject.activeInHierarchy) return true;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
+            if (!resetToTop) return true;
+
+            scrollRect.StopMovement();
+            scrollRect.horizontalNormalizedPosition = 0f;
+            scrollRect.verticalNormalizedPosition = 1f;
+            return true;
+        }
     }
 
     public sealed class SpiceWorkspaceBlankClick : MonoBehaviour, IPointerClickHandler

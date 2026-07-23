@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
@@ -16,6 +17,9 @@ namespace ElectricalSim.Spice.T3
             ValidateHostBindings();
             ValidateHiddenDemoHostInitialization();
             ValidateSimulationModeSwitching();
+            ValidateScrollableTextLayout();
+            ValidateOutcomePresentationDiagnostics();
+            ValidateFailedRunOutcomePresentation();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -195,6 +199,185 @@ namespace ElectricalSim.Spice.T3
             var text = new GameObject("ModeLabel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)).GetComponent<Text>();
             text.transform.SetParent(parent, false);
             return text;
+        }
+
+        private static void ValidateScrollableTextLayout()
+        {
+            var canvasRoot = new GameObject("SpiceScrollableTextValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var result = CreateScrollableTextForValidation(canvasRoot.transform, "Result", new Vector2(300f, 180f));
+                var netlist = CreateScrollableTextForValidation(canvasRoot.transform, "Netlist", new Vector2(300f, 180f));
+                var longText = string.Join("\n", new string[40].Select((_, index) => "诊断 " + index + "：该端子尚未通过导线连接。"));
+
+                if (!SpiceScrollableTextLayout.Refresh(result.ScrollRect, result.Text, longText, true))
+                    throw new InvalidOperationException("Long SPICE diagnostics did not update the result text.");
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(result.Content);
+                if (result.Content.rect.height <= result.Viewport.rect.height)
+                    throw new InvalidOperationException("Long SPICE diagnostics did not expand the actual ResultScrollView content height.");
+                if (result.Viewport.GetComponent<RectMask2D>() == null || result.Content.GetComponent<VerticalLayoutGroup>() == null ||
+                    result.Content.GetComponent<ContentSizeFitter>() == null || result.ScrollRect.content != result.Content || result.ScrollRect.viewport != result.Viewport)
+                    throw new InvalidOperationException("SPICE scroll layout is missing its required Viewport, Content, or standard UGUI layout components.");
+
+                result.ScrollRect.verticalNormalizedPosition = 0f;
+                Canvas.ForceUpdateCanvases();
+                if (result.Content.anchoredPosition.y <= 0.01f)
+                    throw new InvalidOperationException("ResultScrollView could not move its long diagnostic content to the bottom.");
+                var userPosition = result.ScrollRect.verticalNormalizedPosition;
+                if (SpiceScrollableTextLayout.Refresh(result.ScrollRect, result.Text, longText, true))
+                    throw new InvalidOperationException("Unchanged SPICE diagnostics unexpectedly refreshed their scroll layout.");
+                if (Math.Abs(result.ScrollRect.verticalNormalizedPosition - userPosition) > 0.001f)
+                    throw new InvalidOperationException("Unchanged SPICE diagnostics reset the user's scroll position.");
+
+                if (!SpiceScrollableTextLayout.Refresh(netlist.ScrollRect, netlist.Text, longText, true))
+                    throw new InvalidOperationException("Long SPICE netlist did not update independently.");
+                netlist.ScrollRect.verticalNormalizedPosition = 0f;
+                Canvas.ForceUpdateCanvases();
+                if (result.ScrollRect.verticalNormalizedPosition != userPosition || result.ScrollRect.content == netlist.ScrollRect.content)
+                    throw new InvalidOperationException("Result and netlist scroll views are not independent.");
+
+                SpiceScrollableTextLayout.Refresh(result.ScrollRect, result.Text, "短结果", true);
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(result.Content);
+                if (result.Content.rect.height > result.Viewport.rect.height + 0.01f)
+                    throw new InvalidOperationException("Short SPICE results left an unnecessary vertical scroll range.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static SpiceScrollableTextView CreateScrollableTextForValidation(Transform parent, string name, Vector2 size)
+        {
+            var scroll = new GameObject(name + "Scroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<ScrollRect>();
+            scroll.transform.SetParent(parent, false);
+            var scrollRect = scroll.GetComponent<RectTransform>();
+            scrollRect.sizeDelta = size;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = true;
+            scroll.scrollSensitivity = SpiceScrollableTextLayout.ScrollSensitivity;
+
+            var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
+            viewport.SetParent(scroll.transform, false);
+            viewport.anchorMin = Vector2.zero;
+            viewport.anchorMax = Vector2.one;
+            viewport.sizeDelta = Vector2.zero;
+            var content = new GameObject("Content", typeof(RectTransform)).GetComponent<RectTransform>();
+            content.SetParent(viewport, false);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = Vector2.zero;
+            SpiceScrollableTextLayout.ConfigureContent(content);
+
+            var text = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)).GetComponent<Text>();
+            text.transform.SetParent(content, false);
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = 14;
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.rectTransform.anchorMin = new Vector2(0f, 1f);
+            text.rectTransform.anchorMax = new Vector2(1f, 1f);
+            text.rectTransform.pivot = new Vector2(0.5f, 1f);
+            text.rectTransform.sizeDelta = Vector2.zero;
+
+            scroll.viewport = viewport;
+            scroll.content = content;
+            return new SpiceScrollableTextView(scroll, viewport, content, text);
+        }
+
+        private static void ValidateOutcomePresentationDiagnostics()
+        {
+            var canvasRoot = new GameObject("SpiceOutcomePresentationValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var result = CreateScrollableTextForValidation(canvasRoot.transform, "Result", new Vector2(300f, 180f));
+                var diagnosticSinkRoot = new GameObject("DiagnosticSink", typeof(RectTransform));
+                diagnosticSinkRoot.transform.SetParent(canvasRoot.transform, false);
+                var diagnosticText = new GameObject("DiagnosticText", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)).GetComponent<Text>();
+                diagnosticText.transform.SetParent(diagnosticSinkRoot.transform, false);
+                diagnosticText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                var runButton = CreateButton(canvasRoot.transform);
+                var presentation = result.ScrollRect.gameObject.AddComponent<SpiceAssistantOutcomePresentation>();
+                presentation.Initialize(result.Text, diagnosticText, runButton);
+                diagnosticSinkRoot.SetActive(false);
+
+                var diagnostics = string.Join("\n", new string[30].Select((_, index) => "存在悬空端子：error-" + index));
+                diagnosticText.text = diagnostics;
+                presentation.RefreshNow();
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(result.Content);
+                if (result.Text.text != diagnostics || result.Text.color != MainUiTheme.DangerRed)
+                    throw new InvalidOperationException("SPICE outcome presentation did not show hidden blocking diagnostics in the formal result panel.");
+                if (result.Content.rect.height <= result.Viewport.rect.height)
+                    throw new InvalidOperationException("SPICE outcome presentation did not make long blocking diagnostics scrollable.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateFailedRunOutcomePresentation()
+        {
+            var canvasRoot = new GameObject("SpiceFailedOutcomeValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var spiceRoot = CreateRoot(canvasRoot.transform);
+                spiceRoot.SetActive(false);
+                var bindings = spiceRoot.AddComponent<SpiceWorkspaceViewBindings>();
+                var workspace = spiceRoot.AddComponent<SpiceWorkspaceController>();
+                var palette = CreateRect(spiceRoot.transform);
+                var viewport = CreateRect(spiceRoot.transform);
+                var wires = CreateRect(viewport);
+                var components = CreateRect(viewport);
+                var overlay = CreateRect(viewport);
+                var assistant = CreateRect(spiceRoot.transform);
+                var parameters = CreateRect(assistant);
+                var results = CreateRect(assistant);
+                var netlist = CreateRect(assistant);
+                var diagnostics = CreateRect(assistant);
+                var runButton = CreateButton(canvasRoot.transform);
+                bindings.Bind(palette, viewport, wires, components, overlay, assistant, parameters, results, netlist, diagnostics,
+                    runButton, CreateButton(canvasRoot.transform), CreateButton(canvasRoot.transform), CreateButton(canvasRoot.transform));
+
+                var hostRoot = CreateRoot(canvasRoot.transform);
+                hostRoot.SetActive(false);
+                var host = hostRoot.AddComponent<SpiceWorkspaceDemoHost>();
+                host.Configure(bindings, workspace);
+                host.Initialize();
+                spiceRoot.SetActive(true);
+                hostRoot.SetActive(true);
+
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var failed = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (failed == null || failed.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("The invalid SPICE circuit did not enter the failed result state.");
+
+                var resultText = bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText")?.GetComponent<Text>();
+                var outcome = bindings.ResultRoot.GetComponent<SpiceAssistantOutcomePresentation>();
+                if (resultText == null || outcome == null)
+                    throw new InvalidOperationException("The formal SPICE result presentation was not initialized.");
+                outcome.RefreshNow();
+                if (!resultText.text.Contains("SPICE_GROUND_MISSING") || !resultText.text.Contains("SPICE_FLOATING_TERMINAL") || resultText.color != MainUiTheme.DangerRed)
+                {
+                    var diagnosticText = bindings.DiagnosticRoot.Find("DiagnosticScrollView/Viewport/Content/DiagnosticText")?.GetComponent<Text>();
+                    throw new InvalidOperationException("Blocking SPICE diagnostics were replaced by the empty-result placeholder instead of appearing in the formal result panel. Sink='" +
+                        (diagnosticText == null ? "<missing>" : diagnosticText.text) + "' Result='" + resultText.text + "'.");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
         }
 
         public static void ConnectSingleResistor(SpiceWorkspaceController workspace, string source, string resistor, string ground)

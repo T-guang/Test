@@ -709,7 +709,6 @@ namespace ElectricalSim.Spice.Workspace
         private Text diagnosticText;
         private Button runButton;
         private ScrollRect scrollRect;
-        private string lastRendered;
 
         public void Initialize(Text result, Text diagnostics, Button run)
         {
@@ -717,11 +716,15 @@ namespace ElectricalSim.Spice.Workspace
             diagnosticText = diagnostics;
             runButton = run;
             scrollRect = result != null ? result.GetComponentInParent<ScrollRect>() : null;
-            lastRendered = null;
             Refresh();
         }
 
         private void LateUpdate()
+        {
+            Refresh();
+        }
+
+        internal void RefreshNow()
         {
             Refresh();
         }
@@ -743,34 +746,17 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
 
-            if (outcomeText.text == lastRendered) return;
-
             var source = outcomeText.text;
             Render(string.IsNullOrWhiteSpace(source) || source == "尚无结果" ? EmptyOutcome : source, MainUiTheme.NormalText);
         }
 
         private void Render(string value, Color color)
         {
-            if (outcomeText.text == value && outcomeText.color == color)
-            {
-                lastRendered = value;
-                return;
-            }
+            var contentChanged = outcomeText.text != value || outcomeText.color != color;
+            if (!contentChanged) return;
 
-            outcomeText.text = value;
             outcomeText.color = color;
-            lastRendered = value;
-
-            if (scrollRect == null || scrollRect.content == null || scrollRect.viewport == null) return;
-
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(outcomeText.rectTransform);
-            var height = Mathf.Max(scrollRect.viewport.rect.height, outcomeText.preferredHeight + 12f);
-            scrollRect.content.sizeDelta = new Vector2(0f, height);
-            scrollRect.StopMovement();
-            scrollRect.content.anchoredPosition = Vector2.zero;
-            scrollRect.horizontalNormalizedPosition = 0f;
-            scrollRect.verticalNormalizedPosition = 1f;
+            SpiceScrollableTextLayout.Refresh(scrollRect, outcomeText, value, true);
         }
     }
 
