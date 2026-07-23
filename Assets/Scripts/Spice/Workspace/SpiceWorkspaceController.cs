@@ -62,6 +62,8 @@ namespace ElectricalSim.Spice.Workspace
         private bool initialized;
         private CancellationTokenSource simulationCancellation;
         private bool shuttingDown;
+        private bool componentDragInProgress;
+        private Func<bool> modalInputGuard;
         private RectTransform viewportRect;
         private RectTransform contentRect;
         private SpiceWorkspaceViewController viewController;
@@ -138,7 +140,34 @@ namespace ElectricalSim.Spice.Workspace
                 CancelPaletteDrag();
             }
             if (Input.GetKeyDown(KeyCode.R)) RotateSelectedComponent();
+            if ((Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace)) && CanUseDeletionShortcut()) DeleteSelection();
             RefreshWirePreview();
+        }
+
+        public void ConfigureModalInputGuard(Func<bool> guard)
+        {
+            modalInputGuard = guard;
+        }
+
+        public void SetComponentDragInProgress(bool isDragging)
+        {
+            componentDragInProgress = isDragging;
+        }
+
+        private bool CanUseDeletionShortcut()
+        {
+            if (!isActiveAndEnabled || ResultState == SpiceWorkspaceResultState.Running || HasPendingWire || componentDragInProgress || IsViewNavigationActive)
+            {
+                return false;
+            }
+
+            if (modalInputGuard != null && modalInputGuard())
+            {
+                return false;
+            }
+
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            return selected == null || selected.GetComponentInParent<InputField>() == null;
         }
 
         /// <summary>保留给验证 Harness 的固定位置创建入口；元件池交互改由拖放入口使用。</summary>
@@ -566,6 +595,7 @@ namespace ElectricalSim.Spice.Workspace
             selectedComponent = null;
             selectedWire = null;
             Model.Clear();
+            Model.ResetInstanceNaming();
             generatedNetlistContent = null;
             ClearParameterPanel();
             UpdateRotateAvailability();

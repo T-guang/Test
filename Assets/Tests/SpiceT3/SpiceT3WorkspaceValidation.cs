@@ -20,6 +20,7 @@ namespace ElectricalSim.Spice.T3
             ValidateScrollableTextLayout();
             ValidateOutcomePresentationDiagnostics();
             ValidateFailedRunOutcomePresentation();
+            ValidateInstanceNamingReset();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -71,6 +72,34 @@ namespace ElectricalSim.Spice.T3
             model.MoveComponent(resistor.InstanceId, new Vector2(10f, 20f));
             if (changes != 0) throw new InvalidOperationException("Pure view movement changed the electrical result version.");
             if (!model.RemoveComponent(resistor.InstanceId) || model.Wires.Count != 1) throw new InvalidOperationException("Deleting a component did not remove all associated wires.");
+        }
+
+        private static void ValidateInstanceNamingReset()
+        {
+            var model = new SpiceWorkspaceModel();
+            var resistorOne = model.AddComponent(SpiceComponentKind.Resistor, Vector2.zero);
+            var resistorTwo = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            if (resistorOne.InstanceId != "resistor-001" || resistorTwo.InstanceId != "resistor-002")
+                throw new InvalidOperationException("SPICE instance naming did not start at one per component kind.");
+
+            if (!model.RemoveComponent(resistorOne.InstanceId))
+                throw new InvalidOperationException("SPICE instance deletion setup failed.");
+            var resistorThree = model.AddComponent(SpiceComponentKind.Resistor, Vector2.up);
+            if (resistorThree.InstanceId != "resistor-003")
+                throw new InvalidOperationException("Single component deletion unexpectedly reused an instance number.");
+
+            model.Clear();
+            model.ResetInstanceNaming();
+            var resetResistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.zero);
+            var resetDiode = model.AddComponent(SpiceComponentKind.SiliconDiode, Vector2.right);
+            var resetSource = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.left);
+            var resetVoltageProbe = model.AddComponent(SpiceComponentKind.VoltageProbe, Vector2.up);
+            var resetCurrentProbe = model.AddComponent(SpiceComponentKind.CurrentProbe, Vector2.down);
+            var resetSwitch = model.AddComponent(SpiceComponentKind.IdealSwitch, Vector2.one);
+            if (resetResistor.InstanceId != "resistor-001" || resetDiode.InstanceId != "diode-001" ||
+                resetSource.InstanceId != "source-001" || resetVoltageProbe.InstanceId != "voltage-probe-001" ||
+                resetCurrentProbe.InstanceId != "current-probe-001" || resetSwitch.InstanceId != "switch-001")
+                throw new InvalidOperationException("Clearing the SPICE workspace did not reset per-kind instance naming.");
         }
 
         private static void ValidateHostBindings()

@@ -82,6 +82,15 @@ namespace ElectricalSim.Spice.Workspace
             Changed?.Invoke(SpiceWorkspaceChange.Topology);
         }
 
+        /// <summary>
+        /// Clears only the per-kind naming counters after a successful workspace clear.
+        /// Existing component instance IDs are never renumbered or reused by single deletion.
+        /// </summary>
+        public void ResetInstanceNaming()
+        {
+            nextInstanceNumbers.Clear();
+        }
+
         public SpiceCircuitModel BuildCircuitModel()
         {
             var circuit = new SpiceCircuitModel();

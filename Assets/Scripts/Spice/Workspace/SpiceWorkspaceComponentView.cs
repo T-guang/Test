@@ -118,6 +118,7 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
             dragOccurred = true;
+            owner.SetComponentDragInProgress(true);
             owner.SelectComponent(this);
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(owner.WorkspaceRect, eventData.position, eventData.pressEventCamera, out var pointer)) return;
             dragOffset = rectTransform.anchoredPosition - pointer;
@@ -138,6 +139,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnEndDrag(PointerEventData eventData)
         {
+            owner.SetComponentDragInProgress(false);
         }
 
         private void BuildSelectionFrame()

@@ -53,6 +53,7 @@ namespace ElectricalSim.Spice.Workspace
             parameterDialog = dialogRoot.GetComponent<SpiceComponentParameterDialog>();
             parameterDialog.Initialize(modeController.PopupLayer, workspaceController);
             workspaceController.ParameterDialogRequested += parameterDialog.Open;
+            workspaceController.ConfigureModalInputGuard(() => parameterDialog.IsOpen);
             modeController.ModeChanged += HandleModeChanged;
         }
 
