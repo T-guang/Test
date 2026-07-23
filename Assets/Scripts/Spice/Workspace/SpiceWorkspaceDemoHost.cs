@@ -126,6 +126,11 @@ namespace ElectricalSim.Spice.Workspace
             StyleToolbarButton(bindings.RotateButton, "旋转", false, false, 144f, 238f);
             StyleToolbarButton(bindings.DeleteButton, "删除", false, true, 250f, 344f);
             StyleToolbarButton(bindings.ClearButton, "清空", false, true, 356f, 450f);
+            StyleToolbarButton(FindToolbarButton(bindings, "ZoomOut"), "－", false, false, 464f, 498f);
+            StyleToolbarButton(FindToolbarButton(bindings, "ZoomIn"), "＋", false, false, 564f, 598f);
+            StyleToolbarButton(FindToolbarButton(bindings, "FitAll"), "适配全部", false, false, 606f, 676f);
+            StyleToolbarButton(FindToolbarButton(bindings, "ResetView"), "重置视图", false, false, 684f, 754f);
+            StyleZoomLabel(bindings);
 
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
@@ -173,6 +178,25 @@ namespace ElectricalSim.Spice.Workspace
             colors.selectedColor = colors.highlightedColor;
             colors.disabledColor = MainUiTheme.Hex("E5E7EB");
             button.colors = colors;
+        }
+
+        private static Button FindToolbarButton(SpiceWorkspaceViewBindings bindings, string name)
+        {
+            var toolbar = bindings.RunButton.transform.parent;
+            var transform = toolbar.Find(name);
+            return transform != null ? transform.GetComponent<Button>() : null;
+        }
+
+        private static void StyleZoomLabel(SpiceWorkspaceViewBindings bindings)
+        {
+            var toolbar = bindings.RunButton.transform.parent;
+            var labelTransform = toolbar.Find("ZoomLabel");
+            if (labelTransform == null) return;
+            var text = labelTransform.GetComponent<Text>();
+            if (text == null) return;
+            MainUiTheme.ApplyTextRole(text, MainUiTheme.UiTextRole.ToolbarButton);
+            text.color = MainUiTheme.SecondaryText;
+            text.alignment = TextAnchor.MiddleCenter;
         }
 
         private static void StylePaletteCard(RectTransform paletteRoot, SpiceComponentKind kind, string title, string summary, int column, int row)

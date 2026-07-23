@@ -92,15 +92,17 @@ namespace ElectricalSim.Spice.Workspace
 
         public void SelectTerminal(string terminalId) => owner.HandleTerminalClick(this, terminalId);
         public void HoverTerminal(string terminalId, bool entered) => owner.HandleTerminalHover(this, terminalId, entered);
+        public bool ConsumeViewNavigationClick(PointerEventData eventData) => owner.ConsumeViewNavigationClick(eventData);
 
         public void OnPointerDown(PointerEventData eventData)
         {
+            if (owner.IsViewNavigationActive) return;
             dragOccurred = false;
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (dragOccurred || eventData.dragging)
+            if (eventData.button != PointerEventData.InputButton.Left || owner.ConsumeViewNavigationClick(eventData) || dragOccurred || eventData.dragging)
             {
                 return;
             }
@@ -110,6 +112,11 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnBeginDrag(PointerEventData eventData)
         {
+            if (owner.IsViewNavigationActive)
+            {
+                dragOccurred = true;
+                return;
+            }
             dragOccurred = true;
             owner.SelectComponent(this);
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(owner.WorkspaceRect, eventData.position, eventData.pressEventCamera, out var pointer)) return;
@@ -118,6 +125,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnDrag(PointerEventData eventData)
         {
+            if (owner.IsViewNavigationActive) return;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(owner.WorkspaceRect, eventData.position, eventData.pressEventCamera, out var pointer)) return;
             var half = rectTransform.sizeDelta * 0.5f;
             var bounds = owner.WorkspaceRect.rect;
@@ -344,7 +352,11 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceWorkspaceComponentView component;
         private string terminalId;
         public void Initialize(SpiceWorkspaceComponentView owner, string terminal) { component = owner; terminalId = terminal; }
-        public void OnPointerClick(PointerEventData eventData) => component.SelectTerminal(terminalId);
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left || component.ConsumeViewNavigationClick(eventData)) return;
+            component.SelectTerminal(terminalId);
+        }
         public void OnPointerEnter(PointerEventData eventData) => component.HoverTerminal(terminalId, true);
         public void OnPointerExit(PointerEventData eventData) => component.HoverTerminal(terminalId, false);
     }

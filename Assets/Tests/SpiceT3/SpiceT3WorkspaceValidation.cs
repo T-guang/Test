@@ -166,6 +166,16 @@ namespace ElectricalSim.Spice.T3
                 host.Initialize();
                 if (!host.IsInitialized || host.Controller != workspace)
                     throw new InvalidOperationException("Hidden SPICE Demo host did not initialize exactly once.");
+                if (workspace.ViewController == null || workspace.ContentRect == null || workspace.WorkspaceRect != workspace.ContentRect)
+                    throw new InvalidOperationException("SPICE workspace did not create one explicit view Content root.");
+                if (workspace.ContentRect.parent != viewport || wires.parent != workspace.ContentRect || components.parent != workspace.ContentRect || overlay.parent != workspace.ContentRect)
+                    throw new InvalidOperationException("SPICE workspace layers are not sharing the Content coordinate system.");
+                workspace.ViewController.ZoomIn();
+                if (Math.Abs(workspace.ViewController.CurrentScale - 1.1f) > 0.001f)
+                    throw new InvalidOperationException("SPICE workspace zoom-in step is not 10 percent.");
+                workspace.ViewController.ResetView();
+                if (Math.Abs(workspace.ViewController.CurrentScale - 1f) > 0.001f || workspace.ContentRect.anchoredPosition.sqrMagnitude > 0.001f)
+                    throw new InvalidOperationException("SPICE workspace reset view did not restore the default view state.");
             }
             finally
             {

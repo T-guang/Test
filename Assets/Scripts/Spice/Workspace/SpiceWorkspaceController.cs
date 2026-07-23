@@ -62,10 +62,19 @@ namespace ElectricalSim.Spice.Workspace
         private bool initialized;
         private CancellationTokenSource simulationCancellation;
         private bool shuttingDown;
+        private RectTransform viewportRect;
+        private RectTransform contentRect;
+        private SpiceWorkspaceViewController viewController;
+        private Text zoomLabel;
+        private Button zoomOutButton;
+        private Button zoomInButton;
 
         public SpiceWorkspaceModel Model { get; } = new SpiceWorkspaceModel();
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
         public RectTransform WorkspaceRect { get; private set; }
+        public RectTransform ViewportRect => viewportRect;
+        public RectTransform ContentRect => contentRect;
+        public SpiceWorkspaceViewController ViewController => viewController;
         public RectTransform WireLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
         public bool HasPendingWire => pendingComponent != null;
@@ -171,7 +180,7 @@ namespace ElectricalSim.Spice.Workspace
             if (!paletteDragActive) return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(WorkspaceRect, screenPosition, eventCamera, out var local);
             palettePreview.rectTransform.anchoredPosition = local;
-            palettePreview.color = RectTransformUtility.RectangleContainsScreenPoint(WorkspaceRect, screenPosition, eventCamera)
+            palettePreview.color = IsPointerInsideViewport(screenPosition, eventCamera)
                 ? new Color(0.15f, 0.39f, 0.92f, 0.22f)
                 : new Color(0.39f, 0.45f, 0.55f, 0.16f);
         }
@@ -179,7 +188,7 @@ namespace ElectricalSim.Spice.Workspace
         public void EndPaletteDrag(Vector2 screenPosition, Camera eventCamera)
         {
             if (!paletteDragActive) return;
-            if (RectTransformUtility.RectangleContainsScreenPoint(WorkspaceRect, screenPosition, eventCamera) && TryScreenToWorkspace(screenPosition, eventCamera, out var local))
+            if (IsPointerInsideViewport(screenPosition, eventCamera) && TryScreenToWorkspace(screenPosition, eventCamera, out var local))
             {
                 CreateComponent(paletteKind, local);
             }
@@ -189,6 +198,24 @@ namespace ElectricalSim.Spice.Workspace
         public bool TryScreenToWorkspace(Vector2 screenPosition, Camera eventCamera, out Vector2 localPosition)
         {
             return RectTransformUtility.ScreenPointToLocalPointInRectangle(WorkspaceRect, screenPosition, eventCamera, out localPosition);
+        }
+
+        private bool IsPointerInsideViewport(Vector2 screenPosition, Camera eventCamera)
+        {
+            return viewportRect != null && RectTransformUtility.RectangleContainsScreenPoint(viewportRect, screenPosition, eventCamera);
+        }
+
+        public bool IsViewNavigationActive => viewController != null && viewController.IsPanning;
+
+        public bool ConsumeViewNavigationClick(PointerEventData eventData)
+        {
+            return viewController != null && viewController.ConsumeNavigationClick(eventData);
+        }
+
+        public void UpdateZoomControlState(float scale)
+        {
+            if (zoomOutButton != null) zoomOutButton.interactable = scale > 0.4001f;
+            if (zoomInButton != null) zoomInButton.interactable = scale < 1.9999f;
         }
 
         public bool Connect(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState = null)
@@ -470,6 +497,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void HandleWorkspacePointerClick(PointerEventData eventData)
         {
+            if (ConsumeViewNavigationClick(eventData)) return;
             if (eventData.button == PointerEventData.InputButton.Right)
             {
                 UndoPendingWaypoint();
@@ -542,6 +570,8 @@ namespace ElectricalSim.Spice.Workspace
             ClearParameterPanel();
             UpdateRotateAvailability();
             RefreshNetlistUi();
+            // 清空 SPICE 画布后重置为 100% 和初始中心
+            if (viewController != null) viewController.ResetView();
         }
 
         public void CancelPendingWire()
@@ -627,7 +657,21 @@ namespace ElectricalSim.Spice.Workspace
             bindings.DeleteButton.onClick.AddListener(DeleteSelection);
             bindings.ClearButton.onClick.AddListener(ClearWorkspace);
             statusText = SpiceWorkspaceUi.CreateText(toolbar.transform, "Status", "未计算", 15, FontStyle.Normal, TextAnchor.MiddleRight, MainUiTheme.MutedText);
-            SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-330f, 0f), new Vector2(-20f, 0f));
+            SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-350f, 0f), new Vector2(-20f, 0f));
+
+            // 工具栏新增视图命令按钮：[－] [100%] [＋] [适配全部] [重置视图]
+            zoomOutButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ZoomOut", "－", MainUiTheme.ToolbarButton, null);
+            var zoomOut = zoomOutButton;
+            SpiceWorkspaceUi.Anchor(zoomOut.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(464f, -20f), new Vector2(498f, 20f));
+            zoomLabel = SpiceWorkspaceUi.CreateText(toolbar.transform, "ZoomLabel", "100%", 13, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(zoomLabel.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(506f, -14f), new Vector2(556f, 14f));
+            zoomInButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ZoomIn", "＋", MainUiTheme.ToolbarButton, null);
+            var zoomIn = zoomInButton;
+            SpiceWorkspaceUi.Anchor(zoomIn.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(564f, -20f), new Vector2(598f, 20f));
+            var fitAll = SpiceWorkspaceUi.CreateButton(toolbar.transform, "FitAll", "适配全部", MainUiTheme.ToolbarButton, null);
+            SpiceWorkspaceUi.Anchor(fitAll.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(606f, -20f), new Vector2(676f, 20f));
+            var resetView = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ResetView", "重置视图", MainUiTheme.ToolbarButton, null);
+            SpiceWorkspaceUi.Anchor(resetView.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(684f, -20f), new Vector2(754f, 20f));
 
             var palette = bindings.PaletteRoot;
             var paletteTitle = SpiceWorkspaceUi.CreateText(palette.transform, "Title", "基础元件", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
@@ -644,10 +688,38 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
             var workspace = bindings.WorkspaceViewport;
-            WorkspaceRect = workspace;
-            workspace.gameObject.AddComponent<SpiceWorkspaceBlankClick>().Initialize(this);
+            viewportRect = workspace;
+            // 为 Viewport 添加 RectMask2D 以裁剪缩放/平移后超出视口的内容
+            if (workspace.GetComponent<RectMask2D>() == null) workspace.gameObject.AddComponent<RectMask2D>();
+            // 创建统一 Content 容器：缩放/平移只作用于 Content，所有层共享 Content 坐标系
+            contentRect = new GameObject("SpiceWorkspaceContent", typeof(RectTransform)).GetComponent<RectTransform>();
+            contentRect.SetParent(workspace, false);
+            contentRect.anchorMin = new Vector2(0.5f, 0.5f);
+            contentRect.anchorMax = new Vector2(0.5f, 0.5f);
+            contentRect.pivot = new Vector2(0.5f, 0.5f);
+            // 逻辑画布宽高 = Viewport 初始尺寸 × 3
+            var viewportSize = workspace.rect.size;
+            contentRect.sizeDelta = viewportSize * 3f;
+            contentRect.localScale = Vector3.one;
+            contentRect.anchoredPosition = Vector2.zero;
+            // 将三层重新挂到 Content 下，保持 WireLayer 在最底
+            var gridLayer = FindDirectGridLayer(workspace);
+            ConfigureWorkspaceLayer(gridLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.WireLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.ComponentLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.OverlayLayer, contentRect);
+            if (gridLayer != null) gridLayer.SetSiblingIndex(0);
+            bindings.WireLayer.SetSiblingIndex(1);
+            bindings.ComponentLayer.SetSiblingIndex(2);
+            bindings.OverlayLayer.SetSiblingIndex(3);
+            // WorkspaceRect 指向 Content：ComponentView/WireView 的坐标转换无需修改
+            WorkspaceRect = contentRect;
             WireLayer = bindings.WireLayer;
             OverlayLayer = bindings.OverlayLayer;
+            // BlankClick 仍挂在 Viewport 上，负责空白点击和右键撤点
+            workspace.gameObject.AddComponent<SpiceWorkspaceBlankClick>().Initialize(this);
+            // ViewController owns view-only zoom and navigation input.
+            viewController = workspace.gameObject.AddComponent<SpiceWorkspaceViewController>();
 
             palettePreview = SpiceWorkspaceUi.CreateImage(OverlayLayer, "PaletteDragPreview", new Color(0.15f, 0.39f, 0.92f, 0.22f));
             palettePreview.rectTransform.sizeDelta = new Vector2(130f, 72f);
@@ -706,6 +778,45 @@ namespace ElectricalSim.Spice.Workspace
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             ValidateAssistantScrollStructure();
+
+            // 视图控制器初始化（Content 已装配，zoomLabel 已创建）
+            viewController.Initialize(this, viewportRect, contentRect, zoomLabel);
+            // 视图命令按钮绑定
+            zoomOut.onClick.AddListener(viewController.ZoomOut);
+            zoomIn.onClick.AddListener(viewController.ZoomIn);
+            fitAll.onClick.AddListener(viewController.FitAll);
+            resetView.onClick.AddListener(viewController.ResetView);
+        }
+
+        private static RectTransform FindDirectGridLayer(RectTransform workspace)
+        {
+            for (var index = 0; index < workspace.childCount; index++)
+            {
+                var child = workspace.GetChild(index) as RectTransform;
+                if (child != null && child.GetComponent<WorkspaceGrid>() != null)
+                {
+                    return child;
+                }
+            }
+
+            return null;
+        }
+
+        private static void ConfigureWorkspaceLayer(RectTransform layer, RectTransform content)
+        {
+            if (layer == null)
+            {
+                return;
+            }
+
+            layer.SetParent(content, false);
+            layer.anchorMin = Vector2.zero;
+            layer.anchorMax = Vector2.one;
+            layer.pivot = new Vector2(0.5f, 0.5f);
+            layer.anchoredPosition = Vector2.zero;
+            layer.sizeDelta = Vector2.zero;
+            layer.localScale = Vector3.one;
+            layer.localRotation = Quaternion.identity;
         }
 
         private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -982,6 +1093,53 @@ namespace ElectricalSim.Spice.Workspace
             var half = size * 0.5f;
             var bounds = WorkspaceRect.rect;
             return new Vector2(Mathf.Clamp(position.x, bounds.xMin + half.x, bounds.xMax - half.x), Mathf.Clamp(position.y, bounds.yMin + half.y, bounds.yMax - half.y));
+        }
+
+        /// <summary>
+        /// 计算画布内容的边界（Content 局部坐标），用于"适配全部"。
+        /// 边界来源：元件逻辑位置 + 旋转后视觉尺寸、Wire 两端、ManualRoutePoints。
+        /// 不包含 pending Wire 预览、鼠标位置、选择装饰或整个 Content Rect。
+        /// </summary>
+        public Rect? ComputeContentBounds()
+        {
+            if (componentViews.Count == 0 && wireViews.Count == 0) return null;
+            float? minX = null, minY = null, maxX = null, maxY = null;
+            foreach (var component in Model.Components)
+            {
+                var size = SpiceWorkspaceComponentView.SizeFor(component.Kind);
+                if (componentViews.TryGetValue(component.InstanceId, out var view))
+                {
+                    var rot = view.RotationQuarterTurns;
+                    var visualSize = rot % 2 != 0 ? new Vector2(size.y, size.x) : size;
+                    var half = visualSize * 0.5f;
+                    ExpandBounds(ref minX, ref minY, ref maxX, ref maxY, component.Position - half);
+                    ExpandBounds(ref minX, ref minY, ref maxX, ref maxY, component.Position + half);
+                }
+            }
+            foreach (var wire in wireViews)
+            {
+                var startPos = wire.Data.StartComponentId != null && componentViews.TryGetValue(wire.Data.StartComponentId, out var startView)
+                    ? startView.GetTerminalPosition(wire.Data.StartTerminalId) : Vector2.zero;
+                var endPos = wire.Data.EndComponentId != null && componentViews.TryGetValue(wire.Data.EndComponentId, out var endView)
+                    ? endView.GetTerminalPosition(wire.Data.EndTerminalId) : Vector2.zero;
+                ExpandBounds(ref minX, ref minY, ref maxX, ref maxY, startPos);
+                ExpandBounds(ref minX, ref minY, ref maxX, ref maxY, endPos);
+                if (wire.Data.VisualState != null && wire.Data.VisualState.RouteMode == SpiceWireRouteMode.Manual)
+                {
+                    foreach (var waypoint in wire.Data.VisualState.Waypoints)
+                        ExpandBounds(ref minX, ref minY, ref maxX, ref maxY, waypoint);
+                }
+            }
+            if (!minX.HasValue) return null;
+            return Rect.MinMaxRect(minX.Value, minY.Value, maxX.Value, maxY.Value);
+        }
+
+        private static void ExpandBounds(ref float? minX, ref float? minY, ref float? maxX, ref float? maxY, Vector2 point)
+        {
+            if (!minX.HasValue || point.x < minX.Value) minX = point.x;
+            if (!maxX.HasValue || point.x > maxX.Value) maxX = point.x;
+            if (!minY.HasValue || point.y < minY.Value) minY = point.y;
+            if (!maxY.HasValue || point.y > maxY.Value) maxY = point.y;
         }
 
         private string StateMessage()

@@ -195,6 +195,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (eventData.button != PointerEventData.InputButton.Left || owner.ConsumeViewNavigationClick(eventData)) return;
             owner.SelectWire(wire);
         }
     }
