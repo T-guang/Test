@@ -797,7 +797,7 @@ namespace ElectricalSim.Spice.Workspace
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
             var resultHeader = resultRoot.Find("ResultHeader") as RectTransform;
             copyResultButton = SpiceWorkspaceUi.CreateButton(resultHeader, "CopyResult", "复制结果", MainUiTheme.FilterButton, CopyResult);
-            SpiceWorkspaceUi.Anchor(copyResultButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-94f, 2f), new Vector2(-14f, -2f));
+            SpiceWorkspaceUi.Anchor(copyResultButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-102f, 2f), new Vector2(-14f, -2f));
             resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 38f);
             resultText = resultView.Text;
 
@@ -805,13 +805,13 @@ namespace ElectricalSim.Spice.Workspace
             netlistHeader.rectTransform.pivot = new Vector2(0.5f, 1f);
             SpiceWorkspaceUi.Anchor(netlistHeader.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(10f, -58f), new Vector2(-10f, 0f));
             var netlistTitle = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Title", "生成网表", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-142f, -4f));
+            SpiceWorkspaceUi.Anchor(netlistTitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-152f, -4f));
             netlistStatusText = SpiceWorkspaceUi.CreateText(netlistHeader.transform, "Status", "尚未生成网表。", 11, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.MutedText);
             SpiceWorkspaceUi.Anchor(netlistStatusText.rectTransform, Vector2.zero, new Vector2(1f, 0.5f), new Vector2(14f, 4f), new Vector2(-14f, 0f));
             netlistToggleButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Toggle", "展开", MainUiTheme.FilterButton, ToggleNetlist);
-            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-132f, 2f), new Vector2(-76f, -2f));
+            SpiceWorkspaceUi.Anchor(netlistToggleButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-148f, 2f), new Vector2(-84f, -2f));
             copyNetlistButton = SpiceWorkspaceUi.CreateButton(netlistHeader.transform, "Copy", "复制", MainUiTheme.FilterButton, CopyNetlist);
-            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-70f, 2f), new Vector2(-14f, -2f));
+            SpiceWorkspaceUi.Anchor(copyNetlistButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-78f, 2f), new Vector2(-14f, -2f));
 
             netlistView = CreateScrollableTextView(netlistRoot, "NetlistScrollView", "NetlistText", 12, MainUiTheme.NormalText, 62f);
             netlistText = netlistView.Text;
