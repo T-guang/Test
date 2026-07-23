@@ -21,6 +21,13 @@ namespace ElectricalSim.Spice.T3
             ValidateOutcomePresentationDiagnostics();
             ValidateFailedRunOutcomePresentation();
             ValidateInstanceNamingReset();
+            // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
+            // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
+            // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
+            // 赋值与 SetResultText 使用同一变量，文本一致性由构造保证。
+            ValidateCopyableOutcomeFailedState();
+            ValidateCopyableOutcomeNonCopyableStates();
+            ValidateCopyEligibilityDoesNotMutate();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -412,6 +419,140 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("Blocking SPICE diagnostics were replaced by the empty-result placeholder instead of appearing in the formal result panel. Sink='" +
                         (diagnosticText == null ? "<missing>" : diagnosticText.text) + "' Result='" + resultText.text + "'.");
                 }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static SpiceWorkspaceController CreateInitializedWorkspaceForCopy(Transform parent, out SpiceWorkspaceViewBindings bindings)
+        {
+            var spiceRoot = CreateRoot(parent);
+            spiceRoot.SetActive(false);
+            bindings = spiceRoot.AddComponent<SpiceWorkspaceViewBindings>();
+            var workspace = spiceRoot.AddComponent<SpiceWorkspaceController>();
+            var palette = CreateRect(spiceRoot.transform);
+            var viewport = CreateRect(spiceRoot.transform);
+            var wires = CreateRect(viewport);
+            var components = CreateRect(viewport);
+            var overlay = CreateRect(viewport);
+            var assistant = CreateRect(spiceRoot.transform);
+            var parameters = CreateRect(assistant);
+            var results = CreateRect(assistant);
+            var netlist = CreateRect(assistant);
+            var diagnostics = CreateRect(assistant);
+            bindings.Bind(palette, viewport, wires, components, overlay, assistant, parameters, results, netlist, diagnostics,
+                CreateButton(parent), CreateButton(parent), CreateButton(parent), CreateButton(parent));
+
+            var hostRoot = CreateRoot(parent);
+            hostRoot.SetActive(false);
+            var host = hostRoot.AddComponent<SpiceWorkspaceDemoHost>();
+            host.Configure(bindings, workspace);
+            host.Initialize();
+            spiceRoot.SetActive(true);
+            hostRoot.SetActive(true);
+            return workspace;
+        }
+
+        private static void ValidateCopyableOutcomeFailedState()
+        {
+            var canvasRoot = new GameObject("SpiceCopyFailedValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var failed = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (failed == null || failed.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("The invalid SPICE circuit did not enter the failed result state for copy validation.");
+
+                if (!workspace.TryGetCopyableOutcomeText(out var copyText))
+                    throw new InvalidOperationException("SPICE blocking diagnostics were not eligible for copy.");
+                if (!copyText.Contains("SPICE_GROUND_MISSING") && !copyText.Contains("SPICE_FLOATING_TERMINAL"))
+                    throw new InvalidOperationException("SPICE copyable outcome text does not contain blocking diagnostics.");
+
+                var copyButton = bindings.ResultRoot.Find("ResultHeader/CopyResult")?.GetComponent<Button>();
+                if (copyButton == null)
+                    throw new InvalidOperationException("SPICE copy result button was not created.");
+                if (!copyButton.interactable)
+                    throw new InvalidOperationException("SPICE copy result button was not interactable in the failed state.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // NeverRun / Failed / Clear 状态的复制资格和按钮交互验证。
+        // Running / Stale 状态需要 ngspice 求解或 Current 前置，在 batchmode 中无法同步等待
+        // （RunCalculationAsync 的 await 会捕获 UnitySynchronizationContext 导致死锁）。
+        // Running 路径在 RunCalculationAsync 入口即设 lastOutcomeText = null（L324），
+        // Stale 路径在 HandleModelChanged 中设 lastOutcomeText = null（L905），不可复制由构造保证。
+        private static void ValidateCopyableOutcomeNonCopyableStates()
+        {
+            var canvasRoot = new GameObject("SpiceCopyNonCopyableValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                var copyButton = bindings.ResultRoot.Find("ResultHeader/CopyResult")?.GetComponent<Button>();
+                if (copyButton == null)
+                    throw new InvalidOperationException("SPICE copy result button was not created.");
+
+                // NeverRun：刚初始化，未运行，不可复制
+                if (workspace.TryGetCopyableOutcomeText(out _))
+                    throw new InvalidOperationException("SPICE workspace was copyable before any calculation ran.");
+                if (copyButton.interactable)
+                    throw new InvalidOperationException("SPICE copy result button was interactable before any calculation ran.");
+
+                // 运行无效电路进入 Failed，阻断诊断可复制
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var failed = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (failed == null || failed.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("The invalid SPICE circuit did not enter the failed result state for non-copyable validation.");
+                if (!workspace.TryGetCopyableOutcomeText(out _))
+                    throw new InvalidOperationException("SPICE failed result was not eligible for copy.");
+                if (!copyButton.interactable)
+                    throw new InvalidOperationException("SPICE copy result button was not interactable in the failed state.");
+
+                // Clear：清空后不可复制
+                workspace.ClearWorkspace();
+                if (workspace.TryGetCopyableOutcomeText(out _))
+                    throw new InvalidOperationException("SPICE cleared workspace was eligible for copy.");
+                if (copyButton.interactable)
+                    throw new InvalidOperationException("SPICE copy result button was interactable after clearing the workspace.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateCopyEligibilityDoesNotMutate()
+        {
+            var canvasRoot = new GameObject("SpiceCopyNoMutateValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var failed = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (failed == null || failed.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("The invalid SPICE circuit did not enter the failed result state for mutation validation.");
+
+                var componentCount = workspace.Model.Components.Count;
+                var wireCount = workspace.Model.Wires.Count;
+                var resultState = workspace.ResultState;
+
+                for (var index = 0; index < 5; index++)
+                {
+                    if (!workspace.TryGetCopyableOutcomeText(out _))
+                        throw new InvalidOperationException("SPICE copy eligibility check returned false during repeated calls.");
+                }
+
+                if (workspace.Model.Components.Count != componentCount || workspace.Model.Wires.Count != wireCount || workspace.ResultState != resultState)
+                    throw new InvalidOperationException("SPICE copy eligibility check mutated the workspace model, wires, or result state.");
             }
             finally
             {

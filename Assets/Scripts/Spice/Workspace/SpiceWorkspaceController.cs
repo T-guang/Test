@@ -68,6 +68,10 @@ namespace ElectricalSim.Spice.Workspace
         private RectTransform contentRect;
         private SpiceWorkspaceViewController viewController;
         private Text zoomLabel;
+        private Button copyResultButton;
+        // 缓存最近一次正式结果/阻断诊断的权威输出文本（与正式可见 ResultText 一致），
+        // 用于复制资格判断和复制输出；不读取隐藏 DiagnosticRoot，不重新格式化结果。
+        private string lastOutcomeText;
         private Button zoomOutButton;
         private Button zoomInButton;
 
@@ -317,6 +321,7 @@ namespace ElectricalSim.Spice.Workspace
             ResultState = SpiceWorkspaceResultState.Running;
             runButton.interactable = false;
             statusText.text = "计算中...";
+            lastOutcomeText = null;
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             RefreshNetlistUi();
@@ -337,13 +342,17 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     ResultState = SpiceWorkspaceResultState.Current;
                     statusText.text = "结果有效";
-                    SetResultText(FormatResult(result));
+                    var formattedResult = FormatResult(result);
+                    lastOutcomeText = string.IsNullOrEmpty(formattedResult) ? null : formattedResult;
+                    SetResultText(formattedResult);
                 }
                 else
                 {
                     ResultState = SpiceWorkspaceResultState.Failed;
                     statusText.text = "计算失败";
-                    SetDiagnosticText(FormatDiagnostics(result));
+                    var formattedDiagnostics = FormatDiagnostics(result);
+                    lastOutcomeText = string.IsNullOrEmpty(formattedDiagnostics) ? null : formattedDiagnostics;
+                    SetDiagnosticText(formattedDiagnostics);
                 }
                 return result;
             }
@@ -364,6 +373,7 @@ namespace ElectricalSim.Spice.Workspace
                 ResultState = SpiceWorkspaceResultState.Failed;
                 generatedNetlistContent = null;
                 statusText.text = "计算失败";
+                lastOutcomeText = exception.ToString();
                 SetDiagnosticText(exception.ToString());
                 return null;
             }
@@ -379,6 +389,7 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     runButton.interactable = true;
                     RefreshNetlistUi();
+                    RefreshCopyResultButton();
                 }
             }
         }
@@ -597,9 +608,11 @@ namespace ElectricalSim.Spice.Workspace
             Model.Clear();
             Model.ResetInstanceNaming();
             generatedNetlistContent = null;
+            lastOutcomeText = null;
             ClearParameterPanel();
             UpdateRotateAvailability();
             RefreshNetlistUi();
+            RefreshCopyResultButton();
             // 清空 SPICE 画布后重置为 100% 和初始中心
             if (viewController != null) viewController.ResetView();
         }
@@ -781,6 +794,9 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
 
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
+            var resultHeader = resultRoot.Find("ResultHeader") as RectTransform;
+            copyResultButton = SpiceWorkspaceUi.CreateButton(resultHeader, "CopyResult", "复制结果", MainUiTheme.FilterButton, CopyResult);
+            SpiceWorkspaceUi.Anchor(copyResultButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-78f, 2f), new Vector2(-14f, -2f));
             resultView = CreateScrollableTextView(resultRoot, "ResultScrollView", "ResultText", 14, MainUiTheme.NormalText, 38f);
             resultText = resultView.Text;
 
@@ -807,6 +823,7 @@ namespace ElectricalSim.Spice.Workspace
             RefreshNetlistUi();
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
+            RefreshCopyResultButton();
             ValidateAssistantScrollStructure();
 
             // 视图控制器初始化（Content 已装配，zoomLabel 已创建）
@@ -882,9 +899,14 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleModelChanged(SpiceWorkspaceChange change)
         {
-            if (ResultState != SpiceWorkspaceResultState.Running && (ResultState == SpiceWorkspaceResultState.Current || !string.IsNullOrEmpty(generatedNetlistContent))) ResultState = SpiceWorkspaceResultState.Stale;
+            if (ResultState != SpiceWorkspaceResultState.Running && (ResultState == SpiceWorkspaceResultState.Current || !string.IsNullOrEmpty(generatedNetlistContent)))
+            {
+                ResultState = SpiceWorkspaceResultState.Stale;
+                lastOutcomeText = null;
+            }
             if (ResultState != SpiceWorkspaceResultState.Running) statusText.text = StateMessage();
             RefreshNetlistUi();
+            RefreshCopyResultButton();
         }
 
         // 网表仅显示 SpiceNetlistBuilder 已生成的原始文本，UI 不自行重建近似内容。
@@ -899,6 +921,31 @@ namespace ElectricalSim.Spice.Workspace
             if (string.IsNullOrEmpty(generatedNetlistContent)) return;
             GUIUtility.systemCopyBuffer = generatedNetlistContent;
             statusText.text = "已复制网表";
+        }
+
+        /// <summary>
+        /// 获取当前可复制的正式结果/阻断诊断文本。
+        /// 文本来源为同一 Presentation 的权威输出（与正式可见 ResultText 一致），
+        /// 不读取隐藏 DiagnosticRoot，不重新格式化结果。
+        /// 仅在 ResultState 为 Current 或 Failed 且存在实际内容时可复制；
+        /// NeverRun、Running、Stale、空文本或占位文本时不可复制。
+        /// </summary>
+        public bool TryGetCopyableOutcomeText(out string text)
+        {
+            text = lastOutcomeText;
+            return !string.IsNullOrEmpty(text);
+        }
+
+        private void CopyResult()
+        {
+            if (!TryGetCopyableOutcomeText(out var text)) return;
+            GUIUtility.systemCopyBuffer = text;
+            statusText.text = "结果已复制";
+        }
+
+        private void RefreshCopyResultButton()
+        {
+            if (copyResultButton != null) copyResultButton.interactable = TryGetCopyableOutcomeText(out _);
         }
 
         private void RefreshNetlistUi()

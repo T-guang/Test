@@ -396,6 +396,7 @@ namespace ElectricalSim.Spice.Workspace
             LayoutAssistantSections(bindings);
             StyleParameterSection(bindings.ParameterRoot);
             var outcomeText = StyleTextSection(bindings.ResultRoot, "ResultHeader", "仿真结果", "ResultScrollView", "ResultText", "尚无仿真结果\n完成接线后点击“运行计算”", false, MainUiTheme.NormalText);
+            StyleResultCopyButton(bindings.ResultRoot);
             StyleNetlistSection(bindings.NetlistRoot);
             var diagnosticText = StyleTextSection(bindings.DiagnosticRoot, "DiagnosticHeader", "诊断信息", "DiagnosticScrollView", "DiagnosticText", "暂无诊断信息", false, MainUiTheme.DangerRed);
             bindings.DiagnosticRoot.gameObject.SetActive(false);
@@ -460,6 +461,22 @@ namespace ElectricalSim.Spice.Workspace
 
             var presenter = section.GetComponent<SpiceAssistantParameterPresentation>() ?? section.gameObject.AddComponent<SpiceAssistantParameterPresentation>();
             presenter.Initialize(title != null ? title.GetComponent<Text>() : null, subtitle, input != null ? input.GetComponent<InputField>() : null, unit != null ? unit.GetComponent<Button>() : null, apply != null ? apply.gameObject : null);
+        }
+
+        private static void StyleResultCopyButton(RectTransform resultRoot)
+        {
+            if (resultRoot == null) return;
+            var header = resultRoot.Find("ResultHeader") as RectTransform;
+            if (header == null) return;
+
+            // 调整标题右边距，为复制按钮留出空间
+            var title = header.Find("Title") as RectTransform;
+            if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-90f, -4f));
+
+            var buttonTransform = header.Find("CopyResult") as RectTransform;
+            if (buttonTransform == null) return;
+            StyleSmallButton(buttonTransform.GetComponent<Button>(), false, "复制结果");
+            Anchor(buttonTransform, new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-78f, 2f), new Vector2(-14f, -2f));
         }
 
         private static void StyleNetlistSection(RectTransform section)
