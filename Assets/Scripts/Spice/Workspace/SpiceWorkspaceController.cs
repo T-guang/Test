@@ -322,6 +322,7 @@ namespace ElectricalSim.Spice.Workspace
             runButton.interactable = false;
             statusText.text = "计算中...";
             lastOutcomeText = null;
+            RefreshCopyResultButton();
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             RefreshNetlistUi();
@@ -899,7 +900,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleModelChanged(SpiceWorkspaceChange change)
         {
-            if (ResultState != SpiceWorkspaceResultState.Running && (ResultState == SpiceWorkspaceResultState.Current || !string.IsNullOrEmpty(generatedNetlistContent)))
+            if (ResultState != SpiceWorkspaceResultState.Running && ResultState != SpiceWorkspaceResultState.NeverRun)
             {
                 ResultState = SpiceWorkspaceResultState.Stale;
                 lastOutcomeText = null;
@@ -932,7 +933,8 @@ namespace ElectricalSim.Spice.Workspace
         /// </summary>
         public bool TryGetCopyableOutcomeText(out string text)
         {
-            text = lastOutcomeText;
+            var isCurrentOutcome = ResultState == SpiceWorkspaceResultState.Current || ResultState == SpiceWorkspaceResultState.Failed;
+            text = isCurrentOutcome ? lastOutcomeText : null;
             return !string.IsNullOrEmpty(text);
         }
 

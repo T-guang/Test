@@ -516,6 +516,15 @@ namespace ElectricalSim.Spice.T3
                 if (!copyButton.interactable)
                     throw new InvalidOperationException("SPICE copy result button was not interactable in the failed state.");
 
+                // 修改电路后，上一轮阻断诊断不再代表当前电路，必须失效且禁止复制。
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.up * 80f);
+                if (workspace.ResultState != SpiceWorkspaceResultState.Stale)
+                    throw new InvalidOperationException("SPICE failed diagnostics did not become stale after the circuit changed.");
+                if (workspace.TryGetCopyableOutcomeText(out _))
+                    throw new InvalidOperationException("SPICE stale diagnostics were still eligible for copy.");
+                if (copyButton.interactable)
+                    throw new InvalidOperationException("SPICE copy result button stayed interactable after diagnostics became stale.");
+
                 // Clear：清空后不可复制
                 workspace.ClearWorkspace();
                 if (workspace.TryGetCopyableOutcomeText(out _))
