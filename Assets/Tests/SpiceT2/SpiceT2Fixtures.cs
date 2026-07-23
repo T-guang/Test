@@ -200,7 +200,31 @@ namespace ElectricalSim.Spice.T2
             return circuit;
         }
 
-        // 电流探针并联到电压源会形成理想电压约束冲突，必须在调用 ngspice 前拦截。
+        // Cross-component contract: closed switch, serial current probe, diode, and differential voltage probe.
+        public static SpiceCircuitModel DcLibraryV1SeriesChain()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source", 5d));
+            circuit.Components.Add(SpiceComponentModel.IdealSwitch("switch", true));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("iprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r1", 1000d));
+            circuit.Components.Add(SpiceComponentModel.SiliconDiode("d1"));
+            circuit.Components.Add(SpiceComponentModel.Resistor("r2", 2340d));
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("vprobe-1"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground"));
+            Wire(circuit, "source", "positive", "switch", "positive");
+            Wire(circuit, "switch", "negative", "iprobe-1", "positive");
+            Wire(circuit, "iprobe-1", "negative", "r1", "positive");
+            Wire(circuit, "r1", "negative", "d1", "positive");
+            Wire(circuit, "d1", "negative", "r2", "positive");
+            Wire(circuit, "r2", "negative", "ground", "ground");
+            Wire(circuit, "source", "negative", "ground", "ground");
+            Wire(circuit, "vprobe-1", "positive", "r2", "positive");
+            Wire(circuit, "vprobe-1", "negative", "ground", "ground");
+            return circuit;
+        }
+
+        // Parallel with an ideal voltage source must be rejected before ngspice.
         public static SpiceCircuitModel CurrentProbeParallelSource()
         {
             var circuit = SingleResistor();

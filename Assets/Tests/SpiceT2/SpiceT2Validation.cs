@@ -41,6 +41,7 @@ namespace ElectricalSim.Spice.T2
             ExpectCurrentProbeWireDirectionDoesNotAffectNetlist();
             ExpectCurrentProbeNotParameterEditable();
             ExpectCurrentProbeConstraintConflict();
+            ExpectDcLibraryV1NetlistContract();
         }
 
         public static async System.Threading.Tasks.Task<List<SpiceSimulationResult>> RunIntegrationChecksAsync()
@@ -76,6 +77,7 @@ namespace ElectricalSim.Spice.T2
             results.Add(await VerifyCurrentProbeSeries(service).ConfigureAwait(false));
             results.Add(await VerifyReversedCurrentProbe(service).ConfigureAwait(false));
             results.Add(await VerifyTwoCurrentProbes(service).ConfigureAwait(false));
+            results.Add(await VerifyDcLibraryV1SeriesChain(service).ConfigureAwait(false));
             await VerifyCurrentProbeOnlyInConnectedAsync(service).ConfigureAwait(false);
             return results;
         }
@@ -581,6 +583,20 @@ namespace ElectricalSim.Spice.T2
             }
         }
 
+        private static void ExpectDcLibraryV1NetlistContract()
+        {
+            var circuit = SpiceT2Fixtures.DcLibraryV1SeriesChain();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (!graph.IsValid) throw new InvalidOperationException("DC library V1 series-chain fixture should produce a valid graph.");
+            if (graph.SpiceNameByComponentId.ContainsKey("vprobe-1")) throw new InvalidOperationException("Voltage probe must remain non-invasive in the DC library V1 fixture.");
+
+            var netlist = SpiceNetlistBuilder.BuildDcOperatingPoint(circuit, graph).Content;
+            if (!netlist.Contains("RSW") || !netlist.Contains("VPROBE") || !netlist.Contains("D1 ") || CountModelDirectives(netlist) != 1)
+            {
+                throw new InvalidOperationException("DC library V1 netlist must contain the switch, current probe, diode, and exactly one diode model directive.");
+            }
+        }
+
         private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyCurrentProbeSeries(SpiceDcSimulationService service)
         {
             var result = await service.SimulateAsync(SpiceT2Fixtures.CurrentProbeSeries()).ConfigureAwait(false);
@@ -606,6 +622,30 @@ namespace ElectricalSim.Spice.T2
             ExpectSuccess(result);
             ExpectNear(result.ComponentResults["iprobe-1"].Current, 0.01d, CurrentTolerance, "first current probe current");
             ExpectNear(result.ComponentResults["iprobe-2"].Current, 0.01d, CurrentTolerance, "second current probe current");
+            return result;
+        }
+
+        private static async System.Threading.Tasks.Task<SpiceSimulationResult> VerifyDcLibraryV1SeriesChain(SpiceDcSimulationService service)
+        {
+            var result = await service.SimulateAsync(SpiceT2Fixtures.DcLibraryV1SeriesChain()).ConfigureAwait(false);
+            ExpectSuccess(result);
+
+            var currentProbe = result.ComponentResults["iprobe-1"];
+            var r1 = result.ComponentResults["r1"];
+            var r2 = result.ComponentResults["r2"];
+            var diode = result.ComponentResults["d1"];
+            var voltageProbe = result.ComponentResults["vprobe-1"];
+            if (currentProbe.Current <= DiodeCurrentTolerance) throw new InvalidOperationException("DC library V1 current probe must report positive series current.");
+            ExpectNear(r1.Current, currentProbe.Current, DiodeCurrentTolerance, "DC library V1 r1/probe current");
+            ExpectNear(r2.Current, currentProbe.Current, DiodeCurrentTolerance, "DC library V1 r2/probe current");
+            ExpectNear(diode.Current, currentProbe.Current, DiodeCurrentTolerance, "DC library V1 diode/probe current");
+            ExpectNear(voltageProbe.Voltage, r2.Voltage, VoltageTolerance, "DC library V1 voltage probe differential voltage");
+            if (!diode.Notes.Contains("状态：正向导通")) throw new InvalidOperationException("DC library V1 diode must report forward conduction.");
+            if (currentProbe.CurrentDirection != "IN-to-OUT" || voltageProbe.VoltageDirection != "V-plus-to-V-minus")
+            {
+                throw new InvalidOperationException("DC library V1 probe direction labels are inconsistent.");
+            }
+
             return result;
         }
 
