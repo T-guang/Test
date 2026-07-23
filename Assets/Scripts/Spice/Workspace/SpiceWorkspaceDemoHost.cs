@@ -471,12 +471,12 @@ namespace ElectricalSim.Spice.Workspace
 
             // 调整标题右边距，为复制按钮留出空间
             var title = header.Find("Title") as RectTransform;
-            if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-108f, -4f));
+            if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-134f, -4f));
 
             var buttonTransform = header.Find("CopyResult") as RectTransform;
             if (buttonTransform == null) return;
             StyleSmallButton(buttonTransform.GetComponent<Button>(), false, "复制结果");
-            Anchor(buttonTransform, new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-102f, 2f), new Vector2(-14f, -2f));
+            Anchor(buttonTransform, new Vector2(1f, 0.5f), new Vector2(1f, 1f), new Vector2(-128f, 2f), new Vector2(-14f, -2f));
         }
 
         private static void StyleNetlistSection(RectTransform section)
@@ -489,7 +489,7 @@ namespace ElectricalSim.Spice.Workspace
             {
                 StyleHeader(header, "生成网表");
                 var title = header.Find("Title") as RectTransform;
-                if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-152f, -4f));
+                if (title != null) Anchor(title, new Vector2(0f, 0.5f), new Vector2(1f, 1f), new Vector2(14f, 0f), new Vector2(-194f, -4f));
                 var status = header.Find("Status") as RectTransform;
                 if (status != null)
                 {
