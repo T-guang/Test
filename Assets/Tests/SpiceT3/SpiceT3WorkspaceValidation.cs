@@ -42,6 +42,11 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingZeroValueAllowed();
             ValidateDrawingInstanceNumber1000RoundTrip();
             ValidateDrawingInstanceIdSuffixBoundary();
+            ValidateDrawingSameEndpointDifferentManualPaths();
+            ValidateDrawingSameEndpointReverseManualPath();
+            ValidateDrawingSameEndpointAutoAndManual();
+            ValidateDrawingPositionNullRejected();
+            ValidateDrawingPositionZeroAllowed();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -1227,6 +1232,18 @@ namespace ElectricalSim.Spice.T3
             if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.DcVoltageSource, "resistor-001"))
                 throw new InvalidOperationException("resistor-001 与 DcVoltageSource 前缀不匹配应被拒绝。");
 
+            // 纯数字严格校验：不接受加号、减号、空白或其他非数字字符
+            if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.Resistor, "resistor-+001"))
+                throw new InvalidOperationException("resistor-+001 应被拒绝（加号非纯数字）。");
+            if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.Resistor, "resistor- 001"))
+                throw new InvalidOperationException("resistor- 001 应被拒绝（前导空格非纯数字）。");
+            if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.Resistor, "resistor-001 "))
+                throw new InvalidOperationException("resistor-001 (末尾空格) 应被拒绝（末尾空格非纯数字）。");
+            if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.Resistor, "resistor-00a1"))
+                throw new InvalidOperationException("resistor-00a1 应被拒绝（含字母非纯数字）。");
+            if (SpiceWorkspaceModel.IsValidInstanceId(SpiceComponentKind.Resistor, "resistor--001"))
+                throw new InvalidOperationException("resistor--001 应被拒绝（负号非纯数字）。");
+
             // 验证 resistor-001 与 resistor-1000 均能完整往返
             var model = new SpiceWorkspaceModel();
             model.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-001", Vector2.zero, 1000d, 0);
@@ -1237,6 +1254,133 @@ namespace ElectricalSim.Spice.T3
             if (restored.Components.Count != 2) throw new InvalidOperationException("往返后组件数量不匹配。");
             if (restored.FindComponent("resistor-001") == null) throw new InvalidOperationException("往返后丢失 resistor-001。");
             if (restored.FindComponent("resistor-1000") == null) throw new InvalidOperationException("往返后丢失 resistor-1000。");
+        }
+
+        // 验证同端点不同 Manual 路径的 Wire 排序稳定性。
+        // 两条端点相同、waypoint 不同的 Manual Wire，交换添加顺序后 JSON 必须字节完全一致。
+        private static void ValidateDrawingSameEndpointDifferentManualPaths()
+        {
+            var pathA = new[] { new Vector2(40f, 0f), new Vector2(40f, 80f), new Vector2(120f, 80f) };
+            var pathB = new[] { new Vector2(0f, 40f), new Vector2(80f, 40f) };
+
+            // 模型 1：先 A 后 B
+            var modelAB = new SpiceWorkspaceModel();
+            var sourceAB = modelAB.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorAB = modelAB.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelAB.AddWire(sourceAB.InstanceId, "positive", resistorAB.InstanceId, "positive", SpiceWireVisualState.Manual(pathA));
+            modelAB.AddWire(sourceAB.InstanceId, "positive", resistorAB.InstanceId, "positive", SpiceWireVisualState.Manual(pathB));
+
+            // 模型 2：先 B 后 A
+            var modelBA = new SpiceWorkspaceModel();
+            var sourceBA = modelBA.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorBA = modelBA.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelBA.AddWire(sourceBA.InstanceId, "positive", resistorBA.InstanceId, "positive", SpiceWireVisualState.Manual(pathB));
+            modelBA.AddWire(sourceBA.InstanceId, "positive", resistorBA.InstanceId, "positive", SpiceWireVisualState.Manual(pathA));
+
+            var jsonAB = SpiceDrawingSerializer.ToJson(modelAB);
+            var jsonBA = SpiceDrawingSerializer.ToJson(modelBA);
+            if (jsonAB != jsonBA) throw new InvalidOperationException("同端点不同 Manual 路径交换添加顺序后 JSON 应字节一致。");
+        }
+
+        // 验证同端点 Manual Wire 的反向端点创建与正向等价版本 JSON 字节一致。
+        // 反向创建时 waypoint 必须倒序以表示同一物理路径。
+        private static void ValidateDrawingSameEndpointReverseManualPath()
+        {
+            var pathForward = new[] { new Vector2(40f, 0f), new Vector2(40f, 80f), new Vector2(120f, 80f) };
+            var pathReversed = new[] { new Vector2(120f, 80f), new Vector2(40f, 80f), new Vector2(40f, 0f) };
+
+            // 模型 1：正向 source -> resistor
+            var modelFwd = new SpiceWorkspaceModel();
+            var sourceFwd = modelFwd.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorFwd = modelFwd.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelFwd.AddWire(sourceFwd.InstanceId, "positive", resistorFwd.InstanceId, "positive", SpiceWireVisualState.Manual(pathForward));
+
+            // 模型 2：反向 resistor -> source，waypoint 倒序
+            var modelRev = new SpiceWorkspaceModel();
+            var sourceRev = modelRev.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorRev = modelRev.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelRev.AddWire(resistorRev.InstanceId, "positive", sourceRev.InstanceId, "positive", SpiceWireVisualState.Manual(pathReversed));
+
+            var jsonFwd = SpiceDrawingSerializer.ToJson(modelFwd);
+            var jsonRev = SpiceDrawingSerializer.ToJson(modelRev);
+            if (jsonFwd != jsonRev) throw new InvalidOperationException("同端点反向 Manual Wire 与正向等价版本 JSON 应字节一致。");
+        }
+
+        // 验证同端点 Auto 与 Manual Wire 共存时，交换添加顺序后 JSON 字节一致。
+        private static void ValidateDrawingSameEndpointAutoAndManual()
+        {
+            var waypoints = new[] { new Vector2(40f, 0f), new Vector2(40f, 80f), new Vector2(120f, 80f) };
+
+            // 模型 1：先 Auto 后 Manual
+            var modelAM = new SpiceWorkspaceModel();
+            var sourceAM = modelAM.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorAM = modelAM.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelAM.AddWire(sourceAM.InstanceId, "positive", resistorAM.InstanceId, "positive");
+            modelAM.AddWire(sourceAM.InstanceId, "positive", resistorAM.InstanceId, "positive", SpiceWireVisualState.Manual(waypoints));
+
+            // 模型 2：先 Manual 后 Auto
+            var modelMA = new SpiceWorkspaceModel();
+            var sourceMA = modelMA.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistorMA = modelMA.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
+            modelMA.AddWire(sourceMA.InstanceId, "positive", resistorMA.InstanceId, "positive", SpiceWireVisualState.Manual(waypoints));
+            modelMA.AddWire(sourceMA.InstanceId, "positive", resistorMA.InstanceId, "positive");
+
+            var jsonAM = SpiceDrawingSerializer.ToJson(modelAM);
+            var jsonMA = SpiceDrawingSerializer.ToJson(modelMA);
+            if (jsonAM != jsonMA) throw new InvalidOperationException("同端点 Auto/Manual 共存交换添加顺序后 JSON 应字节一致。");
+        }
+
+        // 验证 position 缺失（null）必须被拒绝，且错误信息包含 InstanceId。
+        // SpiceVector2Dto 为 class，缺失时为 null，不再静默变为 (0,0)。
+        private static void ValidateDrawingPositionNullRejected()
+        {
+            var nullPositionDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                components = new System.Collections.Generic.List<SpiceComponentDto>
+                {
+                    new SpiceComponentDto
+                    {
+                        instanceId = "source-001",
+                        componentType = SpiceComponentKind.DcVoltageSource.ToString(),
+                        position = null,
+                        rotationQuarterTurns = 0,
+                        siValueText = "10"
+                    }
+                }
+            };
+            if (SpiceDrawingSerializer.TryFromDto(nullPositionDto, out _, out var error))
+                throw new InvalidOperationException("position=null 应被拒绝。");
+            if (string.IsNullOrEmpty(error)) throw new InvalidOperationException("position=null 应返回错误信息。");
+            if (error.IndexOf("source-001", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("position=null 错误信息应包含 InstanceId。");
+        }
+
+        // 验证显式 position=(0,0) 必须被允许且往返后保持不变。
+        private static void ValidateDrawingPositionZeroAllowed()
+        {
+            var zeroPositionDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                components = new System.Collections.Generic.List<SpiceComponentDto>
+                {
+                    new SpiceComponentDto
+                    {
+                        instanceId = "source-001",
+                        componentType = SpiceComponentKind.DcVoltageSource.ToString(),
+                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        rotationQuarterTurns = 0,
+                        siValueText = "10"
+                    }
+                }
+            };
+            if (!SpiceDrawingSerializer.TryFromDto(zeroPositionDto, out var restored, out var error))
+                throw new InvalidOperationException("position=(0,0) 应被允许：" + error);
+            var restoredSource = restored.FindComponent("source-001");
+            if (restoredSource == null) throw new InvalidOperationException("往返后丢失组件。");
+            if (restoredSource.Position != Vector2.zero) throw new InvalidOperationException("往返后 position 应保持 (0,0)。");
         }
     }
 }

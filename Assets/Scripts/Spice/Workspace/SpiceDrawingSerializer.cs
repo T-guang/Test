@@ -57,10 +57,11 @@ namespace ElectricalSim.Spice.Workspace
     }
 
     /// <summary>
-    /// JsonUtility 不支持 Vector2 的列表序列化，因此使用独立的可序列化结构。
+    /// JsonUtility 不支持 Vector2 的列表序列化，因此使用独立的可序列化类型。
+    /// 使用 sealed class 而非 struct，使缺失字段（null）能与合法的 (0,0) 区分。
     /// </summary>
     [Serializable]
-    public struct SpiceVector2Dto
+    public sealed class SpiceVector2Dto
     {
         public float x;
         public float y;
@@ -164,12 +165,15 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 导线稳定排序：按规范化后的 (startComponentId, startTerminalId, endComponentId, endTerminalId) 字典序。
+        /// 导线稳定排序：先按规范化后的端点四元组字典序，再按 routeMode，
+        /// 最后按规范化后的 ManualRoutePoints（数量、每个 waypoint 的 x、y）逐项比较。
+        /// 规范化后的折点是指端点交换时已倒序的折点序列，与最终序列化顺序一致。
+        /// 这样即使两条端点相同但路径不同的 Wire 也能稳定排序，不受 List.Sort 不稳定性影响。
         /// </summary>
         private static int CompareWiresForStableOrder(SpiceWorkspaceWireData a, SpiceWorkspaceWireData b)
         {
-            NormalizeWireDirection(a, out var aStartComp, out var aStartTerm, out var aEndComp, out var aEndTerm);
-            NormalizeWireDirection(b, out var bStartComp, out var bStartTerm, out var bEndComp, out var bEndTerm);
+            var aSwapped = NormalizeWireDirection(a, out var aStartComp, out var aStartTerm, out var aEndComp, out var aEndTerm);
+            var bSwapped = NormalizeWireDirection(b, out var bStartComp, out var bStartTerm, out var bEndComp, out var bEndTerm);
 
             var cmp = string.Compare(aStartComp, bStartComp, StringComparison.Ordinal);
             if (cmp != 0) return cmp;
@@ -177,7 +181,35 @@ namespace ElectricalSim.Spice.Workspace
             if (cmp != 0) return cmp;
             cmp = string.Compare(aEndComp, bEndComp, StringComparison.Ordinal);
             if (cmp != 0) return cmp;
-            return string.Compare(aEndTerm, bEndTerm, StringComparison.Ordinal);
+            cmp = string.Compare(aEndTerm, bEndTerm, StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+
+            // 端点四元组相同：继续比较 routeMode，确保 Auto 与 Manual 不会因排序不稳定而交换。
+            cmp = string.Compare(a.VisualState.RouteMode.ToString(), b.VisualState.RouteMode.ToString(), StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+
+            // Auto 路由没有 waypoints，比较到此为止（两者均为 Auto）。
+            if (a.VisualState.RouteMode != SpiceWireRouteMode.Manual) return 0;
+            if (b.VisualState.RouteMode != SpiceWireRouteMode.Manual) return 0;
+
+            // Manual 路由：比较规范化后的折点序列（端点交换时倒序），与最终序列化顺序一致。
+            var aWaypoints = a.VisualState.Waypoints;
+            var bWaypoints = b.VisualState.Waypoints;
+
+            cmp = aWaypoints.Count.CompareTo(bWaypoints.Count);
+            if (cmp != 0) return cmp;
+
+            for (var i = 0; i < aWaypoints.Count; i++)
+            {
+                var aPoint = aSwapped ? aWaypoints[aWaypoints.Count - 1 - i] : aWaypoints[i];
+                var bPoint = bSwapped ? bWaypoints[bWaypoints.Count - 1 - i] : bWaypoints[i];
+                cmp = aPoint.x.CompareTo(bPoint.x);
+                if (cmp != 0) return cmp;
+                cmp = aPoint.y.CompareTo(bPoint.y);
+                if (cmp != 0) return cmp;
+            }
+
+            return 0;
         }
 
         /// <summary>
@@ -306,6 +338,12 @@ namespace ElectricalSim.Spice.Workspace
                     }
                 }
 
+                // position 是必填字段：SpiceVector2Dto 为 class，缺失时为 null，必须拒绝以区分合法 (0,0)。
+                if (componentDto.position == null)
+                {
+                    error = "组件缺少 position 字段：" + componentDto.instanceId;
+                    return false;
+                }
                 if (float.IsNaN(componentDto.position.x) || float.IsInfinity(componentDto.position.x) ||
                     float.IsNaN(componentDto.position.y) || float.IsInfinity(componentDto.position.y))
                 {
@@ -398,6 +436,11 @@ namespace ElectricalSim.Spice.Workspace
                     {
                         foreach (var point in wireDto.manualRoutePoints)
                         {
+                            if (point == null)
+                            {
+                                error = "导线折点为 null。";
+                                return false;
+                            }
                             if (float.IsNaN(point.x) || float.IsInfinity(point.x) ||
                                 float.IsNaN(point.y) || float.IsInfinity(point.y))
                             {
