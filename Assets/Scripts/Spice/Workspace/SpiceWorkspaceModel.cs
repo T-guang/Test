@@ -177,6 +177,41 @@ namespace ElectricalSim.Spice.Workspace
                 kind == SpiceComponentKind.Inductor || kind == SpiceComponentKind.IdealSwitch;
         }
 
+        /// <summary>
+        /// 返回器件类型对应的规范 InstanceId 前缀。与 BuildInstanceId 使用同一映射。
+        /// </summary>
+        public static string GetExpectedPrefix(SpiceComponentKind kind)
+        {
+            switch (kind)
+            {
+                case SpiceComponentKind.DcVoltageSource: return "source";
+                case SpiceComponentKind.DcCurrentSource: return "current-source";
+                case SpiceComponentKind.IdealSwitch: return "switch";
+                case SpiceComponentKind.SiliconDiode: return "diode";
+                case SpiceComponentKind.Resistor: return "resistor";
+                case SpiceComponentKind.Capacitor: return "capacitor";
+                case SpiceComponentKind.Inductor: return "inductor";
+                case SpiceComponentKind.VoltageProbe: return "voltage-probe";
+                case SpiceComponentKind.CurrentProbe: return "current-probe";
+                default: return "ground";
+            }
+        }
+
+        /// <summary>
+        /// 校验 InstanceId 是否符合规范：前缀必须与器件类型匹配，后缀必须为正整数的 D3 格式（001-999）。
+        /// </summary>
+        public static bool IsValidInstanceId(SpiceComponentKind kind, string instanceId)
+        {
+            if (string.IsNullOrEmpty(instanceId)) return false;
+            var expectedPrefix = GetExpectedPrefix(kind);
+            if (!instanceId.StartsWith(expectedPrefix + "-", StringComparison.Ordinal)) return false;
+            var suffix = instanceId.Substring(expectedPrefix.Length + 1);
+            if (suffix.Length != 3) return false;
+            if (!int.TryParse(suffix, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) return false;
+            return number >= 1;
+        }
+
+
         private static string BuildInstanceId(SpiceComponentKind kind, int number)
         {
             var prefix = kind == SpiceComponentKind.DcVoltageSource ? "source" :

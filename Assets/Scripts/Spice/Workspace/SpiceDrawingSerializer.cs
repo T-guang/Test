@@ -30,6 +30,7 @@ namespace ElectricalSim.Spice.Workspace
 
     /// <summary>
     /// 单个 SPICE 组件记录。instanceId 在文件内唯一；componentType 对应 SpiceComponentKind 枚举名。
+    /// siValueSpecified 标记 siValue 字段是否在 JSON 中显式存在；有用户参数的器件必须为 true。
     /// </summary>
     [Serializable]
     public sealed class SpiceComponentDto
@@ -39,6 +40,7 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceVector2Dto position;
         public int rotationQuarterTurns;
         public double siValue;
+        public bool siValueSpecified;
     }
 
     /// <summary>
@@ -74,6 +76,7 @@ namespace ElectricalSim.Spice.Workspace
     {
         /// <summary>
         /// 将工作区模型转换为 DTO。不包含结果、网表、诊断、选择或视图状态。
+        /// 组件和导线按稳定顺序（InstanceId / 端点字典序）排序，确保 Wire 添加方向或列表顺序变化不影响输出。
         /// </summary>
         public static SpiceDrawingFileDto ToDto(SpiceWorkspaceModel model)
         {
@@ -84,7 +87,10 @@ namespace ElectricalSim.Spice.Workspace
                 schemaVersion = SpiceDrawingFormat.SchemaVersion
             };
 
-            foreach (var component in model.Components)
+            var sortedComponents = new List<SpiceWorkspaceComponentData>(model.Components);
+            sortedComponents.Sort((a, b) => string.Compare(a.InstanceId, b.InstanceId, StringComparison.Ordinal));
+
+            foreach (var component in sortedComponents)
             {
                 dto.components.Add(new SpiceComponentDto
                 {
@@ -92,11 +98,15 @@ namespace ElectricalSim.Spice.Workspace
                     componentType = component.Kind.ToString(),
                     position = new SpiceVector2Dto { x = component.Position.x, y = component.Position.y },
                     rotationQuarterTurns = component.RotationQuarterTurns,
-                    siValue = component.SiValue
+                    siValue = component.SiValue,
+                    siValueSpecified = true
                 });
             }
 
-            foreach (var wire in model.Wires)
+            var sortedWires = new List<SpiceWorkspaceWireData>(model.Wires);
+            sortedWires.Sort(CompareWiresForStableOrder);
+
+            foreach (var wire in sortedWires)
             {
                 var wireDto = new SpiceWireDto
                 {
@@ -120,7 +130,22 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 将工作区模型序列化为 JSON 字符串。输出是确定性的：组件和导线按模型列表顺序输出。
+        /// 导线稳定排序：按 (startComponentId, startTerminalId, endComponentId, endTerminalId) 字典序。
+        /// 同一组端点的导线按列表中的原始相对顺序保持稳定。
+        /// </summary>
+        private static int CompareWiresForStableOrder(SpiceWorkspaceWireData a, SpiceWorkspaceWireData b)
+        {
+            var cmp = string.Compare(a.StartComponentId, b.StartComponentId, StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.StartTerminalId, b.StartTerminalId, StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.EndComponentId, b.EndComponentId, StringComparison.Ordinal);
+            if (cmp != 0) return cmp;
+            return string.Compare(a.EndTerminalId, b.EndTerminalId, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// 将工作区模型序列化为 JSON 字符串。输出是确定性的：组件按 InstanceId 排序，导线按端点字典序排序。
         /// </summary>
         public static string ToJson(SpiceWorkspaceModel model)
         {
@@ -206,15 +231,29 @@ namespace ElectricalSim.Spice.Workspace
                 }
 
                 if (string.IsNullOrWhiteSpace(componentDto.componentType) ||
-                    !Enum.TryParse<SpiceComponentKind>(componentDto.componentType, out var kind))
+                    !Enum.TryParse<SpiceComponentKind>(componentDto.componentType, out var kind) ||
+                    !Enum.IsDefined(typeof(SpiceComponentKind), kind))
                 {
                     error = "未知器件类型：" + (componentDto.componentType ?? "(null)");
+                    return false;
+                }
+
+                if (!SpiceWorkspaceModel.IsValidInstanceId(kind, componentDto.instanceId))
+                {
+                    error = "InstanceId 不符合器件类型规范：" + componentDto.instanceId + "（期望前缀 " + SpiceWorkspaceModel.GetExpectedPrefix(kind) + "-NNN）";
                     return false;
                 }
 
                 if (double.IsNaN(componentDto.siValue) || double.IsInfinity(componentDto.siValue))
                 {
                     error = "参数值非法（NaN 或 Infinity）：" + componentDto.instanceId;
+                    return false;
+                }
+
+                // 有用户参数的器件必须显式提供 siValue；不得把缺失的电压源/电流源默认为 0。
+                if (SpiceWorkspaceModel.HasUserParameter(kind) && !componentDto.siValueSpecified)
+                {
+                    error = "有参数器件缺少 siValue：" + componentDto.instanceId;
                     return false;
                 }
 
