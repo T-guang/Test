@@ -198,7 +198,7 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 校验 InstanceId 是否符合规范：前缀必须与器件类型匹配，后缀必须为正整数的 D3 格式（001-999）。
+        /// 校验 InstanceId 是否符合规范：前缀必须与器件类型匹配，后缀必须为最少三位正整数的 D3 格式（001、010、1000 等）。
         /// </summary>
         public static bool IsValidInstanceId(SpiceComponentKind kind, string instanceId)
         {
@@ -206,7 +206,7 @@ namespace ElectricalSim.Spice.Workspace
             var expectedPrefix = GetExpectedPrefix(kind);
             if (!instanceId.StartsWith(expectedPrefix + "-", StringComparison.Ordinal)) return false;
             var suffix = instanceId.Substring(expectedPrefix.Length + 1);
-            if (suffix.Length != 3) return false;
+            if (suffix.Length < 3) return false;
             if (!int.TryParse(suffix, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) return false;
             return number >= 1;
         }

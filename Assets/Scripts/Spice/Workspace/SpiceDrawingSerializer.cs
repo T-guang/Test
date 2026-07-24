@@ -30,7 +30,7 @@ namespace ElectricalSim.Spice.Workspace
 
     /// <summary>
     /// 单个 SPICE 组件记录。instanceId 在文件内唯一；componentType 对应 SpiceComponentKind 枚举名。
-    /// siValueSpecified 标记 siValue 字段是否在 JSON 中显式存在；有用户参数的器件必须为 true。
+    /// siValueText 以 invariant-culture 字符串保存数值，用于区分"字段缺失"（null/空）和数值 0。
     /// </summary>
     [Serializable]
     public sealed class SpiceComponentDto
@@ -39,8 +39,7 @@ namespace ElectricalSim.Spice.Workspace
         public string componentType;
         public SpiceVector2Dto position;
         public int rotationQuarterTurns;
-        public double siValue;
-        public bool siValueSpecified;
+        public string siValueText;
     }
 
     /// <summary>
@@ -92,15 +91,19 @@ namespace ElectricalSim.Spice.Workspace
 
             foreach (var component in sortedComponents)
             {
-                dto.components.Add(new SpiceComponentDto
+                var componentDto = new SpiceComponentDto
                 {
                     instanceId = component.InstanceId,
                     componentType = component.Kind.ToString(),
                     position = new SpiceVector2Dto { x = component.Position.x, y = component.Position.y },
-                    rotationQuarterTurns = component.RotationQuarterTurns,
-                    siValue = component.SiValue,
-                    siValueSpecified = true
-                });
+                    rotationQuarterTurns = component.RotationQuarterTurns
+                };
+                // 只有有用户参数的器件才保存参数；无参数器件不保存 siValueText。
+                if (SpiceWorkspaceModel.HasUserParameter(component.Kind))
+                {
+                    componentDto.siValueText = component.SiValue.ToString("R", CultureInfo.InvariantCulture);
+                }
+                dto.components.Add(componentDto);
             }
 
             var sortedWires = new List<SpiceWorkspaceWireData>(model.Wires);
@@ -108,18 +111,24 @@ namespace ElectricalSim.Spice.Workspace
 
             foreach (var wire in sortedWires)
             {
+                // 规范化方向：字典序较小的端点固定为 start，确保 Wire 方向不影响 JSON。
+                var swapped = NormalizeWireDirection(wire, out var startComponentId, out var startTerminalId, out var endComponentId, out var endTerminalId);
+
                 var wireDto = new SpiceWireDto
                 {
-                    startComponentId = wire.StartComponentId,
-                    startTerminalId = wire.StartTerminalId,
-                    endComponentId = wire.EndComponentId,
-                    endTerminalId = wire.EndTerminalId,
+                    startComponentId = startComponentId,
+                    startTerminalId = startTerminalId,
+                    endComponentId = endComponentId,
+                    endTerminalId = endTerminalId,
                     routeMode = wire.VisualState.RouteMode.ToString()
                 };
                 if (wire.VisualState.RouteMode == SpiceWireRouteMode.Manual)
                 {
-                    foreach (var point in wire.VisualState.Waypoints)
+                    var waypoints = wire.VisualState.Waypoints;
+                    // 如果端点被交换，折点必须倒序输出，保持折点序列与端点方向一致。
+                    for (var i = 0; i < waypoints.Count; i++)
                     {
+                        var point = swapped ? waypoints[waypoints.Count - 1 - i] : waypoints[i];
                         wireDto.manualRoutePoints.Add(new SpiceVector2Dto { x = point.x, y = point.y });
                     }
                 }
@@ -130,18 +139,45 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 导线稳定排序：按 (startComponentId, startTerminalId, endComponentId, endTerminalId) 字典序。
-        /// 同一组端点的导线按列表中的原始相对顺序保持稳定。
+        /// 规范化导线方向：比较两端 (componentId, terminalId) 字典序，较小者作为 start。
+        /// 返回 true 表示发生了端点交换。
+        /// </summary>
+        private static bool NormalizeWireDirection(SpiceWorkspaceWireData wire,
+            out string startComponentId, out string startTerminalId,
+            out string endComponentId, out string endTerminalId)
+        {
+            var cmp = string.Compare(wire.StartComponentId, wire.EndComponentId, StringComparison.Ordinal);
+            if (cmp == 0) cmp = string.Compare(wire.StartTerminalId, wire.EndTerminalId, StringComparison.Ordinal);
+            if (cmp <= 0)
+            {
+                startComponentId = wire.StartComponentId;
+                startTerminalId = wire.StartTerminalId;
+                endComponentId = wire.EndComponentId;
+                endTerminalId = wire.EndTerminalId;
+                return false;
+            }
+            startComponentId = wire.EndComponentId;
+            startTerminalId = wire.EndTerminalId;
+            endComponentId = wire.StartComponentId;
+            endTerminalId = wire.StartTerminalId;
+            return true;
+        }
+
+        /// <summary>
+        /// 导线稳定排序：按规范化后的 (startComponentId, startTerminalId, endComponentId, endTerminalId) 字典序。
         /// </summary>
         private static int CompareWiresForStableOrder(SpiceWorkspaceWireData a, SpiceWorkspaceWireData b)
         {
-            var cmp = string.Compare(a.StartComponentId, b.StartComponentId, StringComparison.Ordinal);
+            NormalizeWireDirection(a, out var aStartComp, out var aStartTerm, out var aEndComp, out var aEndTerm);
+            NormalizeWireDirection(b, out var bStartComp, out var bStartTerm, out var bEndComp, out var bEndTerm);
+
+            var cmp = string.Compare(aStartComp, bStartComp, StringComparison.Ordinal);
             if (cmp != 0) return cmp;
-            cmp = string.Compare(a.StartTerminalId, b.StartTerminalId, StringComparison.Ordinal);
+            cmp = string.Compare(aStartTerm, bStartTerm, StringComparison.Ordinal);
             if (cmp != 0) return cmp;
-            cmp = string.Compare(a.EndComponentId, b.EndComponentId, StringComparison.Ordinal);
+            cmp = string.Compare(aEndComp, bEndComp, StringComparison.Ordinal);
             if (cmp != 0) return cmp;
-            return string.Compare(a.EndTerminalId, b.EndTerminalId, StringComparison.Ordinal);
+            return string.Compare(aEndTerm, bEndTerm, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -244,23 +280,30 @@ namespace ElectricalSim.Spice.Workspace
                     return false;
                 }
 
-                if (double.IsNaN(componentDto.siValue) || double.IsInfinity(componentDto.siValue))
+                // 有参数器件必须提供 siValueText；无参数器件不保存参数。
+                double siValue = 0d;
+                if (SpiceWorkspaceModel.HasUserParameter(kind))
                 {
-                    error = "参数值非法（NaN 或 Infinity）：" + componentDto.instanceId;
-                    return false;
-                }
-
-                // 有用户参数的器件必须显式提供 siValue；不得把缺失的电压源/电流源默认为 0。
-                if (SpiceWorkspaceModel.HasUserParameter(kind) && !componentDto.siValueSpecified)
-                {
-                    error = "有参数器件缺少 siValue：" + componentDto.instanceId;
-                    return false;
-                }
-
-                if (SpiceWorkspaceModel.HasUserParameter(kind) && !SpiceWorkspaceModel.IsValidParameter(kind, componentDto.siValue))
-                {
-                    error = "参数值不在合法范围：" + componentDto.instanceId + " = " + componentDto.siValue.ToString(CultureInfo.InvariantCulture);
-                    return false;
+                    if (string.IsNullOrWhiteSpace(componentDto.siValueText))
+                    {
+                        error = "有参数器件缺少 siValueText：" + componentDto.instanceId;
+                        return false;
+                    }
+                    if (!double.TryParse(componentDto.siValueText, NumberStyles.Float, CultureInfo.InvariantCulture, out siValue))
+                    {
+                        error = "参数值文本无法解析为数值：" + componentDto.instanceId + " = " + componentDto.siValueText;
+                        return false;
+                    }
+                    if (double.IsNaN(siValue) || double.IsInfinity(siValue))
+                    {
+                        error = "参数值非法（NaN 或 Infinity）：" + componentDto.instanceId;
+                        return false;
+                    }
+                    if (!SpiceWorkspaceModel.IsValidParameter(kind, siValue))
+                    {
+                        error = "参数值不在合法范围：" + componentDto.instanceId + " = " + siValue.ToString(CultureInfo.InvariantCulture);
+                        return false;
+                    }
                 }
 
                 if (float.IsNaN(componentDto.position.x) || float.IsInfinity(componentDto.position.x) ||
@@ -282,7 +325,7 @@ namespace ElectricalSim.Spice.Workspace
                         kind,
                         componentDto.instanceId,
                         new Vector2(componentDto.position.x, componentDto.position.y),
-                        componentDto.siValue,
+                        siValue,
                         componentDto.rotationQuarterTurns);
                 }
                 catch (InvalidOperationException exception)
