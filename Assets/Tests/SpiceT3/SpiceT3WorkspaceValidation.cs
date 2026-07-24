@@ -47,6 +47,11 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingSameEndpointAutoAndManual();
             ValidateDrawingPositionNullRejected();
             ValidateDrawingPositionZeroAllowed();
+            // Batch B：事务式导入核心与失败保护
+            ValidateDrawingImportSuccessFullCircuit();
+            ValidateDrawingImportFailurePreservesWorkspace();
+            ValidateDrawingImportConsecutiveSuccess();
+            ValidateDrawingImportEmptyDrawing();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -1381,6 +1386,258 @@ namespace ElectricalSim.Spice.T3
             var restoredSource = restored.FindComponent("source-001");
             if (restoredSource == null) throw new InvalidOperationException("往返后丢失组件。");
             if (restoredSource.Position != Vector2.zero) throw new InvalidOperationException("往返后 position 应保持 (0,0)。");
+        }
+
+        // Test A: 成功导入包含十类器件的完整电路，验证所有字段恢复正确。
+        private static void ValidateDrawingImportSuccessFullCircuit()
+        {
+            var canvasRoot = new GameObject("SpiceImportSuccessValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+
+                // 构建包含十类器件的图纸模型，含旋转和开关状态
+                var sourceModel = new SpiceWorkspaceModel();
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.DcVoltageSource, "source-001", new Vector2(0f, 0f), 10d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.DcCurrentSource, "current-source-001", new Vector2(100f, 0f), 0.001d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-001", new Vector2(200f, 0f), 2000d, 1);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.Capacitor, "capacitor-001", new Vector2(300f, 0f), 1e-6d, 2);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.Inductor, "inductor-001", new Vector2(400f, 0f), 0.01d, 3);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.Ground, "ground-001", new Vector2(0f, -100f), 0d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.IdealSwitch, "switch-001", new Vector2(100f, -100f), 1d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.SiliconDiode, "diode-001", new Vector2(200f, -100f), 0d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.VoltageProbe, "voltage-probe-001", new Vector2(300f, -100f), 0d, 0);
+                sourceModel.AddComponentWithIdentity(SpiceComponentKind.CurrentProbe, "current-probe-001", new Vector2(400f, -100f), 0d, 0);
+                sourceModel.RestoreInstanceNumbersFromExisting();
+
+                // 添加 Auto Wire 和三折点 Manual Wire
+                sourceModel.AddWire("source-001", "positive", "resistor-001", "positive");
+                var waypoints = new[] { new Vector2(50f, 0f), new Vector2(50f, 50f), new Vector2(150f, 50f) };
+                sourceModel.AddWire("source-001", "negative", "ground-001", "ground", SpiceWireVisualState.Manual(waypoints));
+
+                var json = SpiceDrawingSerializer.ToJson(sourceModel);
+
+                if (!workspace.TryImportDrawingJson(json, out var error))
+                    throw new InvalidOperationException("导入完整电路应成功：" + error);
+
+                // 验证组件数量
+                if (workspace.Model.Components.Count != 10)
+                    throw new InvalidOperationException("导入后组件数量应为 10，实际 " + workspace.Model.Components.Count);
+
+                // 验证各组件字段（InstanceId、Kind、Position、Rotation、SiValue）
+                var source = workspace.Model.FindComponent("source-001");
+                if (source == null || source.Kind != SpiceComponentKind.DcVoltageSource) throw new InvalidOperationException("导入后电压源丢失或类型错误。");
+                if (source.Position != new Vector2(0f, 0f)) throw new InvalidOperationException("导入后电压源位置不匹配。");
+                if (source.RotationQuarterTurns != 0) throw new InvalidOperationException("导入后电压源旋转不匹配。");
+                if (Math.Abs(source.SiValue - 10d) > 1e-12) throw new InvalidOperationException("导入后电压源参数不匹配。");
+
+                var resistor = workspace.Model.FindComponent("resistor-001");
+                if (resistor == null || resistor.RotationQuarterTurns != 1) throw new InvalidOperationException("导入后电阻旋转应为 1。");
+                if (Math.Abs(resistor.SiValue - 2000d) > 1e-12) throw new InvalidOperationException("导入后电阻参数不匹配。");
+
+                var capacitor = workspace.Model.FindComponent("capacitor-001");
+                if (capacitor == null || capacitor.RotationQuarterTurns != 2) throw new InvalidOperationException("导入后电容旋转应为 2。");
+
+                var inductor = workspace.Model.FindComponent("inductor-001");
+                if (inductor == null || inductor.RotationQuarterTurns != 3) throw new InvalidOperationException("导入后电感旋转应为 3。");
+
+                // 验证开关状态（Closed = SiValue 1）
+                var switchComponent = workspace.Model.FindComponent("switch-001");
+                if (switchComponent == null || Math.Abs(switchComponent.SiValue - 1d) > 1e-12)
+                    throw new InvalidOperationException("导入后开关状态不匹配（应为 Closed=1）。");
+
+                // 验证 Wire 数量和路由模式
+                if (workspace.Model.Wires.Count != 2) throw new InvalidOperationException("导入后导线数量应为 2。");
+                SpiceWorkspaceWireData manualWire = null, autoWire = null;
+                foreach (var wire in workspace.Model.Wires)
+                {
+                    if (wire.VisualState.RouteMode == SpiceWireRouteMode.Manual) manualWire = wire;
+                    else if (wire.VisualState.RouteMode == SpiceWireRouteMode.Auto) autoWire = wire;
+                }
+                if (autoWire == null) throw new InvalidOperationException("导入后应存在 Auto Wire。");
+                if (manualWire == null) throw new InvalidOperationException("导入后应存在 Manual Wire。");
+                if (manualWire.VisualState.Waypoints.Count != 3) throw new InvalidOperationException("导入后 Manual Wire 折点数量应为 3。");
+
+                // 验证编号恢复：导入 R1 后新建电阻应为 R2
+                var newResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.up * 200f);
+                if (newResistor.InstanceId != "resistor-002")
+                    throw new InvalidOperationException("导入后新建电阻应为 resistor-002，实际 " + newResistor.InstanceId);
+
+                // 验证结果状态和无 pending wire
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun)
+                    throw new InvalidOperationException("导入后结果状态应为 NeverRun。");
+                if (workspace.HasPendingWire)
+                    throw new InvalidOperationException("导入后不应有 pending wire。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Test B: 无效导入完全不破坏当前 Workspace。
+        private static void ValidateDrawingImportFailurePreservesWorkspace()
+        {
+            var canvasRoot = new GameObject("SpiceImportFailureValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+
+                // 建立非空旧画布
+                var oldSource = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                var oldResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 100f);
+                workspace.Connect(oldSource.InstanceId, "positive", oldResistor.InstanceId, "positive");
+                var oldModel = workspace.Model;
+                var oldComponentCount = oldModel.Components.Count;
+                var oldWireCount = oldModel.Wires.Count;
+                var oldResultState = workspace.ResultState;
+
+                // 各种无效 JSON
+                var invalidInputs = new[]
+                {
+                    "",                                                                                              // 空 JSON
+                    "{\"format\":\"Wrong\",\"schemaVersion\":1,\"components\":[],\"wires\":[]}",                          // 错误 format
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":99,\"components\":[],\"wires\":[]}", // 未知 schemaVersion
+                    // 缺失 position（DTO 级 null 检测由 ValidateDrawingPositionNullRejected 覆盖；
+                    //   JsonUtility 会将缺失的引用类型字段实例化为默认值 (0,0)，JSON 级无法区分，
+                    //   故此处改用非法旋转值作为替代无效输入）
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":5,\"siValueText\":\"10\"}],\"wires\":[]}",
+                    // 非法 InstanceId
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-1\",\"componentType\":\"Resistor\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":0,\"siValueText\":\"1000\"}],\"wires\":[]}",
+                    // 悬空 Wire 引用
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[],\"wires\":[{\"startComponentId\":\"resistor-001\",\"startTerminalId\":\"positive\",\"endComponentId\":\"resistor-002\",\"endTerminalId\":\"negative\",\"routeMode\":\"Auto\"}]}",
+                    // 非法参数（0 欧姆电阻）
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-001\",\"componentType\":\"Resistor\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":0,\"siValueText\":\"0\"}],\"wires\":[]}"
+                };
+
+                for (var i = 0; i < invalidInputs.Length; i++)
+                {
+                    var invalidJson = invalidInputs[i];
+                    if (workspace.TryImportDrawingJson(invalidJson, out var error))
+                        throw new InvalidOperationException("无效 JSON #" + i + " 应被拒绝：" + invalidJson.Substring(0, Math.Min(80, invalidJson.Length)));
+                    if (string.IsNullOrEmpty(error)) throw new InvalidOperationException("无效 JSON #" + i + " 应返回错误信息。");
+
+                    // 旧 Model 引用不变
+                    if (!ReferenceEquals(workspace.Model, oldModel))
+                        throw new InvalidOperationException("失败导入后 Model 引用不应改变。");
+
+                    // 旧画布数据不变
+                    if (workspace.Model.Components.Count != oldComponentCount)
+                        throw new InvalidOperationException("失败导入后组件数量不应改变。");
+                    if (workspace.Model.Wires.Count != oldWireCount)
+                        throw new InvalidOperationException("失败导入后导线数量不应改变。");
+
+                    // 旧组件字段不变
+                    var stillSource = workspace.Model.FindComponent(oldSource.InstanceId);
+                    if (stillSource == null || stillSource.Position != oldSource.Position || stillSource.SiValue != oldSource.SiValue)
+                        throw new InvalidOperationException("失败导入后旧组件字段不应改变。");
+
+                    // 旧结果状态不变
+                    if (workspace.ResultState != oldResultState)
+                        throw new InvalidOperationException("失败导入后结果状态不应改变。");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Test C: 连续成功导入，最终只有第二次导入的内容。
+        private static void ValidateDrawingImportConsecutiveSuccess()
+        {
+            var canvasRoot = new GameObject("SpiceImportConsecutiveValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+
+                // 图纸 A：包含 source-001 和 resistor-001
+                var modelA = new SpiceWorkspaceModel();
+                modelA.AddComponentWithIdentity(SpiceComponentKind.DcVoltageSource, "source-001", Vector2.zero, 10d, 0);
+                modelA.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-001", Vector2.right, 1000d, 0);
+                modelA.RestoreInstanceNumbersFromExisting();
+                modelA.AddWire("source-001", "positive", "resistor-001", "positive");
+                var jsonA = SpiceDrawingSerializer.ToJson(modelA);
+
+                // 图纸 B：包含 capacitor-001 和 inductor-001
+                var modelB = new SpiceWorkspaceModel();
+                modelB.AddComponentWithIdentity(SpiceComponentKind.Capacitor, "capacitor-001", Vector2.left, 1e-6d, 0);
+                modelB.AddComponentWithIdentity(SpiceComponentKind.Inductor, "inductor-001", Vector2.right, 0.01d, 0);
+                modelB.RestoreInstanceNumbersFromExisting();
+                modelB.AddWire("capacitor-001", "positive", "inductor-001", "positive");
+                var jsonB = SpiceDrawingSerializer.ToJson(modelB);
+
+                // 先导入 A
+                if (!workspace.TryImportDrawingJson(jsonA, out var errorA))
+                    throw new InvalidOperationException("导入图纸 A 应成功：" + errorA);
+                if (workspace.Model.Components.Count != 2 || workspace.Model.FindComponent("source-001") == null)
+                    throw new InvalidOperationException("导入 A 后应包含 source-001。");
+
+                // 再导入 B
+                if (!workspace.TryImportDrawingJson(jsonB, out var errorB))
+                    throw new InvalidOperationException("导入图纸 B 应成功：" + errorB);
+
+                // 最终只有 B 的内容
+                if (workspace.Model.Components.Count != 2)
+                    throw new InvalidOperationException("导入 B 后组件数量应为 2。");
+                if (workspace.Model.FindComponent("source-001") != null)
+                    throw new InvalidOperationException("导入 B 后不应残留 source-001。");
+                if (workspace.Model.FindComponent("resistor-001") != null)
+                    throw new InvalidOperationException("导入 B 后不应残留 resistor-001。");
+                if (workspace.Model.FindComponent("capacitor-001") == null)
+                    throw new InvalidOperationException("导入 B 后应包含 capacitor-001。");
+                if (workspace.Model.FindComponent("inductor-001") == null)
+                    throw new InvalidOperationException("导入 B 后应包含 inductor-001。");
+                if (workspace.Model.Wires.Count != 1)
+                    throw new InvalidOperationException("导入 B 后导线数量应为 1。");
+
+                // 验证编号恢复：新建电容应为 capacitor-002
+                var newCapacitor = workspace.CreateComponent(SpiceComponentKind.Capacitor, Vector2.up);
+                if (newCapacitor.InstanceId != "capacitor-002")
+                    throw new InvalidOperationException("导入 B 后新建电容应为 capacitor-002，实际 " + newCapacitor.InstanceId);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Test D: 空图纸导入，画布清空，编号从 1 开始。
+        private static void ValidateDrawingImportEmptyDrawing()
+        {
+            var canvasRoot = new GameObject("SpiceImportEmptyValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+
+                // 先建立非空画布
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right);
+
+                // 导入空图纸
+                var emptyJson = SpiceDrawingSerializer.ToJson(new SpiceWorkspaceModel());
+                if (!workspace.TryImportDrawingJson(emptyJson, out var error))
+                    throw new InvalidOperationException("导入空图纸应成功：" + error);
+
+                // 画布为空
+                if (workspace.Model.Components.Count != 0)
+                    throw new InvalidOperationException("导入空图纸后组件数量应为 0。");
+                if (workspace.Model.Wires.Count != 0)
+                    throw new InvalidOperationException("导入空图纸后导线数量应为 0。");
+
+                // 编号从 1 开始
+                var newResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                if (newResistor.InstanceId != "resistor-001")
+                    throw new InvalidOperationException("空图纸导入后新建电阻应为 resistor-001，实际 " + newResistor.InstanceId);
+
+                // 结果状态为 NeverRun
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun)
+                    throw new InvalidOperationException("空图纸导入后结果状态应为 NeverRun。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
         }
     }
 }

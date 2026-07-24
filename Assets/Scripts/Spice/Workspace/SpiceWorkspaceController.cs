@@ -75,7 +75,7 @@ namespace ElectricalSim.Spice.Workspace
         private Button zoomOutButton;
         private Button zoomInButton;
 
-        public SpiceWorkspaceModel Model { get; } = new SpiceWorkspaceModel();
+        public SpiceWorkspaceModel Model { get; private set; } = new SpiceWorkspaceModel();
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
         public RectTransform WorkspaceRect { get; private set; }
         public RectTransform ViewportRect => viewportRect;
@@ -616,6 +616,92 @@ namespace ElectricalSim.Spice.Workspace
             RefreshCopyResultButton();
             // 清空 SPICE 画布后重置为 100% 和初始中心
             if (viewController != null) viewController.ResetView();
+        }
+
+        /// <summary>
+        /// 事务式导入图纸 JSON。先在临时模型上完整解析和校验，成功后才替换当前工作区。
+        /// 失败时不修改任何当前状态（画布、元件、Wire、选择、结果、网表、编号）。
+        /// </summary>
+        public bool TryImportDrawingJson(string json, out string error)
+        {
+            EnsureInitialized();
+            // 阶段一：纯解析+校验，构建临时模型。任何失败都直接返回，不触碰当前状态。
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var tempModel, out error))
+            {
+                return false;
+            }
+            // 阶段二：只有临时模型完整构建成功后才进入提交阶段。
+            CommitImportedModel(tempModel);
+            return true;
+        }
+
+        /// <summary>
+        /// 成功导入提交：销毁旧视图、替换模型、重建视图、清除旧结果。
+        /// 只在 TryFromJson 成功后调用，失败路径永远不会进入此方法。
+        /// 不复用 ClearWorkspace，避免其 ResetInstanceNaming 副作用与导入编号语义冲突。
+        /// </summary>
+        private void CommitImportedModel(SpiceWorkspaceModel tempModel)
+        {
+            // 1. 安全取消所有进行中的交互
+            CancelPendingWire();
+            CancelPaletteDrag();
+            componentDragInProgress = false;
+
+            // 2. 清理选中状态（手动 SetSelected(false) 以清除视觉高亮）
+            if (selectedComponent != null) selectedComponent.SetSelected(false);
+            if (selectedWire != null) selectedWire.SetSelected(false);
+            selectedComponent = null;
+            selectedWire = null;
+
+            // 3. 销毁旧视图
+            foreach (var wire in wireViews.ToList()) wire.Destroy();
+            wireViews.Clear();
+            foreach (var view in componentViews.Values) Destroy(view.gameObject);
+            componentViews.Clear();
+
+            // 4. 替换模型：解除旧订阅 → 替换引用 → 订阅新模型（只订阅一次）
+            Model.Changed -= HandleModelChanged;
+            Model = tempModel;
+            Model.Changed += HandleModelChanged;
+
+            // 5. 按新模型重建所有元件视图（CreateComponentView 保留 InstanceId、Position、Rotation、SiValue）
+            foreach (var component in Model.Components)
+            {
+                CreateComponentView(component);
+            }
+
+            // 6. 按新模型重建所有 Wire 视图（SpiceWorkspaceWireView 构造时按 VisualState 重建路由）
+            foreach (var wire in Model.Wires)
+            {
+                var startView = componentViews[wire.StartComponentId];
+                var endView = componentViews[wire.EndComponentId];
+                wireViews.Add(new SpiceWorkspaceWireView(this, wire, startView, endView));
+            }
+
+            // 7. 清除旧仿真结果、旧诊断、旧网表，恢复为未运行状态
+            generatedNetlistContent = null;
+            lastOutcomeText = null;
+            ResultState = SpiceWorkspaceResultState.NeverRun;
+            SetResultText(string.Empty);
+            SetDiagnosticText(string.Empty);
+            ClearParameterPanel();
+            UpdateRotateAvailability();
+            RefreshNetlistUi();
+            RefreshCopyResultButton();
+            if (statusText != null) statusText.text = StateMessage();
+
+            // 8. 视图适配：有内容时 FitAll，空画布时 ResetView
+            if (viewController != null)
+            {
+                if (Model.Components.Count == 0 && Model.Wires.Count == 0)
+                {
+                    viewController.ResetView();
+                }
+                else
+                {
+                    viewController.FitAll();
+                }
+            }
         }
 
         public void CancelPendingWire()
