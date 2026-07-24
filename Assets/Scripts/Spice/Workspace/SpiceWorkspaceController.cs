@@ -621,10 +621,15 @@ namespace ElectricalSim.Spice.Workspace
         /// <summary>
         /// 事务式导入图纸 JSON。先在临时模型上完整解析和校验，成功后才替换当前工作区。
         /// 失败时不修改任何当前状态（画布、元件、Wire、选择、结果、网表、编号）。
+        /// 仿真计算进行中时拒绝导入，以避免旧电路异步结果覆盖刚导入电路的结果和网表。
         /// </summary>
         public bool TryImportDrawingJson(string json, out string error)
         {
             EnsureInitialized();
+            if (!CanImportDrawing(out error))
+            {
+                return false;
+            }
             // 阶段一：纯解析+校验，构建临时模型。任何失败都直接返回，不触碰当前状态。
             if (!SpiceDrawingSerializer.TryFromJson(json, out var tempModel, out error))
             {
@@ -633,6 +638,30 @@ namespace ElectricalSim.Spice.Workspace
             // 阶段二：只有临时模型完整构建成功后才进入提交阶段。
             CommitImportedModel(tempModel);
             return true;
+        }
+
+        /// <summary>
+        /// 判定当前是否允许导入图纸。仿真计算进行中时拒绝，保留计算结果完整性。
+        /// 不取消当前 ngspice，不等待 Task，不修改任何状态。
+        /// </summary>
+        internal bool CanImportDrawing(out string reason)
+        {
+            if (ResultState == SpiceWorkspaceResultState.Running)
+            {
+                reason = "仿真计算进行中，请稍后导入图纸。";
+                return false;
+            }
+            reason = null;
+            return true;
+        }
+
+        /// <summary>
+        /// 仅供 T3 测试受控设置 ResultState，以验证 Running 等状态下的导入保护。
+        /// 不在生产路径调用；不触发 ngspice，不修改视图或结果文本。
+        /// </summary>
+        internal void SetResultStateForTesting(SpiceWorkspaceResultState state)
+        {
+            ResultState = state;
         }
 
         /// <summary>

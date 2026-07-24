@@ -52,6 +52,9 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingImportFailurePreservesWorkspace();
             ValidateDrawingImportConsecutiveSuccess();
             ValidateDrawingImportEmptyDrawing();
+            // Batch B 收口：运行态保护、必填坐标 JSON 校验
+            ValidateDrawingImportRejectedWhileRunning();
+            ValidateDrawingImportMissingPositionRejected();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -793,7 +796,7 @@ namespace ElectricalSim.Spice.T3
             {
                 instanceId = "resistor-001",
                 componentType = SpiceComponentKind.Resistor.ToString(),
-                position = new SpiceVector2Dto { x = 1f, y = 1f },
+                position = new SpiceVector2Dto { x = "1", y = "1" },
                 rotationQuarterTurns = 0,
                 siValueText = "2000"
             });
@@ -812,7 +815,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "unknown-001",
                         componentType = "NonexistentType",
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0
                     }
                 }
@@ -832,7 +835,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "resistor-001",
                         componentType = SpiceComponentKind.Resistor.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "0"
                     }
@@ -874,7 +877,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "resistor-001",
                         componentType = "999",
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "1000"
                     }
@@ -895,7 +898,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0
                         // siValueText 缺省为 null
                     }
@@ -916,7 +919,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "   "
                     }
@@ -937,7 +940,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "not-a-number"
                     }
@@ -958,7 +961,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "NaN"
                     }
@@ -979,7 +982,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "Infinity"
                     }
@@ -1000,7 +1003,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.Resistor.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "1000"
                     }
@@ -1021,7 +1024,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "resistor-1",
                         componentType = SpiceComponentKind.Resistor.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "1000"
                     }
@@ -1042,7 +1045,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "resistor-000",
                         componentType = SpiceComponentKind.Resistor.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "1000"
                     }
@@ -1063,7 +1066,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "resistor--001",
                         componentType = SpiceComponentKind.Resistor.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "1000"
                     }
@@ -1375,7 +1378,7 @@ namespace ElectricalSim.Spice.T3
                     {
                         instanceId = "source-001",
                         componentType = SpiceComponentKind.DcVoltageSource.ToString(),
-                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        position = new SpiceVector2Dto { x = "0", y = "0" },
                         rotationQuarterTurns = 0,
                         siValueText = "10"
                     }
@@ -1411,9 +1414,11 @@ namespace ElectricalSim.Spice.T3
                 sourceModel.RestoreInstanceNumbersFromExisting();
 
                 // 添加 Auto Wire 和三折点 Manual Wire
+                // Auto Wire：source-001 -> resistor-001（"resistor-001" < "source-001"，序列化会规范化方向）
                 sourceModel.AddWire("source-001", "positive", "resistor-001", "positive");
+                // Manual Wire：使用已规范化方向 ground-001 -> source-001（字典序较小者在 start），避免端点交换导致折点倒序
                 var waypoints = new[] { new Vector2(50f, 0f), new Vector2(50f, 50f), new Vector2(150f, 50f) };
-                sourceModel.AddWire("source-001", "negative", "ground-001", "ground", SpiceWireVisualState.Manual(waypoints));
+                sourceModel.AddWire("ground-001", "ground", "source-001", "negative", SpiceWireVisualState.Manual(waypoints));
 
                 var json = SpiceDrawingSerializer.ToJson(sourceModel);
 
@@ -1456,7 +1461,27 @@ namespace ElectricalSim.Spice.T3
                 }
                 if (autoWire == null) throw new InvalidOperationException("导入后应存在 Auto Wire。");
                 if (manualWire == null) throw new InvalidOperationException("导入后应存在 Manual Wire。");
-                if (manualWire.VisualState.Waypoints.Count != 3) throw new InvalidOperationException("导入后 Manual Wire 折点数量应为 3。");
+
+                // 逐点验证 ManualRoutePoints 坐标与顺序（端点已规范化为 ground-001 -> source-001，无交换）
+                if (manualWire.StartComponentId != "ground-001" || manualWire.StartTerminalId != "ground")
+                    throw new InvalidOperationException("导入后 Manual Wire 起始端点不匹配：" + manualWire.StartComponentId + "/" + manualWire.StartTerminalId);
+                if (manualWire.EndComponentId != "source-001" || manualWire.EndTerminalId != "negative")
+                    throw new InvalidOperationException("导入后 Manual Wire 结束端点不匹配：" + manualWire.EndComponentId + "/" + manualWire.EndTerminalId);
+                if (manualWire.VisualState.RouteMode != SpiceWireRouteMode.Manual)
+                    throw new InvalidOperationException("导入后 Manual Wire RouteMode 应为 Manual。");
+                if (manualWire.VisualState.Waypoints.Count != 3)
+                    throw new InvalidOperationException("导入后 Manual Wire 折点数量应为 3，实际 " + manualWire.VisualState.Waypoints.Count);
+                var wpTolerance = 1e-5f;
+                if (Mathf.Abs(manualWire.VisualState.Waypoints[0].x - 50f) > wpTolerance || Mathf.Abs(manualWire.VisualState.Waypoints[0].y - 0f) > wpTolerance)
+                    throw new InvalidOperationException("导入后 Manual Wire Waypoints[0] 应为 (50, 0)，实际 " + manualWire.VisualState.Waypoints[0]);
+                if (Mathf.Abs(manualWire.VisualState.Waypoints[1].x - 50f) > wpTolerance || Mathf.Abs(manualWire.VisualState.Waypoints[1].y - 50f) > wpTolerance)
+                    throw new InvalidOperationException("导入后 Manual Wire Waypoints[1] 应为 (50, 50)，实际 " + manualWire.VisualState.Waypoints[1]);
+                if (Mathf.Abs(manualWire.VisualState.Waypoints[2].x - 150f) > wpTolerance || Mathf.Abs(manualWire.VisualState.Waypoints[2].y - 50f) > wpTolerance)
+                    throw new InvalidOperationException("导入后 Manual Wire Waypoints[2] 应为 (150, 50)，实际 " + manualWire.VisualState.Waypoints[2]);
+
+                // 验证 Auto Wire 仍为 Auto
+                if (autoWire.VisualState.RouteMode != SpiceWireRouteMode.Auto)
+                    throw new InvalidOperationException("导入后 Auto Wire RouteMode 应为 Auto。");
 
                 // 验证编号恢复：导入 R1 后新建电阻应为 R2
                 var newResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.up * 200f);
@@ -1498,16 +1523,14 @@ namespace ElectricalSim.Spice.T3
                     "",                                                                                              // 空 JSON
                     "{\"format\":\"Wrong\",\"schemaVersion\":1,\"components\":[],\"wires\":[]}",                          // 错误 format
                     "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":99,\"components\":[],\"wires\":[]}", // 未知 schemaVersion
-                    // 缺失 position（DTO 级 null 检测由 ValidateDrawingPositionNullRejected 覆盖；
-                    //   JsonUtility 会将缺失的引用类型字段实例化为默认值 (0,0)，JSON 级无法区分，
-                    //   故此处改用非法旋转值作为替代无效输入）
-                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":5,\"siValueText\":\"10\"}],\"wires\":[]}",
+                    // 缺失完整 position（x/y 为字符串字段，缺失时为 null，TryFromJson 必须拒绝）
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}",
                     // 非法 InstanceId
-                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-1\",\"componentType\":\"Resistor\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":0,\"siValueText\":\"1000\"}],\"wires\":[]}",
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-1\",\"componentType\":\"Resistor\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"1000\"}],\"wires\":[]}",
                     // 悬空 Wire 引用
                     "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[],\"wires\":[{\"startComponentId\":\"resistor-001\",\"startTerminalId\":\"positive\",\"endComponentId\":\"resistor-002\",\"endTerminalId\":\"negative\",\"routeMode\":\"Auto\"}]}",
                     // 非法参数（0 欧姆电阻）
-                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-001\",\"componentType\":\"Resistor\",\"position\":{\"x\":0,\"y\":0},\"rotationQuarterTurns\":0,\"siValueText\":\"0\"}],\"wires\":[]}"
+                    "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-001\",\"componentType\":\"Resistor\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"0\"}],\"wires\":[]}"
                 };
 
                 for (var i = 0; i < invalidInputs.Length; i++)
@@ -1638,6 +1661,112 @@ namespace ElectricalSim.Spice.T3
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
+        }
+
+        // Test E: 仿真计算进行中（Running）禁止导入，保留当前计算和状态。
+        private static void ValidateDrawingImportRejectedWhileRunning()
+        {
+            var canvasRoot = new GameObject("SpiceImportRunningGuardValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+
+                // 建立非空旧画布
+                var oldSource = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                var oldResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 100f);
+                workspace.Connect(oldSource.InstanceId, "positive", oldResistor.InstanceId, "positive");
+                var oldModel = workspace.Model;
+                var oldComponentCount = oldModel.Components.Count;
+                var oldWireCount = oldModel.Wires.Count;
+
+                // 构造一个合法的导入 JSON
+                var importModel = new SpiceWorkspaceModel();
+                importModel.AddComponentWithIdentity(SpiceComponentKind.DcVoltageSource, "source-001", Vector2.left, 5d, 0);
+                importModel.RestoreInstanceNumbersFromExisting();
+                var validJson = SpiceDrawingSerializer.ToJson(importModel);
+
+                // 设置 Running 状态（不实际启动 ngspice）
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+                if (workspace.ResultState != SpiceWorkspaceResultState.Running)
+                    throw new InvalidOperationException("测试前置：无法设置 Running 状态。");
+
+                // 尝试导入合法 JSON，应被拒绝
+                if (workspace.TryImportDrawingJson(validJson, out var error))
+                    throw new InvalidOperationException("Running 状态下导入应被拒绝。");
+                if (string.IsNullOrEmpty(error))
+                    throw new InvalidOperationException("Running 状态下应返回错误信息。");
+                // 错误信息应包含"计算"或"运行"
+                if (error.IndexOf("计算", StringComparison.Ordinal) < 0 && error.IndexOf("运行", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("Running 状态错误信息应包含'计算'或'运行'，实际：" + error);
+
+                // Model 引用不变
+                if (!ReferenceEquals(workspace.Model, oldModel))
+                    throw new InvalidOperationException("Running 拒绝导入后 Model 引用不应改变。");
+                // 组件/Wire 数量不变
+                if (workspace.Model.Components.Count != oldComponentCount)
+                    throw new InvalidOperationException("Running 拒绝导入后组件数量不应改变。");
+                if (workspace.Model.Wires.Count != oldWireCount)
+                    throw new InvalidOperationException("Running 拒绝导入后导线数量不应改变。");
+                // ResultState 仍为 Running
+                if (workspace.ResultState != SpiceWorkspaceResultState.Running)
+                    throw new InvalidOperationException("Running 拒绝导入后 ResultState 仍应为 Running。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Test F: 真实 JSON 缺失 position 必须被 TryFromJson 拒绝。
+        // 覆盖：缺失完整 position、缺失 x、缺失 y、显式 (0,0) 成功、DTO null position 继续拒绝。
+        private static void ValidateDrawingImportMissingPositionRejected()
+        {
+            // A. 缺失完整 position
+            var missingPositionJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}";
+            if (SpiceDrawingSerializer.TryFromJson(missingPositionJson, out _, out var errorA))
+                throw new InvalidOperationException("缺失完整 position 的 JSON 应被拒绝。");
+            if (string.IsNullOrEmpty(errorA)) throw new InvalidOperationException("缺失 position 应返回错误信息。");
+
+            // B. position 存在但缺失 x（JsonUtility 将缺失的 string 字段置为 null）
+            var missingXJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}";
+            if (SpiceDrawingSerializer.TryFromJson(missingXJson, out _, out var errorB))
+                throw new InvalidOperationException("缺失 position.x 的 JSON 应被拒绝。");
+            if (string.IsNullOrEmpty(errorB)) throw new InvalidOperationException("缺失 position.x 应返回错误信息。");
+
+            // C. position 存在但缺失 y
+            var missingYJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"x\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}";
+            if (SpiceDrawingSerializer.TryFromJson(missingYJson, out _, out var errorC))
+                throw new InvalidOperationException("缺失 position.y 的 JSON 应被拒绝。");
+            if (string.IsNullOrEmpty(errorC)) throw new InvalidOperationException("缺失 position.y 应返回错误信息。");
+
+            // D. position x/y 显式为零必须成功
+            var zeroPositionJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}";
+            if (!SpiceDrawingSerializer.TryFromJson(zeroPositionJson, out var zeroModel, out var errorD))
+                throw new InvalidOperationException("显式 (0,0) position 应被允许：" + errorD);
+            var zeroSource = zeroModel.FindComponent("source-001");
+            if (zeroSource == null || zeroSource.Position != Vector2.zero)
+                throw new InvalidOperationException("显式 (0,0) position 导入后位置应为 (0,0)。");
+
+            // E. DTO 级 position = null 继续被拒绝
+            var nullPositionDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                components = new System.Collections.Generic.List<SpiceComponentDto>
+                {
+                    new SpiceComponentDto
+                    {
+                        instanceId = "source-001",
+                        componentType = SpiceComponentKind.DcVoltageSource.ToString(),
+                        position = null,
+                        rotationQuarterTurns = 0,
+                        siValueText = "10"
+                    }
+                }
+            };
+            if (SpiceDrawingSerializer.TryFromDto(nullPositionDto, out _, out var errorE))
+                throw new InvalidOperationException("DTO 级 position=null 应继续被拒绝。");
+            if (string.IsNullOrEmpty(errorE)) throw new InvalidOperationException("position=null 应返回错误信息。");
         }
     }
 }

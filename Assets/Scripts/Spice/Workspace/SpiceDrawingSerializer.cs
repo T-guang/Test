@@ -59,12 +59,14 @@ namespace ElectricalSim.Spice.Workspace
     /// <summary>
     /// JsonUtility 不支持 Vector2 的列表序列化，因此使用独立的可序列化类型。
     /// 使用 sealed class 而非 struct，使缺失字段（null）能与合法的 (0,0) 区分。
+    /// x/y 以 invariant-culture 字符串保存数值，使 JsonUtility 反序列化时能区分
+    /// "字段缺失"（null/空）与显式零值（"0"），与 siValueText 的缺失/0 语义一致。
     /// </summary>
     [Serializable]
     public sealed class SpiceVector2Dto
     {
-        public float x;
-        public float y;
+        public string x;
+        public string y;
     }
 
     /// <summary>
@@ -96,7 +98,7 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     instanceId = component.InstanceId,
                     componentType = component.Kind.ToString(),
-                    position = new SpiceVector2Dto { x = component.Position.x, y = component.Position.y },
+                    position = new SpiceVector2Dto { x = component.Position.x.ToString("R", CultureInfo.InvariantCulture), y = component.Position.y.ToString("R", CultureInfo.InvariantCulture) },
                     rotationQuarterTurns = component.RotationQuarterTurns
                 };
                 // 只有有用户参数的器件才保存参数；无参数器件不保存 siValueText。
@@ -130,7 +132,7 @@ namespace ElectricalSim.Spice.Workspace
                     for (var i = 0; i < waypoints.Count; i++)
                     {
                         var point = swapped ? waypoints[waypoints.Count - 1 - i] : waypoints[i];
-                        wireDto.manualRoutePoints.Add(new SpiceVector2Dto { x = point.x, y = point.y });
+                        wireDto.manualRoutePoints.Add(new SpiceVector2Dto { x = point.x.ToString("R", CultureInfo.InvariantCulture), y = point.y.ToString("R", CultureInfo.InvariantCulture) });
                     }
                 }
                 dto.wires.Add(wireDto);
@@ -339,15 +341,18 @@ namespace ElectricalSim.Spice.Workspace
                 }
 
                 // position 是必填字段：SpiceVector2Dto 为 class，缺失时为 null，必须拒绝以区分合法 (0,0)。
+                // x/y 以字符串保存，缺失时为 null/空，必须拒绝以区分显式零值 "0"。
                 if (componentDto.position == null)
                 {
                     error = "组件缺少 position 字段：" + componentDto.instanceId;
                     return false;
                 }
-                if (float.IsNaN(componentDto.position.x) || float.IsInfinity(componentDto.position.x) ||
-                    float.IsNaN(componentDto.position.y) || float.IsInfinity(componentDto.position.y))
+                if (!TryParseCoordinate(componentDto.position.x, out var posX, out error, componentDto.instanceId, "position.x"))
                 {
-                    error = "位置坐标非法（NaN 或 Infinity）：" + componentDto.instanceId;
+                    return false;
+                }
+                if (!TryParseCoordinate(componentDto.position.y, out var posY, out error, componentDto.instanceId, "position.y"))
+                {
                     return false;
                 }
 
@@ -362,7 +367,7 @@ namespace ElectricalSim.Spice.Workspace
                     tempModel.AddComponentWithIdentity(
                         kind,
                         componentDto.instanceId,
-                        new Vector2(componentDto.position.x, componentDto.position.y),
+                        new Vector2(posX, posY),
                         siValue,
                         componentDto.rotationQuarterTurns);
                 }
@@ -441,13 +446,15 @@ namespace ElectricalSim.Spice.Workspace
                                 error = "导线折点为 null。";
                                 return false;
                             }
-                            if (float.IsNaN(point.x) || float.IsInfinity(point.x) ||
-                                float.IsNaN(point.y) || float.IsInfinity(point.y))
+                            if (!TryParseCoordinate(point.x, out var wpX, out error, wireDto.startComponentId, "manualRoutePoints.x"))
                             {
-                                error = "导线折点坐标非法（NaN 或 Infinity）。";
                                 return false;
                             }
-                            waypoints.Add(new Vector2(point.x, point.y));
+                            if (!TryParseCoordinate(point.y, out var wpY, out error, wireDto.startComponentId, "manualRoutePoints.y"))
+                            {
+                                return false;
+                            }
+                            waypoints.Add(new Vector2(wpX, wpY));
                         }
                     }
                     if (waypoints.Count == 0)
@@ -476,6 +483,32 @@ namespace ElectricalSim.Spice.Workspace
             tempModel.RestoreInstanceNumbersFromExisting();
 
             model = tempModel;
+            return true;
+        }
+
+        /// <summary>
+        /// 解析坐标字符串字段。坐标以 invariant-culture 字符串保存，
+        /// 缺失（null/空）必须拒绝以区分显式零值 "0"；NaN/Infinity 同样拒绝。
+        /// </summary>
+        private static bool TryParseCoordinate(string text, out float value, out string error, string instanceId, string fieldName)
+        {
+            value = 0f;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                error = "组件 " + instanceId + " 缺少坐标字段：" + fieldName;
+                return false;
+            }
+            if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            {
+                error = "组件 " + instanceId + " 坐标字段无法解析为数值：" + fieldName + " = " + text;
+                return false;
+            }
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                error = "组件 " + instanceId + " 坐标字段非法（NaN 或 Infinity）：" + fieldName;
+                return false;
+            }
+            error = null;
             return true;
         }
     }
