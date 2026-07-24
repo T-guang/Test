@@ -31,6 +31,52 @@ namespace ElectricalSim.Spice.Workspace
             return component;
         }
 
+        /// <summary>
+        /// 按指定 InstanceId 和旋转创建组件，供导入保留文件内原始身份使用。
+        /// 不推进 nextInstanceNumbers；导入完成后应调用 RestoreInstanceNumbersFromExisting 恢复下一编号。
+        /// </summary>
+        public SpiceWorkspaceComponentData AddComponentWithIdentity(SpiceComponentKind kind, string instanceId, Vector2 position, double siValue, int rotationQuarterTurns)
+        {
+            if (string.IsNullOrEmpty(instanceId)) throw new ArgumentException("InstanceId is required.", nameof(instanceId));
+            if (FindComponent(instanceId) != null) throw new InvalidOperationException("Duplicate InstanceId: " + instanceId);
+            // 无参数器件（GND/二极管/探针）使用固定默认值 0，不通过 IsValidParameter 校验用户参数。
+            var effectiveValue = HasUserParameter(kind) ? siValue : DefaultValue(kind);
+            if (HasUserParameter(kind) && !IsValidParameter(kind, siValue)) throw new ArgumentOutOfRangeException(nameof(siValue), "Parameter is invalid for " + kind + ".");
+            var clampedRotation = ((rotationQuarterTurns % 4) + 4) % 4;
+            var component = new SpiceWorkspaceComponentData(instanceId, kind, position, effectiveValue, clampedRotation);
+            components.Add(component);
+            Changed?.Invoke(SpiceWorkspaceChange.Topology);
+            return component;
+        }
+
+        /// <summary>
+        /// 导入完成后，根据已存在组件的 InstanceId 数字部分恢复各类型下一编号，
+        /// 确保后续新建组件编号 = max(已存在编号) + 1。
+        /// </summary>
+        public void RestoreInstanceNumbersFromExisting()
+        {
+            nextInstanceNumbers.Clear();
+            foreach (var component in components)
+            {
+                var number = ExtractInstanceNumber(component.InstanceId);
+                if (number <= 0) continue;
+                var kind = component.Kind;
+                if (!nextInstanceNumbers.TryGetValue(kind, out var current) || number > current)
+                {
+                    nextInstanceNumbers[kind] = number;
+                }
+            }
+        }
+
+        private static int ExtractInstanceNumber(string instanceId)
+        {
+            if (string.IsNullOrEmpty(instanceId)) return 0;
+            var dashIndex = instanceId.LastIndexOf('-');
+            if (dashIndex < 0 || dashIndex + 1 >= instanceId.Length) return 0;
+            var digits = instanceId.Substring(dashIndex + 1);
+            return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+        }
+
         public bool RemoveComponent(string instanceId)
         {
             var component = FindComponent(instanceId);
@@ -121,6 +167,16 @@ namespace ElectricalSim.Spice.Workspace
                 (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && value > 0d);
         }
 
+        /// <summary>
+        /// 判断器件类型是否有用户可编辑参数。无参数器件（GND/二极管/探针）导入时使用固定默认值。
+        /// </summary>
+        public static bool HasUserParameter(SpiceComponentKind kind)
+        {
+            return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
+                kind == SpiceComponentKind.Resistor || kind == SpiceComponentKind.Capacitor ||
+                kind == SpiceComponentKind.Inductor || kind == SpiceComponentKind.IdealSwitch;
+        }
+
         private static string BuildInstanceId(SpiceComponentKind kind, int number)
         {
             var prefix = kind == SpiceComponentKind.DcVoltageSource ? "source" :
@@ -154,17 +210,28 @@ namespace ElectricalSim.Spice.Workspace
     public sealed class SpiceWorkspaceComponentData
     {
         public SpiceWorkspaceComponentData(string instanceId, SpiceComponentKind kind, Vector2 position, double siValue)
+            : this(instanceId, kind, position, siValue, 0)
+        {
+        }
+
+        public SpiceWorkspaceComponentData(string instanceId, SpiceComponentKind kind, Vector2 position, double siValue, int rotationQuarterTurns)
         {
             InstanceId = instanceId;
             Kind = kind;
             Position = position;
             SiValue = siValue;
+            RotationQuarterTurns = ((rotationQuarterTurns % 4) + 4) % 4;
         }
 
         public string InstanceId { get; }
         public SpiceComponentKind Kind { get; }
         public Vector2 Position { get; set; }
         public double SiValue { get; set; }
+        /// <summary>
+        /// 离散旋转状态（0-3，表示顺时针 90 度的倍数）。
+        /// 旋转只影响视觉布局，不写入 SpiceCircuitModel，也不使 DC 结果过期。
+        /// </summary>
+        public int RotationQuarterTurns { get; set; }
         public bool HasTerminal(string terminalId) => Kind == SpiceComponentKind.Ground
             ? string.Equals(terminalId, SpiceComponentModel.GroundTerminalId, StringComparison.Ordinal)
             : string.Equals(terminalId, SpiceComponentModel.PositiveTerminalId, StringComparison.Ordinal) || string.Equals(terminalId, SpiceComponentModel.NegativeTerminalId, StringComparison.Ordinal);

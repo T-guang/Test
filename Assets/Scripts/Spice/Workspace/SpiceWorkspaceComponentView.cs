@@ -52,6 +52,7 @@ namespace ElectricalSim.Spice.Workspace
             BuildSymbolRoot();
             BuildAnnotationRoot();
             RefreshAnnotation();
+            rotationQuarterTurns = component.RotationQuarterTurns;
             ApplyRotation();
         }
 
@@ -87,6 +88,7 @@ namespace ElectricalSim.Spice.Workspace
         public void RotateClockwise()
         {
             rotationQuarterTurns = (rotationQuarterTurns + 1) % 4;
+            data.RotationQuarterTurns = rotationQuarterTurns;
             ApplyRotation();
         }
 

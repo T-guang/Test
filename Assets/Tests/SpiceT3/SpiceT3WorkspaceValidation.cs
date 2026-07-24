@@ -28,6 +28,14 @@ namespace ElectricalSim.Spice.T3
             ValidateCopyableOutcomeFailedState();
             ValidateCopyableOutcomeNonCopyableStates();
             ValidateCopyEligibilityDoesNotMutate();
+            ValidateDrawingDataContractRoundTrip();
+            ValidateDrawingTenDeviceTypesRoundTrip();
+            ValidateDrawingRotationAndSwitchState();
+            ValidateDrawingWireRouteModes();
+            ValidateDrawingEmptyCanvasRoundTrip();
+            ValidateDrawingJsonDeterminism();
+            ValidateDrawingInstanceNumberRecovery();
+            ValidateDrawingImportRejectionCases();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -574,6 +582,247 @@ namespace ElectricalSim.Spice.T3
             if (!workspace.Connect(source, "positive", resistor, "positive") ||
                 !workspace.Connect(source, "negative", ground, "ground") ||
                 !workspace.Connect(resistor, "negative", ground, "ground")) throw new InvalidOperationException("Unable to construct the single-resistor T3 topology.");
+        }
+
+        // ===== SPICE 图纸数据契约与内存往返验证 =====
+
+        private static void ValidateDrawingDataContractRoundTrip()
+        {
+            var model = new SpiceWorkspaceModel();
+            var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(10f, 20f));
+            var resistor = model.AddComponent(SpiceComponentKind.Resistor, new Vector2(200f, 100f));
+            model.AddWire(source.InstanceId, "positive", resistor.InstanceId, "positive");
+
+            var json = SpiceDrawingSerializer.ToJson(model);
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var restored, out var error))
+                throw new InvalidOperationException("图纸 JSON 往返失败：" + error);
+
+            if (restored.Components.Count != 2) throw new InvalidOperationException("往返后组件数量不匹配。");
+            if (restored.Wires.Count != 1) throw new InvalidOperationException("往返后导线数量不匹配。");
+
+            var restoredSource = restored.FindComponent(source.InstanceId);
+            if (restoredSource == null) throw new InvalidOperationException("往返后丢失源组件。");
+            if (restoredSource.Kind != SpiceComponentKind.DcVoltageSource) throw new InvalidOperationException("往返后器件类型不匹配。");
+            if (restoredSource.Position != new Vector2(10f, 20f)) throw new InvalidOperationException("往返后位置不匹配。");
+            if (Math.Abs(restoredSource.SiValue - source.SiValue) > 1e-12) throw new InvalidOperationException("往返后参数值不匹配。");
+
+            var restoredWire = restored.Wires[0];
+            if (restoredWire.StartComponentId != source.InstanceId || restoredWire.StartTerminalId != "positive") throw new InvalidOperationException("往返后导线起点不匹配。");
+            if (restoredWire.EndComponentId != resistor.InstanceId || restoredWire.EndTerminalId != "positive") throw new InvalidOperationException("往返后导线终点不匹配。");
+            if (restoredWire.VisualState.RouteMode != SpiceWireRouteMode.Auto) throw new InvalidOperationException("往返后路由模式不匹配。");
+
+            var dto = SpiceDrawingSerializer.ToDto(model);
+            if (dto.format != SpiceDrawingFormat.Format) throw new InvalidOperationException("DTO format 不正确。");
+            if (dto.schemaVersion != SpiceDrawingFormat.SchemaVersion) throw new InvalidOperationException("DTO schemaVersion 不正确。");
+        }
+
+        private static void ValidateDrawingTenDeviceTypesRoundTrip()
+        {
+            var model = new SpiceWorkspaceModel();
+            model.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(0f, 0f));
+            model.AddComponent(SpiceComponentKind.DcCurrentSource, new Vector2(100f, 0f));
+            model.AddComponent(SpiceComponentKind.Resistor, new Vector2(200f, 0f));
+            model.AddComponent(SpiceComponentKind.Capacitor, new Vector2(300f, 0f));
+            model.AddComponent(SpiceComponentKind.Inductor, new Vector2(400f, 0f));
+            model.AddComponent(SpiceComponentKind.Ground, new Vector2(500f, 0f));
+            model.AddComponent(SpiceComponentKind.IdealSwitch, new Vector2(600f, 0f));
+            model.AddComponent(SpiceComponentKind.SiliconDiode, new Vector2(700f, 0f));
+            model.AddComponent(SpiceComponentKind.VoltageProbe, new Vector2(800f, 0f));
+            model.AddComponent(SpiceComponentKind.CurrentProbe, new Vector2(900f, 0f));
+
+            var json = SpiceDrawingSerializer.ToJson(model);
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var restored, out var error))
+                throw new InvalidOperationException("10 类器件往返失败：" + error);
+
+            if (restored.Components.Count != 10) throw new InvalidOperationException("10 类器件往返后数量不匹配。");
+            var expectedKinds = new[]
+            {
+                SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource,
+                SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor,
+                SpiceComponentKind.Inductor, SpiceComponentKind.Ground,
+                SpiceComponentKind.IdealSwitch, SpiceComponentKind.SiliconDiode,
+                SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe
+            };
+            for (var i = 0; i < 10; i++)
+            {
+                if (restored.Components[i].Kind != expectedKinds[i])
+                    throw new InvalidOperationException("10 类器件往返后第 " + i + " 个器件类型不匹配。");
+            }
+        }
+
+        private static void ValidateDrawingRotationAndSwitchState()
+        {
+            var model = new SpiceWorkspaceModel();
+            var source = model.AddComponentWithIdentity(SpiceComponentKind.DcVoltageSource, "source-001", new Vector2(10f, 10f), 12d, 2);
+            var sw = model.AddComponentWithIdentity(SpiceComponentKind.IdealSwitch, "switch-001", new Vector2(100f, 100f), 1d, 3);
+
+            var json = SpiceDrawingSerializer.ToJson(model);
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var restored, out var error))
+                throw new InvalidOperationException("旋转/开关往返失败：" + error);
+
+            var restoredSource = restored.FindComponent("source-001");
+            if (restoredSource.RotationQuarterTurns != 2) throw new InvalidOperationException("往返后旋转值不匹配。");
+            if (Math.Abs(restoredSource.SiValue - 12d) > 1e-12) throw new InvalidOperationException("往返后电压值不匹配。");
+
+            var restoredSwitch = restored.FindComponent("switch-001");
+            if (restoredSwitch.RotationQuarterTurns != 3) throw new InvalidOperationException("往返后开关旋转值不匹配。");
+            if (Math.Abs(restoredSwitch.SiValue - 1d) > 1e-12) throw new InvalidOperationException("往返后开关状态不匹配。");
+        }
+
+        private static void ValidateDrawingWireRouteModes()
+        {
+            var model = new SpiceWorkspaceModel();
+            var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var resistor = model.AddComponent(SpiceComponentKind.Resistor, new Vector2(200f, 0f));
+            var ground = model.AddComponent(SpiceComponentKind.Ground, new Vector2(0f, -200f));
+
+            model.AddWire(source.InstanceId, "positive", resistor.InstanceId, "positive");
+            var waypoints = new[] { new Vector2(40f, 0f), new Vector2(40f, 80f), new Vector2(120f, 80f) };
+            model.AddWire(source.InstanceId, "negative", ground.InstanceId, "ground", SpiceWireVisualState.Manual(waypoints));
+
+            var json = SpiceDrawingSerializer.ToJson(model);
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var restored, out var error))
+                throw new InvalidOperationException("Wire 路由模式往返失败：" + error);
+
+            if (restored.Wires.Count != 2) throw new InvalidOperationException("往返后导线数量不匹配。");
+            if (restored.Wires[0].VisualState.RouteMode != SpiceWireRouteMode.Auto) throw new InvalidOperationException("自动路由模式往返后不匹配。");
+            if (restored.Wires[1].VisualState.RouteMode != SpiceWireRouteMode.Manual) throw new InvalidOperationException("手工路由模式往返后不匹配。");
+            if (restored.Wires[1].VisualState.Waypoints.Count != 3) throw new InvalidOperationException("手工折点数量往返后不匹配。");
+            if (restored.Wires[1].VisualState.Waypoints[1] != new Vector2(40f, 80f)) throw new InvalidOperationException("手工折点坐标往返后不匹配。");
+        }
+
+        private static void ValidateDrawingEmptyCanvasRoundTrip()
+        {
+            var model = new SpiceWorkspaceModel();
+            var json = SpiceDrawingSerializer.ToJson(model);
+            if (!SpiceDrawingSerializer.TryFromJson(json, out var restored, out var error))
+                throw new InvalidOperationException("空画布往返失败：" + error);
+            if (restored.Components.Count != 0 || restored.Wires.Count != 0)
+                throw new InvalidOperationException("空画布往返后不应有组件或导线。");
+        }
+
+        private static void ValidateDrawingJsonDeterminism()
+        {
+            var model = new SpiceWorkspaceModel();
+            model.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(10f, 20f));
+            model.AddComponent(SpiceComponentKind.Resistor, new Vector2(200f, 100f));
+            model.AddWire("source-001", "positive", "resistor-001", "positive");
+
+            var json1 = SpiceDrawingSerializer.ToJson(model);
+            var json2 = SpiceDrawingSerializer.ToJson(model);
+            if (json1 != json2) throw new InvalidOperationException("相同模型的 JSON 输出不确定。");
+        }
+
+        private static void ValidateDrawingInstanceNumberRecovery()
+        {
+            var model = new SpiceWorkspaceModel();
+            model.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-001", Vector2.zero, 1000d, 0);
+            model.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-002", Vector2.right, 2000d, 0);
+            model.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-005", Vector2.up, 5000d, 0);
+            model.RestoreInstanceNumbersFromExisting();
+
+            var newResistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.down);
+            if (newResistor.InstanceId != "resistor-006")
+                throw new InvalidOperationException("导入 R1/R2/R5 后新建应得到 R6，实际得到 " + newResistor.InstanceId);
+        }
+
+        private static void ValidateDrawingImportRejectionCases()
+        {
+            // 未知格式
+            var badFormat = JsonUtility.ToJson(new SpiceDrawingFileDto { format = "Unknown", schemaVersion = 1 }, true);
+            if (SpiceDrawingSerializer.TryFromJson(badFormat, out _, out var error1))
+                throw new InvalidOperationException("未知格式应被拒绝。");
+            if (string.IsNullOrEmpty(error1)) throw new InvalidOperationException("未知格式应返回错误信息。");
+
+            // 未知版本
+            var badVersion = JsonUtility.ToJson(new SpiceDrawingFileDto { format = SpiceDrawingFormat.Format, schemaVersion = 99 }, true);
+            if (SpiceDrawingSerializer.TryFromJson(badVersion, out _, out _))
+                throw new InvalidOperationException("未知版本应被拒绝。");
+
+            // 空内容
+            if (SpiceDrawingSerializer.TryFromJson("", out _, out _))
+                throw new InvalidOperationException("空内容应被拒绝。");
+            if (SpiceDrawingSerializer.TryFromJson("   ", out _, out _))
+                throw new InvalidOperationException("空白内容应被拒绝。");
+
+            // 重复 InstanceId
+            var model = new SpiceWorkspaceModel();
+            model.AddComponentWithIdentity(SpiceComponentKind.Resistor, "resistor-001", Vector2.zero, 1000d, 0);
+            var dto = SpiceDrawingSerializer.ToDto(model);
+            dto.components.Add(new SpiceComponentDto
+            {
+                instanceId = "resistor-001",
+                componentType = SpiceComponentKind.Resistor.ToString(),
+                position = new SpiceVector2Dto { x = 1f, y = 1f },
+                rotationQuarterTurns = 0,
+                siValue = 2000d
+            });
+            if (SpiceDrawingSerializer.TryFromDto(dto, out _, out var error3))
+                throw new InvalidOperationException("重复 InstanceId 应被拒绝。");
+            if (string.IsNullOrEmpty(error3)) throw new InvalidOperationException("重复 InstanceId 应返回错误信息。");
+
+            // 未知器件类型
+            var unknownTypeDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                components = new System.Collections.Generic.List<SpiceComponentDto>
+                {
+                    new SpiceComponentDto
+                    {
+                        instanceId = "unknown-001",
+                        componentType = "NonexistentType",
+                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        rotationQuarterTurns = 0,
+                        siValue = 0d
+                    }
+                }
+            };
+            if (SpiceDrawingSerializer.TryFromDto(unknownTypeDto, out _, out var error4))
+                throw new InvalidOperationException("未知器件类型应被拒绝。");
+            if (string.IsNullOrEmpty(error4)) throw new InvalidOperationException("未知器件类型应返回错误信息。");
+
+            // 非法参数（0 欧姆电阻）
+            var badParamDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                components = new System.Collections.Generic.List<SpiceComponentDto>
+                {
+                    new SpiceComponentDto
+                    {
+                        instanceId = "resistor-001",
+                        componentType = SpiceComponentKind.Resistor.ToString(),
+                        position = new SpiceVector2Dto { x = 0f, y = 0f },
+                        rotationQuarterTurns = 0,
+                        siValue = 0d
+                    }
+                }
+            };
+            if (SpiceDrawingSerializer.TryFromDto(badParamDto, out _, out var error5))
+                throw new InvalidOperationException("0 欧姆电阻应被拒绝。");
+            if (string.IsNullOrEmpty(error5)) throw new InvalidOperationException("非法参数应返回错误信息。");
+
+            // 导线引用不存在的组件
+            var danglingWireDto = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion,
+                wires = new System.Collections.Generic.List<SpiceWireDto>
+                {
+                    new SpiceWireDto
+                    {
+                        startComponentId = "resistor-001",
+                        startTerminalId = "positive",
+                        endComponentId = "resistor-002",
+                        endTerminalId = "negative",
+                        routeMode = SpiceWireRouteMode.Auto.ToString()
+                    }
+                }
+            };
+            if (SpiceDrawingSerializer.TryFromDto(danglingWireDto, out _, out var error6))
+                throw new InvalidOperationException("引用不存在组件的导线应被拒绝。");
+            if (string.IsNullOrEmpty(error6)) throw new InvalidOperationException("悬空导线应返回错误信息。");
         }
     }
 }
