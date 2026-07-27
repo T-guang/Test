@@ -65,6 +65,12 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingFileRunningGuardBeforeFileAccess();
             ValidateDrawingFileClearResetsPath();
             ValidateDrawingFileChineseAndSpacePath();
+            // Batch C1 收口：文件边界验证与 UI 职责归位
+            ValidateDrawingFileSaveFailurePreservesPath();
+            ValidateDrawingFileOversizedImportRejected();
+            ValidateDrawingFileInvalidUtf8ImportRejected();
+            ValidateDrawingFileMissingPositionYRejected();
+            ValidateDrawingFileSuccessDoesNotWriteStatusText();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -2160,6 +2166,270 @@ namespace ElectricalSim.Spice.T3
             {
                 CleanupTempDir(tempDir);
             }
+        }
+
+        // 保存失败：目录本身作为目标文件的无效路径；保存必须失败；CurrentSpiceFilePath 不变；原文件内容不变；无 .tmp/.backup 残留。
+        private static void ValidateDrawingFileSaveFailurePreservesPath()
+        {
+            var tempDir = CreateUniqueTempDir("SaveFailure");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileSaveFailure", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+
+                    // 先成功保存到有效路径 A
+                    var validPath = Path.Combine(tempDir, "valid");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out var error1))
+                        throw new InvalidOperationException("测试前置：保存到有效路径应成功：" + error1);
+                    var savedPathA = Path.Combine(tempDir, "valid.spicejson");
+                    var originalContent = File.ReadAllText(savedPathA, System.Text.Encoding.UTF8);
+                    var currentPath = workspace.CurrentSpiceFilePath;
+
+                    // 尝试保存到一个“目录本身作为目标文件”的无效路径。
+                    // 目录名必须以 .spicejson 结尾，否则 NormalizeExtension 会追加扩展名，
+                    // 使实际写入目标变成 tempDir/subdir.spicejson（父目录下的普通文件），保存反而成功。
+                    var invalidPath = Path.Combine(tempDir, "subdir.spicejson");
+                    Directory.CreateDirectory(invalidPath); // invalidPath 现在是一个目录且扩展名已规范化
+                    if (workspace.TrySaveWorkspaceToPath(invalidPath, out var error2))
+                        throw new InvalidOperationException("保存到目录路径应失败。");
+                    if (string.IsNullOrEmpty(error2))
+                        throw new InvalidOperationException("保存失败应返回错误信息。");
+
+                    // CurrentSpiceFilePath 仍等于 A
+                    if (workspace.CurrentSpiceFilePath != currentPath)
+                        throw new InvalidOperationException("保存失败后 CurrentSpiceFilePath 应不变：" + workspace.CurrentSpiceFilePath);
+
+                    // A 的原文件内容不变
+                    var afterContent = File.ReadAllText(savedPathA, System.Text.Encoding.UTF8);
+                    if (afterContent != originalContent)
+                        throw new InvalidOperationException("保存失败后原文件内容不应改变。");
+
+                    // 无 .tmp 或 .backup 残留
+                    var tmpFiles = Directory.GetFiles(tempDir, "*.tmp*", SearchOption.AllDirectories);
+                    if (tmpFiles.Length > 0)
+                        throw new InvalidOperationException("保存失败不应残留 .tmp 文件：" + tmpFiles.Length + " 个。");
+                    var backupFiles = Directory.GetFiles(tempDir, "*.backup*", SearchOption.AllDirectories);
+                    if (backupFiles.Length > 0)
+                        throw new InvalidOperationException("保存失败不应残留 .backup 文件：" + backupFiles.Length + " 个。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 超大文件：创建大于 MaxFileBytes 的 .spicejson；导入必须失败；错误包含“1MB”或“超过”；Workspace 与路径不变。
+        private static void ValidateDrawingFileOversizedImportRejected()
+        {
+            var tempDir = CreateUniqueTempDir("Oversized");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileOversized", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    // 建立非空旧画布并确立当前路径
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+                    var oldModel = workspace.Model;
+                    var oldComponentCount = workspace.Model.Components.Count;
+                    var oldPath = workspace.CurrentSpiceFilePath;
+
+                    // 创建大于 MaxFileBytes 的文件
+                    var oversizedPath = Path.Combine(tempDir, "oversized.spicejson");
+                    var oversizedBytes = new byte[SpiceDrawingFileService.MaxFileBytes + 1];
+                    for (var i = 0; i < oversizedBytes.Length; i++) oversizedBytes[i] = (byte)'a';
+                    File.WriteAllBytes(oversizedPath, oversizedBytes);
+
+                    if (workspace.TryImportWorkspaceFromPath(oversizedPath, out var error))
+                        throw new InvalidOperationException("超大文件导入应失败。");
+                    if (string.IsNullOrEmpty(error))
+                        throw new InvalidOperationException("超大文件应返回错误信息。");
+                    if (error.IndexOf("1MB", StringComparison.Ordinal) < 0 && error.IndexOf("超过", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("超大文件错误应包含'1MB'或'超过'：" + error);
+
+                    // Workspace 与路径不变
+                    if (!ReferenceEquals(workspace.Model, oldModel))
+                        throw new InvalidOperationException("超大文件拒绝后 Model 引用不应改变。");
+                    if (workspace.Model.Components.Count != oldComponentCount)
+                        throw new InvalidOperationException("超大文件拒绝后组件数量不应改变。");
+                    if (workspace.CurrentSpiceFilePath != oldPath)
+                        throw new InvalidOperationException("超大文件拒绝后当前路径不应改变。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 非法 UTF-8：写入包含非法字节序列（0xC3, 0x28）的文件；导入必须失败；错误包含“UTF-8”；Workspace 与路径不变。
+        private static void ValidateDrawingFileInvalidUtf8ImportRejected()
+        {
+            var tempDir = CreateUniqueTempDir("InvalidUtf8");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileInvalidUtf8", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+                    var oldModel = workspace.Model;
+                    var oldPath = workspace.CurrentSpiceFilePath;
+
+                    // 写入非法 UTF-8 字节序列 0xC3 0x28
+                    var invalidPath = Path.Combine(tempDir, "invalid_utf8.spicejson");
+                    File.WriteAllBytes(invalidPath, new byte[] { 0xC3, 0x28, 0x7B, 0x7D });
+
+                    if (workspace.TryImportWorkspaceFromPath(invalidPath, out var error))
+                        throw new InvalidOperationException("非法 UTF-8 文件导入应失败。");
+                    if (string.IsNullOrEmpty(error))
+                        throw new InvalidOperationException("非法 UTF-8 应返回错误信息。");
+                    if (error.IndexOf("UTF-8", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("非法 UTF-8 错误应包含'UTF-8'：" + error);
+
+                    if (!ReferenceEquals(workspace.Model, oldModel))
+                        throw new InvalidOperationException("非法 UTF-8 拒绝后 Model 引用不应改变。");
+                    if (workspace.CurrentSpiceFilePath != oldPath)
+                        throw new InvalidOperationException("非法 UTF-8 拒绝后当前路径不应改变。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 缺失 position.y：真实 JSON 文件，position 只有 x 没有 y；路径级导入必须失败；Workspace 与路径不变。
+        private static void ValidateDrawingFileMissingPositionYRejected()
+        {
+            var tempDir = CreateUniqueTempDir("MissingPosY");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileMissingPosY", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+                    var oldModel = workspace.Model;
+                    var oldPath = workspace.CurrentSpiceFilePath;
+
+                    // 写入缺失 position.y 的 JSON
+                    var missingYJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"x\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}";
+                    var badPath = Path.Combine(tempDir, "missing_y.spicejson");
+                    File.WriteAllText(badPath, missingYJson, System.Text.Encoding.UTF8);
+
+                    if (workspace.TryImportWorkspaceFromPath(badPath, out var error))
+                        throw new InvalidOperationException("缺失 position.y 的文件导入应失败。");
+                    if (string.IsNullOrEmpty(error))
+                        throw new InvalidOperationException("缺失 position.y 应返回错误信息。");
+
+                    if (!ReferenceEquals(workspace.Model, oldModel))
+                        throw new InvalidOperationException("缺失 position.y 拒绝后 Model 引用不应改变。");
+                    if (workspace.CurrentSpiceFilePath != oldPath)
+                        throw new InvalidOperationException("缺失 position.y 拒绝后当前路径不应改变。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 成功路径级操作不得写入 statusText：保存成功、导入成功后验证 C1 没有写“已保存到：绝对路径”或“已从以下路径导入：绝对路径”。
+        // 注意：Batch B 的 CommitImportedModel 在导入提交阶段会合法地把 statusText 重置为“未计算”（清空旧结果），
+        // 这不属于 C1 的成功 UI 文案。本测试只验证 C1 没有写入“已保存到”/“已从以下路径导入”/完整路径三类成功提示。
+        private static void ValidateDrawingFileSuccessDoesNotWriteStatusText()
+        {
+            var tempDir = CreateUniqueTempDir("NoStatusText");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileNoStatusText", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+
+                    // 设置状态栏初始文本为已知标记
+                    var marker = "T3_MARKER_BEFORE_FILE_OP";
+                    workspace.SetStatusTextForTesting(marker);
+
+                    // 保存成功后状态栏不应被 C1 改写（TrySaveWorkspaceToPath 不调用 CommitImportedModel）
+                    var savePath = Path.Combine(tempDir, "save");
+                    if (!workspace.TrySaveWorkspaceToPath(savePath, out var saveError))
+                        throw new InvalidOperationException("保存应成功：" + saveError);
+                    var statusAfterSave = workspace.GetStatusTextForTesting();
+                    if (statusAfterSave != marker)
+                        throw new InvalidOperationException("C1 保存成功后不应写入 statusText。预期：" + marker + " 实际：" + statusAfterSave);
+                    AssertNoSuccessUiText(statusAfterSave, savePath, "保存");
+
+                    // 导入成功后状态栏可被 Batch B 的 CommitImportedModel 重置为“未计算”，
+                    // 但 C1 不得写入“已从以下路径导入：绝对路径”之类的成功 UI 文案。
+                    var savedFile = Path.Combine(tempDir, "save.spicejson");
+                    var importRoot = new GameObject("SpiceFileNoStatusTextImport", typeof(RectTransform), typeof(Canvas));
+                    try
+                    {
+                        var importWorkspace = CreateInitializedWorkspaceForCopy(importRoot.transform, out _);
+                        importWorkspace.SetStatusTextForTesting(marker);
+                        if (!importWorkspace.TryImportWorkspaceFromPath(savedFile, out var importError))
+                            throw new InvalidOperationException("导入应成功：" + importError);
+                        var statusAfterImport = importWorkspace.GetStatusTextForTesting();
+                        AssertNoSuccessUiText(statusAfterImport, savedFile, "导入");
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(importRoot);
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 校验 statusText 不包含 C1 的成功 UI 文案：“已保存到”、“已从以下路径导入”、或完整绝对路径本身。
+        private static void AssertNoSuccessUiText(string statusText, string fullPath, string operation)
+        {
+            if (statusText == null) return;
+            if (statusText.IndexOf("已保存到", StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("C1 " + operation + " 不应写入“已保存到”文案：" + statusText);
+            if (statusText.IndexOf("已从以下路径导入", StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("C1 " + operation + " 不应写入“已从以下路径导入”文案：" + statusText);
+            if (!string.IsNullOrEmpty(fullPath) && statusText.IndexOf(fullPath, StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("C1 " + operation + " 不应在 statusText 暴露完整路径：" + statusText);
         }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。

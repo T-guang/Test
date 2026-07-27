@@ -668,6 +668,24 @@ namespace ElectricalSim.Spice.Workspace
             ResultState = state;
         }
 
+        /// <summary>
+        /// 仅供 T3 测试读取当前状态栏文本，以验证 C1 文件操作成功后未写入 UI 文案。
+        /// 不在生产路径调用。
+        /// </summary>
+        internal string GetStatusTextForTesting()
+        {
+            return statusText != null ? statusText.text : null;
+        }
+
+        /// <summary>
+        /// 仅供 T3 测试设置状态栏初始文本，便于验证 C1 未覆盖成功 UI 文案。
+        /// 不在生产路径调用。
+        /// </summary>
+        internal void SetStatusTextForTesting(string text)
+        {
+            if (statusText != null) statusText.text = text;
+        }
+
         /// <summary>当前会话的图纸文件路径。保存或导入成功后更新；清空画布后清除。</summary>
         public string CurrentSpiceFilePath => fileService.CurrentSpiceFilePath;
 
@@ -697,7 +715,7 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
             fileService.SetCurrentSpiceFilePath(normalizedPath);
-            if (statusText != null) statusText.text = "图纸已保存到：" + normalizedPath;
+            // C1 不写成功 UI 文案；C2 将根据 CurrentSpiceFilePath 显示“已保存：<文件名>”。
             return true;
         }
 
@@ -748,7 +766,7 @@ namespace ElectricalSim.Spice.Workspace
             }
             // 导入成功：更新当前路径（导入路径不规范化扩展名，保持用户传入的路径）。
             fileService.SetCurrentSpiceFilePath(path);
-            if (statusText != null) statusText.text = "图纸已从以下路径导入：" + path;
+            // C1 不写成功 UI 文案；C2 将根据 CurrentSpiceFilePath 显示“已导入：<文件名>”。
             return true;
         }
 

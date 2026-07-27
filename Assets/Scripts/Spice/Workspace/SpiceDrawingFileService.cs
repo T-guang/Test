@@ -100,7 +100,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 error = "创建保存目录失败：" + exception.Message;
-                Console.WriteLine("[SpiceDrawingFileService] 创建保存目录异常：" + exception);
+                Debug.LogError("[SpiceDrawingFileService] 创建保存目录异常：" + exception);
                 return false;
             }
 
@@ -112,7 +112,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 error = "写入临时文件失败：" + exception.Message;
-                Console.WriteLine("[SpiceDrawingFileService] 写入临时文件异常：" + exception);
+                Debug.LogError("[SpiceDrawingFileService] 写入临时文件异常：" + exception);
                 TryDeleteTempFile(tempPath);
                 return false;
             }
@@ -134,7 +134,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 error = "替换目标文件失败：" + exception.Message;
-                Console.WriteLine("[SpiceDrawingFileService] 替换目标文件异常：" + exception);
+                Debug.LogError("[SpiceDrawingFileService] 替换目标文件异常：" + exception);
                 TryDeleteTempFile(tempPath);
                 return false;
             }
@@ -178,7 +178,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 error = "读取文件信息失败：" + exception.Message;
-                Console.WriteLine("[SpiceDrawingFileService] 读取文件信息异常：" + exception);
+                Debug.LogError("[SpiceDrawingFileService] 读取文件信息异常：" + exception);
                 return false;
             }
 
@@ -191,7 +191,7 @@ namespace ElectricalSim.Spice.Workspace
             catch (Exception exception)
             {
                 error = "文件不是有效的 UTF-8 文本：" + exception.Message;
-                Console.WriteLine("[SpiceDrawingFileService] UTF-8 读取异常：" + exception);
+                Debug.LogError("[SpiceDrawingFileService] UTF-8 读取异常：" + exception);
                 return false;
             }
         }
@@ -202,7 +202,7 @@ namespace ElectricalSim.Spice.Workspace
             try { if (File.Exists(path)) File.Delete(path); }
             catch (Exception exception)
             {
-                Console.WriteLine("[SpiceDrawingFileService] 清理临时文件失败：" + path + " " + exception);
+                Debug.LogError("[SpiceDrawingFileService] 清理临时文件失败：" + path + " " + exception);
             }
         }
     }
