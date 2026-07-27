@@ -22,6 +22,7 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceWorkspaceComponentData data;
         private RectTransform rectTransform;
         private RectTransform symbolRoot;
+        private RectTransform schematicSymbol;
         private RectTransform annotationRoot;
         private Image selectionFrame;
         private Outline selectionOutline;
@@ -83,6 +84,32 @@ namespace ElectricalSim.Spice.Workspace
         public void RefreshAnnotation()
         {
             if (summaryText != null) summaryText.text = SpiceWorkspaceDisplay.FormatParameter(data.Kind, data.SiValue);
+        }
+
+        public void RefreshVisualState()
+        {
+            RefreshAnnotation();
+            if (data.Kind != SpiceComponentKind.IdealSwitch || symbolRoot == null) return;
+
+            if (schematicSymbol != null)
+            {
+                schematicSymbol.gameObject.SetActive(false);
+                if (Application.isPlaying) Destroy(schematicSymbol.gameObject);
+                else DestroyImmediate(schematicSymbol.gameObject);
+                schematicSymbol = null;
+            }
+
+            BuildSchematicSymbol();
+        }
+
+        internal bool IsIdealSwitchDrawnClosedForTesting()
+        {
+            if (data.Kind != SpiceComponentKind.IdealSwitch || symbolRoot == null) return false;
+            if (schematicSymbol == null || schematicSymbol.childCount != 3) return false;
+
+            var blade = schematicSymbol.GetChild(2).GetComponent<RectTransform>();
+            return blade != null && Mathf.Abs(blade.anchoredPosition.y) <= 0.01f &&
+                Mathf.Abs(Mathf.DeltaAngle(blade.localEulerAngles.z, 0f)) <= 0.01f;
         }
 
         public void RotateClockwise()
@@ -206,11 +233,12 @@ namespace ElectricalSim.Spice.Workspace
 
         private void BuildSchematicSymbol()
         {
-            var symbol = new GameObject("Symbol", typeof(RectTransform));
-            symbol.transform.SetParent(symbolRoot, false);
-            var symbolRect = symbol.GetComponent<RectTransform>();
-            symbolRect.sizeDelta = new Vector2(104f, 52f);
-            symbolRect.anchoredPosition = Vector2.zero;
+            schematicSymbol = new GameObject("Symbol", typeof(RectTransform)).GetComponent<RectTransform>();
+            schematicSymbol.SetParent(symbolRoot, false);
+            schematicSymbol.SetAsFirstSibling();
+            schematicSymbol.sizeDelta = new Vector2(104f, 52f);
+            schematicSymbol.anchoredPosition = Vector2.zero;
+            var symbol = schematicSymbol.gameObject;
             switch (data.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource:

@@ -50,6 +50,7 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingPositionZeroAllowed();
             // Batch B：事务式导入核心与失败保护
             ValidateDrawingImportSuccessFullCircuit();
+            ValidateIdealSwitchVisualStateSynchronization();
             ValidateDrawingImportFailurePreservesWorkspace();
             ValidateDrawingImportConsecutiveSuccess();
             ValidateDrawingImportEmptyDrawing();
@@ -1430,6 +1431,43 @@ namespace ElectricalSim.Spice.T3
             var restoredSource = restored.FindComponent("source-001");
             if (restoredSource == null) throw new InvalidOperationException("往返后丢失组件。");
             if (restoredSource.Position != Vector2.zero) throw new InvalidOperationException("往返后 position 应保持 (0,0)。");
+        }
+
+        private static void ValidateIdealSwitchVisualStateSynchronization()
+        {
+            var canvasRoot = new GameObject("SpiceSwitchVisualValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var switchData = workspace.CreateComponent(SpiceComponentKind.IdealSwitch, Vector2.zero);
+                var switchView = workspace.GetComponentViewForTesting(switchData.InstanceId);
+                if (switchView == null) throw new InvalidOperationException("新建理想开关应创建元件视图。");
+                if (switchView.IsIdealSwitchDrawnClosedForTesting())
+                    throw new InvalidOperationException("新建理想开关应显示为断开。");
+
+                if (!workspace.TrySetSwitchState(switchData.InstanceId, true))
+                    throw new InvalidOperationException("理想开关应能切换到闭合状态。");
+                if (!switchView.IsIdealSwitchDrawnClosedForTesting())
+                    throw new InvalidOperationException("闭合理想开关应立即重绘为闭合符号。");
+
+                var json = SpiceDrawingSerializer.ToJson(workspace.Model);
+                if (!workspace.TryImportDrawingJson(json, out var error))
+                    throw new InvalidOperationException("导入闭合理想开关应成功：" + error);
+
+                switchView = workspace.GetComponentViewForTesting(switchData.InstanceId);
+                if (switchView == null) throw new InvalidOperationException("导入理想开关应创建元件视图。");
+                if (!switchView.IsIdealSwitchDrawnClosedForTesting())
+                    throw new InvalidOperationException("导入后的闭合理想开关应显示为闭合符号。");
+
+                if (!workspace.TrySetSwitchState(switchData.InstanceId, false))
+                    throw new InvalidOperationException("理想开关应能切换到断开状态。");
+                if (switchView.IsIdealSwitchDrawnClosedForTesting())
+                    throw new InvalidOperationException("断开理想开关应立即重绘为断开符号。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
         }
 
         // Test A: 成功导入包含十类器件的完整电路，验证所有字段恢复正确。

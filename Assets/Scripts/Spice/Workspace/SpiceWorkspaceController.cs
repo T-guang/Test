@@ -293,7 +293,7 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
 
-            componentViews[instanceId].RefreshAnnotation();
+            componentViews[instanceId].RefreshVisualState();
             if (selectedComponent != null && string.Equals(selectedComponent.InstanceId, instanceId, StringComparison.Ordinal)) RefreshParameterPanel();
             if (statusText != null) statusText.text = "开关状态已更新，请重新运行计算。";
             return true;
@@ -730,6 +730,12 @@ namespace ElectricalSim.Spice.Workspace
             // 阶段二：只有临时模型完整构建成功后才进入提交阶段。
             CommitImportedModel(tempModel);
             return true;
+        }
+
+        internal SpiceWorkspaceComponentView GetComponentViewForTesting(string instanceId)
+        {
+            componentViews.TryGetValue(instanceId, out var view);
+            return view;
         }
 
         /// <summary>
