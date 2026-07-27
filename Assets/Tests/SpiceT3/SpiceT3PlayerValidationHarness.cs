@@ -1,6 +1,9 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using ElectricalSim.Spice.Core;
+using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
 
@@ -45,6 +48,7 @@ namespace ElectricalSim.Spice.T3
                 var updated = await workspace.RunCalculationAsync();
                 if (updated == null || !updated.Success || Math.Abs(updated.ComponentResults[resistor.InstanceId].Current - 0.005d) > 1e-8d) throw new InvalidOperationException("Updated Player result is incorrect.");
                 report.updatedCurrent = updated.ComponentResults[resistor.InstanceId].Current;
+                await ValidateD1StaleResultDiscard(workspace, resistor);
                 workspace.Model.RemoveWire(workspace.Model.Wires[0]);
                 if (workspace.ResultState != SpiceWorkspaceResultState.Stale) throw new InvalidOperationException("Player topology change did not stale the result.");
                 var invalid = await workspace.RunCalculationAsync();
@@ -61,6 +65,40 @@ namespace ElectricalSim.Spice.T3
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("[SpiceT3] Player validation report: " + path);
             Application.Quit(report.success ? 0 : 1);
+        }
+
+        private static async Task ValidateD1StaleResultDiscard(SpiceWorkspaceController workspace, SpiceWorkspaceComponentData resistor)
+        {
+            var completion = new TaskCompletionSource<SpiceSimulationResult>();
+            workspace.SetSimulationOverrideForTesting((_, __) => completion.Task);
+            try
+            {
+                var calculation = workspace.RunCalculationAsync();
+                if (workspace.ResultState != SpiceWorkspaceResultState.Running)
+                    throw new InvalidOperationException("D1 delayed calculation did not enter Running state.");
+                if (workspace.TrySetParameter(resistor.InstanceId, 3d, "kOhm"))
+                    throw new InvalidOperationException("D1 rejected parameter mutation was accepted while Running.");
+                if (workspace.CreateComponent(SpiceComponentKind.Capacitor, Vector2.zero) != null)
+                    throw new InvalidOperationException("D1 rejected component creation was accepted while Running.");
+
+                // The production guards reject UI mutations. This controlled model mutation proves
+                // the second layer still discards an outdated request if a future path bypasses them.
+                if (!workspace.Model.TrySetParameter(resistor.InstanceId, 4000d))
+                    throw new InvalidOperationException("D1 controlled model mutation failed.");
+
+                completion.SetResult(new SpiceSimulationResult
+                {
+                    Success = true,
+                    GeneratedNetlistContent = "* D1 delayed result"
+                });
+                var stale = await calculation;
+                if (stale != null || workspace.ResultState != SpiceWorkspaceResultState.Stale)
+                    throw new InvalidOperationException("D1 outdated calculation result was not discarded.");
+            }
+            finally
+            {
+                workspace.SetSimulationOverrideForTesting(null);
+            }
         }
 
         private static string ResolveResultPath()

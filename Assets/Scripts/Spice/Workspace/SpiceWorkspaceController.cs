@@ -61,6 +61,10 @@ namespace ElectricalSim.Spice.Workspace
         private int unitIndex;
         private bool initialized;
         private CancellationTokenSource simulationCancellation;
+        private Func<SpiceCircuitModel, CancellationToken, Task<SpiceSimulationResult>> simulationOverrideForTesting;
+        private long electricalRevision;
+        private long calculationRequestId;
+        private long activeCalculationRequestId;
         private bool shuttingDown;
         private bool componentDragInProgress;
         private Func<bool> modalInputGuard;
@@ -89,6 +93,7 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform WireLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
         public bool HasPendingWire => pendingComponent != null;
+        internal long ElectricalRevisionForTesting => electricalRevision;
         public event Action<SpiceWorkspaceComponentData> ParameterDialogRequested;
 
         // C2 文件操作事件：Host 订阅后负责打开 Windows 文件对话框、替换确认和用户反馈。
@@ -196,6 +201,7 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceWorkspaceComponentData CreateComponent(SpiceComponentKind kind, Vector2 position)
         {
             EnsureInitialized();
+            if (!CanModifyElectricalModel()) return null;
             var data = Model.AddComponent(kind, ClampToWorkspace(kind, position));
             CreateComponentView(data);
             SelectComponent(componentViews[data.InstanceId]);
@@ -211,7 +217,9 @@ namespace ElectricalSim.Spice.Workspace
         public void BeginPaletteDrag(SpiceComponentKind kind, Vector2 screenPosition, Camera eventCamera)
         {
             EnsureInitialized();
+            if (!CanModifyElectricalModel()) return;
             CancelPendingWire();
+            CancelPaletteDrag();
             paletteKind = kind;
             paletteDragActive = true;
             palettePreview.gameObject.SetActive(true);
@@ -265,6 +273,7 @@ namespace ElectricalSim.Spice.Workspace
         public bool Connect(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState = null)
         {
             EnsureInitialized();
+            if (!CanModifyElectricalModel()) return false;
             if (!Model.AddWire(startComponentId, startTerminalId, endComponentId, endTerminalId, visualState)) return false;
             var wire = Model.Wires[Model.Wires.Count - 1];
             wireViews.Add(new SpiceWorkspaceWireView(this, wire, componentViews[startComponentId], componentViews[endComponentId]));
@@ -274,6 +283,7 @@ namespace ElectricalSim.Spice.Workspace
         public bool TrySetParameter(string instanceId, double displayValue, string unit)
         {
             EnsureInitialized();
+            if (!CanModifyElectricalModel()) return false;
             var component = Model.FindComponent(instanceId);
             if (component == null || !SpiceParameterUnits.TryToSi(component.Kind, displayValue, unit, out var siValue)) return false;
             if (!Model.TrySetParameter(instanceId, siValue)) return false;
@@ -287,6 +297,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public bool TrySetSwitchState(string instanceId, bool closed)
         {
+            if (!CanModifyElectricalModel()) return false;
             var component = Model.FindComponent(instanceId);
             if (component == null || component.Kind != SpiceComponentKind.IdealSwitch || !Model.TrySetParameter(instanceId, closed ? 1d : 0d))
             {
@@ -327,9 +338,15 @@ namespace ElectricalSim.Spice.Workspace
         {
             EnsureInitialized();
             if (ResultState == SpiceWorkspaceResultState.Running) return null;
-            
+
+            CancelPendingWire();
+            CancelPaletteDrag();
             var previousState = ResultState;
+            var requestId = ++calculationRequestId;
+            var revisionAtStart = electricalRevision;
+            var modelAtStart = Model;
             ResultState = SpiceWorkspaceResultState.Running;
+            activeCalculationRequestId = requestId;
             runButton.interactable = false;
             statusText.text = "计算中...";
             lastOutcomeText = null;
@@ -346,10 +363,13 @@ namespace ElectricalSim.Spice.Workspace
                 localCancellation = new CancellationTokenSource();
                 simulationCancellation = localCancellation;
 
-                var result = await simulationService.SimulateAsync(Model.BuildCircuitModel(), localCancellation.Token);
+                var result = await SimulateCircuitAsync(modelAtStart.BuildCircuitModel(), localCancellation.Token);
 
-                if (localCancellation.IsCancellationRequested || shuttingDown)
+                if (!CanCommitCalculationResult(requestId, revisionAtStart, modelAtStart, localCancellation))
+                {
+                    DiscardOutdatedCalculation(requestId, revisionAtStart, modelAtStart);
                     return null;
+                }
 
                 generatedNetlistContent = result.GeneratedNetlistContent;
                 if (result.Success)
@@ -372,17 +392,27 @@ namespace ElectricalSim.Spice.Workspace
             }
             catch (OperationCanceledException)
             {
-                if (!shuttingDown)
+                if (IsActiveCalculationRequest(requestId) && !shuttingDown)
                 {
-                    ResultState = previousState;
-                    statusText.text = "计算已取消";
+                    if (revisionAtStart != electricalRevision || !ReferenceEquals(modelAtStart, Model))
+                    {
+                        DiscardOutdatedCalculation(requestId, revisionAtStart, modelAtStart);
+                    }
+                    else
+                    {
+                        ResultState = previousState;
+                        statusText.text = "计算已取消";
+                    }
                 }
                 return null;
             }
             catch (Exception exception)
             {
-                if (localCancellation != null && localCancellation.IsCancellationRequested || shuttingDown)
+                if (!CanCommitCalculationResult(requestId, revisionAtStart, modelAtStart, localCancellation))
+                {
+                    DiscardOutdatedCalculation(requestId, revisionAtStart, modelAtStart);
                     return null;
+                }
 
                 ResultState = SpiceWorkspaceResultState.Failed;
                 generatedNetlistContent = null;
@@ -393,20 +423,23 @@ namespace ElectricalSim.Spice.Workspace
             }
             finally
             {
-                if (ReferenceEquals(simulationCancellation, localCancellation))
-                    simulationCancellation = null;
+                if (IsActiveCalculationRequest(requestId))
+                {
+                    if (ReferenceEquals(simulationCancellation, localCancellation))
+                        simulationCancellation = null;
+                    activeCalculationRequestId = 0;
+                    if (!shuttingDown && runButton != null)
+                    {
+                        runButton.interactable = true;
+                        RefreshNetlistUi();
+                        RefreshCopyResultButton();
+                        // C2：离开 Running 时恢复保存/另存为/导入按钮。
+                        RefreshFileOperationButtonsAvailability();
+                    }
+                }
 
                 if (localCancellation != null)
                     localCancellation.Dispose();
-
-                if (!shuttingDown && runButton != null)
-                {
-                    runButton.interactable = true;
-                    RefreshNetlistUi();
-                    RefreshCopyResultButton();
-                    // C2：离开 Running 时恢复保存/另存为/导入按钮。
-                    RefreshFileOperationButtonsAvailability();
-                }
             }
         }
 
@@ -664,6 +697,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void DeleteSelection()
         {
+            if (!CanModifyElectricalModel()) return;
             if (selectedComponent != null)
             {
                 var id = selectedComponent.InstanceId;
@@ -688,6 +722,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void ClearWorkspace()
         {
+            if (!CanModifyElectricalModel()) return;
             CancelPendingWire();
             foreach (var wire in wireViews.ToList()) wire.Destroy();
             wireViews.Clear();
@@ -736,6 +771,11 @@ namespace ElectricalSim.Spice.Workspace
         {
             componentViews.TryGetValue(instanceId, out var view);
             return view;
+        }
+
+        internal void SetSimulationOverrideForTesting(Func<SpiceCircuitModel, CancellationToken, Task<SpiceSimulationResult>> simulationOverride)
+        {
+            simulationOverrideForTesting = simulationOverride;
         }
 
         /// <summary>
@@ -900,6 +940,7 @@ namespace ElectricalSim.Spice.Workspace
             Model.Changed -= HandleModelChanged;
             Model = tempModel;
             Model.Changed += HandleModelChanged;
+            AdvanceElectricalRevision();
 
             // 5. 按新模型重建所有元件视图（CreateComponentView 保留 InstanceId、Position、Rotation、SiValue）
             foreach (var component in Model.Components)
@@ -1233,6 +1274,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleModelChanged(SpiceWorkspaceChange change)
         {
+            AdvanceElectricalRevision();
             if (ResultState != SpiceWorkspaceResultState.Running && ResultState != SpiceWorkspaceResultState.NeverRun)
             {
                 ResultState = SpiceWorkspaceResultState.Stale;
@@ -1241,6 +1283,48 @@ namespace ElectricalSim.Spice.Workspace
             if (ResultState != SpiceWorkspaceResultState.Running) statusText.text = StateMessage();
             RefreshNetlistUi();
             RefreshCopyResultButton();
+        }
+
+        private bool CanModifyElectricalModel()
+        {
+            if (ResultState != SpiceWorkspaceResultState.Running) return true;
+            if (statusText != null) statusText.text = "仿真计算进行中，请稍后修改电路。";
+            return false;
+        }
+
+        private void AdvanceElectricalRevision()
+        {
+            unchecked { electricalRevision++; }
+        }
+
+        private bool IsActiveCalculationRequest(long requestId)
+        {
+            return requestId != 0 && requestId == activeCalculationRequestId;
+        }
+
+        private bool CanCommitCalculationResult(long requestId, long revisionAtStart, SpiceWorkspaceModel modelAtStart, CancellationTokenSource localCancellation)
+        {
+            return !shuttingDown && localCancellation != null && !localCancellation.IsCancellationRequested &&
+                IsActiveCalculationRequest(requestId) && revisionAtStart == electricalRevision && ReferenceEquals(modelAtStart, Model);
+        }
+
+        private void DiscardOutdatedCalculation(long requestId, long revisionAtStart, SpiceWorkspaceModel modelAtStart)
+        {
+            if (!IsActiveCalculationRequest(requestId) || shuttingDown) return;
+            if (revisionAtStart == electricalRevision && ReferenceEquals(modelAtStart, Model)) return;
+
+            lastOutcomeText = null;
+            ResultState = Model.Components.Count == 0 && Model.Wires.Count == 0
+                ? SpiceWorkspaceResultState.NeverRun
+                : SpiceWorkspaceResultState.Stale;
+            if (statusText != null) statusText.text = StateMessage();
+        }
+
+        private Task<SpiceSimulationResult> SimulateCircuitAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken)
+        {
+            return simulationOverrideForTesting != null
+                ? simulationOverrideForTesting(circuit, cancellationToken)
+                : simulationService.SimulateAsync(circuit, cancellationToken);
         }
 
         // 网表仅显示 SpiceNetlistBuilder 已生成的原始文本，UI 不自行重建近似内容。
