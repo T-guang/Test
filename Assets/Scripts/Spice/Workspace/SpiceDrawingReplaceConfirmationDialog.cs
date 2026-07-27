@@ -131,7 +131,7 @@ namespace ElectricalSim.Spice.Workspace
             panel.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             panel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             panel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            panel.rectTransform.sizeDelta = new Vector2(380f, 180f);
+            panel.rectTransform.sizeDelta = new Vector2(460f, 220f);
             panel.rectTransform.anchoredPosition = Vector2.zero;
             var outline = panelGo.AddComponent<Outline>();
             outline.effectColor = MainUiTheme.Divider;
@@ -140,19 +140,19 @@ namespace ElectricalSim.Spice.Workspace
             shadow.effectColor = new Color(0f, 0f, 0f, 0.18f);
             shadow.effectDistance = new Vector2(0f, -4f);
 
-            // 标题
-            var title = SpiceWorkspaceUi.CreateText(panel.transform, "Title", "导入图纸", 17, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
-            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -44f), new Vector2(-20f, -8f));
+            // 标题（顶部带 20 边距）
+            var title = SpiceWorkspaceUi.CreateText(panel.transform, "Title", "导入图纸", 18, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
+            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -52f), new Vector2(-24f, -10f));
 
-            // 正文
-            body = SpiceWorkspaceUi.CreateText(panel.transform, "Body", "导入图纸将替换当前 SPICE 画布，是否继续？", 14, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.NormalText);
-            SpiceWorkspaceUi.Anchor(body.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -96f), new Vector2(-20f, -52f));
+            // 正文（标题下方，留出呼吸空间）
+            body = SpiceWorkspaceUi.CreateText(panel.transform, "Body", "导入图纸将替换当前 SPICE 画布，是否继续？", 15, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.NormalText);
+            SpiceWorkspaceUi.Anchor(body.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -108f), new Vector2(-24f, -60f));
 
-            // 取消 / 继续导入 按钮
+            // 取消 / 继续导入 按钮（底部右侧，按钮宽 96，高 36，间距 12，右边距 24）
             cancelButton = SpiceWorkspaceUi.CreateButton(panel.transform, "Cancel", "取消", Color.white, Cancel);
-            SpiceWorkspaceUi.Anchor(cancelButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-190f, 16f), new Vector2(-106f, 48f));
+            SpiceWorkspaceUi.Anchor(cancelButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-228f, 24f), new Vector2(-132f, 60f));
             confirmButton = SpiceWorkspaceUi.CreateButton(panel.transform, "Confirm", "继续导入", MainUiTheme.PrimaryBlue, HandleConfirmClicked, true);
-            SpiceWorkspaceUi.Anchor(confirmButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-96f, 16f), new Vector2(-20f, 48f));
+            SpiceWorkspaceUi.Anchor(confirmButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-120f, 24f), new Vector2(-24f, 60f));
             ConfigureButtonColors(cancelButton, false);
             ConfigureButtonColors(confirmButton, true);
         }

@@ -351,11 +351,13 @@ namespace ElectricalSim.Spice.Workspace
             StyleToolbarButton(FindToolbarButton(bindings, "ZoomIn"), "＋", false, false, 564f, 598f);
             StyleToolbarButton(FindToolbarButton(bindings, "FitAll"), "适配全部", false, false, 606f, 676f);
             StyleToolbarButton(FindToolbarButton(bindings, "ResetView"), "重置视图", false, false, 684f, 754f);
-            // C2 文件操作工具栏按钮：保存 / 另存为 / 导入，沿用既有样式与坐标。
-            StyleToolbarButton(FindToolbarButton(bindings, "SaveFile"), "保存", false, false, 762f, 832f);
-            StyleToolbarButton(FindToolbarButton(bindings, "SaveAsFile"), "另存为", false, false, 840f, 910f);
-            StyleToolbarButton(FindToolbarButton(bindings, "ImportFile"), "导入", false, false, 918f, 988f);
+            // C2 文件操作工具栏按钮：保存 / 另存为 / 导入，使用右锚点布局，从右到左排列。
+            // 导入最靠右（右边距 24，宽 80），另存为和保存依次向左，按钮间距 12。
+            StyleToolbarButtonRightAnchored(FindToolbarButton(bindings, "ImportFile"), "导入", false, false, 24f, 104f);
+            StyleToolbarButtonRightAnchored(FindToolbarButton(bindings, "SaveAsFile"), "另存为", false, false, 116f, 196f);
+            StyleToolbarButtonRightAnchored(FindToolbarButton(bindings, "SaveFile"), "保存", false, false, 208f, 288f);
             StyleZoomLabel(bindings);
+            StyleStatusTextRightPadding(bindings);
 
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
@@ -410,6 +412,58 @@ namespace ElectricalSim.Spice.Workspace
             var toolbar = bindings.RunButton.transform.parent;
             var transform = toolbar.Find(name);
             return transform != null ? transform.GetComponent<Button>() : null;
+        }
+
+        /// <summary>
+        /// 右锚点工具栏按钮：anchorMin/Max=(1,0.5)，offsetMin=(-rightOuter, -20)，offsetMax=(-rightInner, 20)。
+        /// rightInner/rightOuter 均为距工具栏右边的正偏移；rightOuter > rightInner，宽度 = rightOuter - rightInner。
+        /// 与既有左锚点按钮共享样式逻辑，仅锚定方式不同。
+        /// </summary>
+        private static void StyleToolbarButtonRightAnchored(Button button, string label, bool primary, bool danger, float rightInner, float rightOuter)
+        {
+            if (button == null) return;
+
+            Anchor(button.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-rightOuter, ToolbarButtonTop), new Vector2(-rightInner, ToolbarButtonBottom));
+
+            var image = button.GetComponent<Image>() ?? button.gameObject.AddComponent<Image>();
+            image.sprite = UiThemeTokens.GetRoundedSprite(10);
+            image.type = Image.Type.Sliced;
+            image.color = primary ? MainUiTheme.PrimaryBlue : Color.white;
+            button.targetGraphic = image;
+
+            var outline = button.GetComponent<Outline>() ?? button.gameObject.AddComponent<Outline>();
+            outline.effectColor = primary ? MainUiTheme.PrimaryBlue : danger ? MainUiTheme.DangerBorder : MainUiTheme.Hex("D8DEE8");
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var text = button.GetComponentInChildren<Text>();
+            if (text != null)
+            {
+                text.text = label;
+                MainUiTheme.ApplyTextRole(text, primary ? MainUiTheme.UiTextRole.ToolbarPrimaryButton : danger ? MainUiTheme.UiTextRole.ToolbarDangerButton : MainUiTheme.UiTextRole.ToolbarButton);
+                text.color = primary ? Color.white : danger ? MainUiTheme.DangerRed : MainUiTheme.NormalText;
+                Stretch(text.rectTransform, Vector2.zero, Vector2.zero);
+            }
+
+            var colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = primary ? MainUiTheme.Hex("1D4ED8") : danger ? MainUiTheme.Hex("FEF2F2") : MainUiTheme.Hex("F8FAFC");
+            colors.pressedColor = primary ? MainUiTheme.Hex("1E40AF") : danger ? MainUiTheme.Hex("FEE2E2") : MainUiTheme.Hex("EAF2FF");
+            colors.selectedColor = colors.highlightedColor;
+            colors.disabledColor = MainUiTheme.Hex("E5E7EB");
+            button.colors = colors;
+        }
+
+        /// <summary>
+        /// 调整状态文本区域，避免与右锚点的文件操作按钮重叠。
+        /// 文件按钮最左边界为距右 288（保存按钮 rightOuter）；状态文本右边距 304，左边距 360（宽度可变，至少 200）。
+        /// </summary>
+        private static void StyleStatusTextRightPadding(SpiceWorkspaceViewBindings bindings)
+        {
+            var toolbar = bindings.RunButton.transform.parent;
+            var statusTransform = toolbar.Find("Status");
+            if (statusTransform == null) return;
+            // 右锚点，offsetMin=(-360, 0) offsetMax=(-304, 0)，保证不与文件按钮重叠
+            Anchor(statusTransform as RectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-360f, 0f), new Vector2(-304f, 0f));
         }
 
         private static void StyleZoomLabel(SpiceWorkspaceViewBindings bindings)

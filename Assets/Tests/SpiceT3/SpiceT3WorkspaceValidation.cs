@@ -87,6 +87,10 @@ namespace ElectricalSim.Spice.T3
             ValidateReplaceConfirmationDisposeDestroysAllObjects();
             ValidateReplaceConfirmationOpenSiblingOrder();
             ValidateDefaultDirectoryFailureSkipsDialog();
+            // C2.1 收口：弹窗放大尺寸、文件按钮右锚点布局、工作目录恢复
+            ValidateReplaceConfirmationDialogEnlargedSize();
+            ValidateFileToolbarButtonsRightAnchoredLayout();
+            ValidateFileDialogRestoresWorkingDirectory();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -2979,6 +2983,148 @@ namespace ElectricalSim.Spice.T3
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
+        }
+
+        // 替换确认弹窗放大尺寸为约 460 × 220，标题/正文/按钮不重叠。
+        private static void ValidateReplaceConfirmationDialogEnlargedSize()
+        {
+            var canvasRoot = new GameObject("SpiceReplaceSize", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+
+                var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                popupLayer.SetParent(canvasRoot.transform, false);
+                host.InitializeFileWorkflowForTesting(popupLayer);
+
+                var dialog = host.GetReplaceConfirmationDialogForTesting();
+                dialog.Open();
+
+                var panelTransform = popupLayer.Find("SpiceReplaceConfirmPanel");
+                if (panelTransform == null) throw new InvalidOperationException("测试前置：Panel 应存在。");
+                var size = panelTransform.GetComponent<RectTransform>().sizeDelta;
+                if (Math.Abs(size.x - 460f) > 0.01f || Math.Abs(size.y - 220f) > 0.01f)
+                    throw new InvalidOperationException("替换确认弹窗尺寸应为 460×220，实际：" + size);
+
+                // 验证按钮在 Panel 内部，不重叠不截断
+                var cancelTransform = panelTransform.Find("Cancel");
+                var confirmTransform = panelTransform.Find("Confirm");
+                if (cancelTransform == null || confirmTransform == null)
+                    throw new InvalidOperationException("测试前置：取消和继续导入按钮应存在。");
+
+                var cancelRect = cancelTransform.GetComponent<RectTransform>();
+                var confirmRect = confirmTransform.GetComponent<RectTransform>();
+                // 两个按钮都在 Panel 右下角区域，且 confirm 在 cancel 右侧
+                if (confirmRect.offsetMin.x <= cancelRect.offsetMax.x)
+                    throw new InvalidOperationException("继续导入按钮应在取消按钮右侧。");
+                // 按钮在 Panel 边界内（offsetMin.x >= -size.x/2，offsetMax.x <= size.x/2）
+                if (cancelRect.offsetMin.x < -size.x / 2f + 1f || confirmRect.offsetMax.x > size.x / 2f - 1f)
+                    throw new InvalidOperationException("按钮超出 Panel 边界。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 文件按钮使用右锚点布局，导入最靠右，状态文本不与文件按钮重叠。
+        private static void ValidateFileToolbarButtonsRightAnchoredLayout()
+        {
+            var canvasRoot = new GameObject("SpiceFileButtonsRightAnchored", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var save = workspace.GetSaveFileButtonForTesting();
+                var saveAs = workspace.GetSaveAsFileButtonForTesting();
+                var import = workspace.GetImportFileButtonForTesting();
+                if (save == null || saveAs == null || import == null)
+                    throw new InvalidOperationException("测试前置：三个文件按钮应存在。");
+
+                var saveRect = save.GetComponent<RectTransform>();
+                var saveAsRect = saveAs.GetComponent<RectTransform>();
+                var importRect = import.GetComponent<RectTransform>();
+
+                // 三个按钮都应使用右锚点（anchorMin.x == anchorMax.x == 1）
+                if (Math.Abs(saveRect.anchorMin.x - 1f) > 0.001f || Math.Abs(saveRect.anchorMax.x - 1f) > 0.001f)
+                    throw new InvalidOperationException("保存按钮应使用右锚点。");
+                if (Math.Abs(saveAsRect.anchorMin.x - 1f) > 0.001f || Math.Abs(saveAsRect.anchorMax.x - 1f) > 0.001f)
+                    throw new InvalidOperationException("另存为按钮应使用右锚点。");
+                if (Math.Abs(importRect.anchorMin.x - 1f) > 0.001f || Math.Abs(importRect.anchorMax.x - 1f) > 0.001f)
+                    throw new InvalidOperationException("导入按钮应使用右锚点。");
+
+                // 导入最靠右：import 的 rightInner < saveAs 的 rightInner < save 的 rightInner
+                var importRightInner = -importRect.offsetMax.x;
+                var saveAsRightInner = -saveAsRect.offsetMax.x;
+                var saveRightInner = -saveRect.offsetMax.x;
+                if (!(importRightInner < saveAsRightInner && saveAsRightInner < saveRightInner))
+                    throw new InvalidOperationException("导入应最靠右，另存为次之，保存最左。import=" + importRightInner + " saveAs=" + saveAsRightInner + " save=" + saveRightInner);
+
+                // 右边距应在 18~24 范围（导入按钮 rightInner）
+                if (importRightInner < 18f || importRightInner > 24f)
+                    throw new InvalidOperationException("导入按钮右边距应在 18~24，实际：" + importRightInner);
+
+                // 状态文本不应与文件按钮重叠：状态文本 offsetMax.x（右边界）应 <= 文件按钮 offsetMin.x（左边界）
+                var toolbar = save.transform.parent;
+                var statusTransform = toolbar.Find("Status");
+                if (statusTransform != null)
+                {
+                    var statusRect = statusTransform.GetComponent<RectTransform>();
+                    // 状态文本右边界（距右的负偏移）应比保存按钮左边界（距右的负偏移）更靠左
+                    var statusRight = -statusRect.offsetMax.x;
+                    var saveLeft = -saveRect.offsetMin.x;
+                    if (statusRight < saveLeft)
+                        throw new InvalidOperationException("状态文本应不与文件按钮重叠。statusRight=" + statusRight + " saveLeft=" + saveLeft);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 文件对话框调用后工作目录恢复（通过可注入的初始目录验证 finally 语义）。
+        // 由于 batchmode 无法调用原生对话框，本测试验证 WindowsFileDialog 在 initialDirectory
+        // 存在时切换工作目录、在 finally 恢复的契约：通过反射或直接调用验证目录恢复。
+        // 非 Windows 平台跳过（WindowsFileDialog 整体被 #if 隔离）。
+        private static void ValidateFileDialogRestoresWorkingDirectory()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var originalDir = System.IO.Directory.GetCurrentDirectory();
+            var tempDir = CreateUniqueTempDir("FileDialogDirRestore");
+            try
+            {
+                // 在 tempDir 下创建子目录作为 initialDirectory
+                var initialDir = System.IO.Path.Combine(tempDir, "InitialDir");
+                System.IO.Directory.CreateDirectory(initialDir);
+
+                // 调用 OpenFile（batchmode 下 GetOpenFileName 会立即返回 false，不阻塞）
+                // 验证调用后工作目录恢复为 originalDir
+                ElectricalSim.Platform.WindowsFileDialog.OpenFile("测试", "All|*.*", "txt", initialDir);
+                var afterOpen = System.IO.Directory.GetCurrentDirectory();
+                if (afterOpen != originalDir)
+                    throw new InvalidOperationException("OpenFile 后工作目录应恢复，原：" + originalDir + " 实际：" + afterOpen);
+
+                // 调用 SaveFile 同样验证
+                ElectricalSim.Platform.WindowsFileDialog.SaveFile("测试", "All|*.*", "txt", initialDir, "default.txt");
+                var afterSave = System.IO.Directory.GetCurrentDirectory();
+                if (afterSave != originalDir)
+                    throw new InvalidOperationException("SaveFile 后工作目录应恢复，原：" + originalDir + " 实际：" + afterSave);
+
+                // 验证 initialDirectory 不存在时也不抛异常、不改工作目录
+                var nonExistent = System.IO.Path.Combine(tempDir, "DoesNotExist");
+                ElectricalSim.Platform.WindowsFileDialog.OpenFile("测试", "All|*.*", "txt", nonExistent);
+                var afterNonExistent = System.IO.Directory.GetCurrentDirectory();
+                if (afterNonExistent != originalDir)
+                    throw new InvalidOperationException("initialDirectory 不存在时工作目录不应改变。");
+            }
+            finally
+            {
+                // 确保测试自身也恢复工作目录
+                try { System.IO.Directory.SetCurrentDirectory(originalDir); } catch { }
+                CleanupTempDir(tempDir);
+            }
+#endif
         }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。

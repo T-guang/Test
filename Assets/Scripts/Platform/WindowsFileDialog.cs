@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace ElectricalSim.Platform
@@ -8,6 +9,8 @@ namespace ElectricalSim.Platform
     /// Windows 原生打开/保存文件对话框封装。仅 Windows 平台引用 Comdlg32；
     /// 非 Windows 平台不引用任何 Windows API，由调用方在编译期被 #if 隔离。
     /// 所有方法在用户取消时返回 null，不抛异常；支持中文路径（CharSet.Auto）。
+    /// 为防止 Windows 记忆上次目录，调用原生对话框前临时切换当前工作目录到 initialDirectory，
+    /// 调用后无论成功/取消/异常都在 finally 恢复原工作目录。保留 OFN_NOCHANGEDIR。
     /// </summary>
     public static class WindowsFileDialog
     {
@@ -64,6 +67,7 @@ namespace ElectricalSim.Platform
         /// <summary>
         /// 打开文件对话框，可指定初始目录。用户取消返回 null。
         /// 使用 OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR。
+        /// 为对抗 Windows 目录记忆，调用前临时将当前工作目录切到 initialDirectory，finally 恢复。
         /// </summary>
         public static string OpenFile(string title, string filter, string extension, string initialDirectory)
         {
@@ -80,17 +84,37 @@ namespace ElectricalSim.Platform
             ofn.flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
             ofn.dlgOwner = GetActiveWindow();
 
-            if (GetOpenFileName(ofn))
+            string originalDir = null;
+            bool dirChanged = false;
+            try
             {
-                return ofn.file;
+                if (!string.IsNullOrEmpty(initialDirectory) && Directory.Exists(initialDirectory))
+                {
+                    originalDir = Directory.GetCurrentDirectory();
+                    Directory.SetCurrentDirectory(initialDirectory);
+                    dirChanged = true;
+                }
+                if (GetOpenFileName(ofn))
+                {
+                    return ofn.file;
+                }
+                return null;
             }
-            return null;
+            finally
+            {
+                if (dirChanged)
+                {
+                    try { Directory.SetCurrentDirectory(originalDir); }
+                    catch { /* 恢复失败不影响主流程；OFN_NOCHANGEDIR 已限制对话框自身不改进程目录 */ }
+                }
+            }
         }
 
         /// <summary>
         /// 保存文件对话框。用户取消返回 null。
         /// 使用 OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR。
         /// Windows 自身处理覆盖确认，不依赖应用层弹窗。
+        /// 为对抗 Windows 目录记忆，调用前临时将当前工作目录切到 initialDirectory，finally 恢复。
         /// </summary>
         public static string SaveFile(string title, string filter, string extension, string initialDirectory, string defaultFileName)
         {
@@ -108,11 +132,30 @@ namespace ElectricalSim.Platform
             ofn.flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
             ofn.dlgOwner = GetActiveWindow();
 
-            if (GetSaveFileName(ofn))
+            string originalDir = null;
+            bool dirChanged = false;
+            try
             {
-                return ofn.file;
+                if (!string.IsNullOrEmpty(initialDirectory) && Directory.Exists(initialDirectory))
+                {
+                    originalDir = Directory.GetCurrentDirectory();
+                    Directory.SetCurrentDirectory(initialDirectory);
+                    dirChanged = true;
+                }
+                if (GetSaveFileName(ofn))
+                {
+                    return ofn.file;
+                }
+                return null;
             }
-            return null;
+            finally
+            {
+                if (dirChanged)
+                {
+                    try { Directory.SetCurrentDirectory(originalDir); }
+                    catch { /* 恢复失败不影响主流程；OFN_NOCHANGEDIR 已限制对话框自身不改进程目录 */ }
+                }
+            }
         }
     }
 #endif
