@@ -71,6 +71,18 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingFileInvalidUtf8ImportRejected();
             ValidateDrawingFileMissingPositionYRejected();
             ValidateDrawingFileSuccessDoesNotWriteStatusText();
+            // Batch C2：工具栏按钮、文件工作流决策、替换确认与反馈
+            ValidateFileToolbarButtonsCreatedOnce();
+            ValidateFileToolbarButtonsDisabledWhileRunning();
+            ValidateFileOperationCallbackRunningGuard();
+            ValidateSaveRoutesToSaveAsWhenNoCurrentPath();
+            ValidateSaveRoutesToSaveCurrentWhenHasPath();
+            ValidateShowFileOperationStatusOnlyFileName();
+            ValidateShowFileOperationStatusNoStack();
+            ValidateReplaceConfirmationDialogCreatedOnceAndReusable();
+            ValidateReplaceConfirmationCancelDoesNotImport();
+            ValidateReplaceConfirmationConfirmCallsImportOnce();
+            ValidateClearWorkspaceRoutesSaveToSaveAs();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -2430,6 +2442,399 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException("C1 " + operation + " 不应写入“已从以下路径导入”文案：" + statusText);
             if (!string.IsNullOrEmpty(fullPath) && statusText.IndexOf(fullPath, StringComparison.Ordinal) >= 0)
                 throw new InvalidOperationException("C1 " + operation + " 不应在 statusText 暴露完整路径：" + statusText);
+        }
+
+        // ============ Batch C2 自动验证 ============
+        // Windows 原生对话框无法在 batchmode 中调用，自动测试只验证工作流决策、回调次数、
+        // 取消和确认状态。Windows 原生对话框由 Editor 人工验收。
+
+        // 工具栏恰好一个保存、一个另存为、一个导入按钮。
+        private static void ValidateFileToolbarButtonsCreatedOnce()
+        {
+            var canvasRoot = new GameObject("SpiceFileToolbarButtons", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var save = workspace.GetSaveFileButtonForTesting();
+                var saveAs = workspace.GetSaveAsFileButtonForTesting();
+                var import = workspace.GetImportFileButtonForTesting();
+                if (save == null) throw new InvalidOperationException("工具栏应创建保存按钮。");
+                if (saveAs == null) throw new InvalidOperationException("工具栏应创建另存为按钮。");
+                if (import == null) throw new InvalidOperationException("工具栏应创建导入按钮。");
+                if (save == saveAs || save == import || saveAs == import)
+                    throw new InvalidOperationException("三个文件操作按钮必须各自独立。");
+                if (save.gameObject.name != "SaveFile" || saveAs.gameObject.name != "SaveAsFile" || import.gameObject.name != "ImportFile")
+                    throw new InvalidOperationException("文件操作按钮名称不匹配。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Running 时三个按钮 disabled。
+        private static void ValidateFileToolbarButtonsDisabledWhileRunning()
+        {
+            var canvasRoot = new GameObject("SpiceFileButtonsRunning", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+                if (workspace.GetSaveFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("Running 时保存按钮应禁用。");
+                if (workspace.GetSaveAsFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("Running 时另存为按钮应禁用。");
+                if (workspace.GetImportFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("Running 时导入按钮应禁用。");
+                // 离开 Running 后恢复
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.NeverRun);
+                if (!workspace.GetSaveFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("离开 Running 后保存按钮应恢复。");
+                if (!workspace.GetSaveAsFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("离开 Running 后另存为按钮应恢复。");
+                if (!workspace.GetImportFileButtonForTesting().interactable)
+                    throw new InvalidOperationException("离开 Running 后导入按钮应恢复。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Running 时直接调用处理入口，不触发文件对话框、不改路径。
+        private static void ValidateFileOperationCallbackRunningGuard()
+        {
+            var canvasRoot = new GameObject("SpiceFileCallbackGuard", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+
+                var saveInvoked = false;
+                var saveAsInvoked = false;
+                var importInvoked = false;
+                workspace.SaveRequested += () => saveInvoked = true;
+                workspace.SaveAsRequested += () => saveAsInvoked = true;
+                workspace.ImportRequested += () => importInvoked = true;
+
+                workspace.InvokeSaveButtonForTesting();
+                workspace.InvokeSaveAsButtonForTesting();
+                workspace.InvokeImportButtonForTesting();
+
+                if (saveInvoked || saveAsInvoked || importInvoked)
+                    throw new InvalidOperationException("Running 时不应触发任何文件操作事件。");
+                var status = workspace.GetStatusTextForTesting();
+                if (status == null || status.IndexOf("仿真计算进行中", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("Running 时应显示运行中提示：" + status);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // CurrentSpiceFilePath 为空时"保存"路由到"另存为"处理。
+        private static void ValidateSaveRoutesToSaveAsWhenNoCurrentPath()
+        {
+            var canvasRoot = new GameObject("SpiceSaveRoutesToSaveAs", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var saveInvoked = false;
+                var saveAsInvoked = false;
+                workspace.SaveRequested += () => saveInvoked = true;
+                workspace.SaveAsRequested += () => saveAsInvoked = true;
+
+                workspace.InvokeSaveButtonForTesting();
+                if (saveInvoked) throw new InvalidOperationException("无路径时保存不应路由到 SaveRequested。");
+                if (!saveAsInvoked) throw new InvalidOperationException("无路径时保存应路由到 SaveAsRequested。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 已有路径时"保存"路由到 SaveRequested（不打开对话框）。
+        private static void ValidateSaveRoutesToSaveCurrentWhenHasPath()
+        {
+            var tempDir = CreateUniqueTempDir("SaveRoutes");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceSaveRoutesToCurrent", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var savePath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(savePath, out var error))
+                        throw new InvalidOperationException("测试前置：保存应成功：" + error);
+
+                    var saveInvoked = false;
+                    var saveAsInvoked = false;
+                    workspace.SaveRequested += () => saveInvoked = true;
+                    workspace.SaveAsRequested += () => saveAsInvoked = true;
+
+                    workspace.InvokeSaveButtonForTesting();
+                    if (!saveInvoked) throw new InvalidOperationException("有路径时保存应路由到 SaveRequested。");
+                    if (saveAsInvoked) throw new InvalidOperationException("有路径时保存不应路由到 SaveAsRequested。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 成功消息只包含文件名，不含绝对路径。
+        private static void ValidateShowFileOperationStatusOnlyFileName()
+        {
+            var tempDir = CreateUniqueTempDir("StatusFileName");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceStatusFileName", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var savePath = Path.Combine(tempDir, "my_circuit.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(savePath, out var error))
+                        throw new InvalidOperationException("测试前置：保存应成功：" + error);
+
+                    workspace.ShowFileOperationStatus("已保存：" + System.IO.Path.GetFileName(workspace.CurrentSpiceFilePath));
+                    var status = workspace.GetStatusTextForTesting();
+                    if (status == null || status.IndexOf("my_circuit.spicejson", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("成功消息应包含文件名：" + status);
+                    if (status.IndexOf(tempDir, StringComparison.Ordinal) >= 0)
+                        throw new InvalidOperationException("成功消息不应包含绝对路径：" + status);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 错误消息不显示堆栈。
+        private static void ValidateShowFileOperationStatusNoStack()
+        {
+            var canvasRoot = new GameObject("SpiceStatusNoStack", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                workspace.ShowFileOperationStatus("导入失败，文件格式无效。");
+                var status = workspace.GetStatusTextForTesting();
+                if (status == null || status.IndexOf("Exception", StringComparison.Ordinal) >= 0)
+                    throw new InvalidOperationException("错误消息不应包含异常类名：" + status);
+                if (status.IndexOf("at System", StringComparison.Ordinal) >= 0)
+                    throw new InvalidOperationException("错误消息不应包含堆栈：" + status);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 替换确认弹窗创建一次且可复用。
+        private static void ValidateReplaceConfirmationDialogCreatedOnceAndReusable()
+        {
+            var canvasRoot = new GameObject("SpiceReplaceConfirmCreate", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                // Host 由 CreateInitializedWorkspaceForCopy 在 canvasRoot 下创建为同级 hostRoot，
+                // 不在 bindings 的父级链上，使用 canvasRoot.GetComponentInChildren 定位（非 GameObject.Find）。
+                var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+                if (host == null) throw new InvalidOperationException("测试前置：Host 不应为空。");
+
+                var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                popupLayer.SetParent(canvasRoot.transform, false);
+                host.InitializeFileWorkflowForTesting(popupLayer);
+
+                var dialog = host.GetReplaceConfirmationDialogForTesting();
+                if (dialog == null) throw new InvalidOperationException("替换确认弹窗应被创建。");
+                if (dialog.IsOpen) throw new InvalidOperationException("弹窗初始应为关闭。");
+
+                dialog.Open();
+                if (!dialog.IsOpen) throw new InvalidOperationException("Open 后应处于打开状态。");
+                dialog.CloseWithoutApply();
+                if (dialog.IsOpen) throw new InvalidOperationException("CloseWithoutApply 后应关闭。");
+
+                // 复用：再次打开
+                dialog.Open();
+                if (!dialog.IsOpen) throw new InvalidOperationException("弹窗应可复用。");
+                dialog.CloseWithoutApply();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 替换确认取消不改模型和路径。
+        private static void ValidateReplaceConfirmationCancelDoesNotImport()
+        {
+            var tempDir = CreateUniqueTempDir("ReplaceCancel");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceReplaceCancel", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+
+                    var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                    popupLayer.SetParent(canvasRoot.transform, false);
+                    host.InitializeFileWorkflowForTesting(popupLayer);
+
+                    var badPath = Path.Combine(tempDir, "bad.spicejson");
+                    File.WriteAllText(badPath, "not json", System.Text.Encoding.UTF8);
+
+                    var oldComponentCount = workspace.Model.Components.Count;
+                    var oldPath = workspace.CurrentSpiceFilePath;
+
+                    // 进入替换确认
+                    if (!host.TryBeginImportFromPathForTesting(badPath))
+                        throw new InvalidOperationException("非空画布应进入替换确认。");
+                    var dialog = host.GetReplaceConfirmationDialogForTesting();
+                    if (!dialog.IsOpen) throw new InvalidOperationException("替换确认弹窗应打开。");
+
+                    // 取消 - 通过 Cancel() 触发 Cancelled 事件，Host 据此清理 pendingImportPath
+                    dialog.Cancel();
+                    if (dialog.IsOpen) throw new InvalidOperationException("取消后弹窗应关闭。");
+                    if (host.GetPendingImportPathForTesting() != null)
+                        throw new InvalidOperationException("取消后 pendingImportPath 应清空。");
+
+                    // 模型和路径不变
+                    if (workspace.Model.Components.Count != oldComponentCount)
+                        throw new InvalidOperationException("取消确认后组件数量不应改变。");
+                    if (workspace.CurrentSpiceFilePath != oldPath)
+                        throw new InvalidOperationException("取消确认后路径不应改变。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 替换确认后只调用一次 TryImportWorkspaceFromPath。
+        private static void ValidateReplaceConfirmationConfirmCallsImportOnce()
+        {
+            var tempDir = CreateUniqueTempDir("ReplaceConfirm");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceReplaceConfirmImport", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+
+                    var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                    popupLayer.SetParent(canvasRoot.transform, false);
+                    host.InitializeFileWorkflowForTesting(popupLayer);
+
+                    // 准备一个有效的导入文件（空画布 JSON）
+                    var importPath = Path.Combine(tempDir, "import.spicejson");
+                    var emptyJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[],\"wires\":[]}";
+                    File.WriteAllText(importPath, emptyJson, System.Text.Encoding.UTF8);
+
+                    // 进入替换确认
+                    if (!host.TryBeginImportFromPathForTesting(importPath))
+                        throw new InvalidOperationException("非空画布应进入替换确认。");
+                    var dialog = host.GetReplaceConfirmationDialogForTesting();
+                    if (!dialog.IsOpen) throw new InvalidOperationException("替换确认弹窗应打开。");
+
+                    // 确认前 pendingImportPath 已设置
+                    if (host.GetPendingImportPathForTesting() != importPath)
+                        throw new InvalidOperationException("确认前 pendingImportPath 应为候选路径。");
+
+                    // 确认 - 通过 Confirm() 触发 ConfirmRequested 事件（模拟点击"继续导入"）
+                    dialog.Confirm();
+
+                    // 确认后弹窗关闭、pendingImportPath 清空
+                    if (dialog.IsOpen) throw new InvalidOperationException("确认后弹窗应关闭。");
+                    if (host.GetPendingImportPathForTesting() != null)
+                        throw new InvalidOperationException("确认后 pendingImportPath 应清空。");
+
+                    // 导入成功：CurrentSpiceFilePath 更新为导入路径
+                    if (workspace.CurrentSpiceFilePath != importPath)
+                        throw new InvalidOperationException("确认导入后路径应更新：" + workspace.CurrentSpiceFilePath);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 清空后保存走另存为。
+        private static void ValidateClearWorkspaceRoutesSaveToSaveAs()
+        {
+            var tempDir = CreateUniqueTempDir("ClearRoutesSaveAs");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceClearRoutesSaveAs", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var savePath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(savePath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+                    if (!workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("测试前置：应有当前路径。");
+
+                    // 清空画布（C1 已保证 ClearWorkspace 清除 CurrentSpiceFilePath）
+                    workspace.ClearAll();
+
+                    if (workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("清空后不应有当前路径。");
+
+                    // 清空后保存应路由到 SaveAsRequested
+                    var saveInvoked = false;
+                    var saveAsInvoked = false;
+                    workspace.SaveRequested += () => saveInvoked = true;
+                    workspace.SaveAsRequested += () => saveAsInvoked = true;
+
+                    workspace.InvokeSaveButtonForTesting();
+                    if (saveInvoked) throw new InvalidOperationException("清空后保存不应路由到 SaveRequested。");
+                    if (!saveAsInvoked) throw new InvalidOperationException("清空后保存应路由到 SaveAsRequested。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
         }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。

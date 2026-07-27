@@ -75,6 +75,10 @@ namespace ElectricalSim.Spice.Workspace
         private string lastOutcomeText;
         private Button zoomOutButton;
         private Button zoomInButton;
+        // C2 文件操作工具栏按钮：保存 / 另存为 / 导入
+        private Button saveFileButton;
+        private Button saveAsFileButton;
+        private Button importFileButton;
 
         public SpiceWorkspaceModel Model { get; private set; } = new SpiceWorkspaceModel();
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
@@ -86,6 +90,12 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform OverlayLayer { get; private set; }
         public bool HasPendingWire => pendingComponent != null;
         public event Action<SpiceWorkspaceComponentData> ParameterDialogRequested;
+
+        // C2 文件操作事件：Host 订阅后负责打开 Windows 文件对话框、替换确认和用户反馈。
+        // Controller 只在按钮点击且未运行中时触发，不直接调用 C1 文件 API。
+        public event Action SaveRequested;
+        public event Action SaveAsRequested;
+        public event Action ImportRequested;
 
         /// <summary>绑定外部宿主后初始化。本控制器不创建 Canvas、EventSystem 或 Camera。</summary>
         public void Initialize(SpiceWorkspaceViewBindings hostBindings)
@@ -327,6 +337,8 @@ namespace ElectricalSim.Spice.Workspace
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             RefreshNetlistUi();
+            // C2：进入 Running 时禁用保存/另存为/导入按钮（不依赖 Update 轮询）。
+            RefreshFileOperationButtonsAvailability();
 
             CancellationTokenSource localCancellation = null;
             try
@@ -392,6 +404,8 @@ namespace ElectricalSim.Spice.Workspace
                     runButton.interactable = true;
                     RefreshNetlistUi();
                     RefreshCopyResultButton();
+                    // C2：离开 Running 时恢复保存/另存为/导入按钮。
+                    RefreshFileOperationButtonsAvailability();
                 }
             }
         }
@@ -399,6 +413,80 @@ namespace ElectricalSim.Spice.Workspace
         public void RunCalculation() => RunFromButton();
         public void RotateSelection() => RotateSelectedComponent();
         public void ClearAll() => ClearWorkspace();
+
+        // C2 文件操作按钮回调：每次点击都二次校验 Running，避免任何路径在仿真中被触发。
+        // 不直接调用 C1 文件 API；仅触发事件由 Host 协调对话框与确认。
+        private void HandleSaveButtonClicked()
+        {
+            if (ResultState == SpiceWorkspaceResultState.Running)
+            {
+                ShowFileOperationStatus("仿真计算进行中，请稍后操作图纸。");
+                return;
+            }
+            // 无当前路径时“保存”等同“另存为”：交给 Host 走对话框流程。
+            if (!fileService.HasCurrentSpiceFilePath)
+            {
+                SaveAsRequested?.Invoke();
+                return;
+            }
+            SaveRequested?.Invoke();
+        }
+
+        private void HandleSaveAsButtonClicked()
+        {
+            if (ResultState == SpiceWorkspaceResultState.Running)
+            {
+                ShowFileOperationStatus("仿真计算进行中，请稍后操作图纸。");
+                return;
+            }
+            SaveAsRequested?.Invoke();
+        }
+
+        private void HandleImportButtonClicked()
+        {
+            if (ResultState == SpiceWorkspaceResultState.Running)
+            {
+                ShowFileOperationStatus("仿真计算进行中，请稍后操作图纸。");
+                return;
+            }
+            ImportRequested?.Invoke();
+        }
+
+        /// <summary>
+        /// C2 专属：显示文件操作的成功/失败/提示消息。仅由 Host 在文件工作流完成后调用。
+        /// 不覆盖运行计算、参数更新、接线提示、Batch B 导入成功后的“未计算”等已有状态时机
+        /// （Host 负责仅在合适时机调用本方法）。
+        /// </summary>
+        public void ShowFileOperationStatus(string message)
+        {
+            if (statusText != null && !string.IsNullOrEmpty(message))
+            {
+                statusText.text = message;
+            }
+        }
+
+        /// <summary>
+        /// C2 专属：根据 ResultState 刷新保存/另存为/导入按钮的 interactable。
+        /// 仅在进入 Running 和离开 Running 时由 RunCalculationAsync 调用一次，
+        /// 不依赖全局 Update 轮询。
+        /// </summary>
+        private void RefreshFileOperationButtonsAvailability()
+        {
+            var enabled = ResultState != SpiceWorkspaceResultState.Running;
+            if (saveFileButton != null) saveFileButton.interactable = enabled;
+            if (saveAsFileButton != null) saveAsFileButton.interactable = enabled;
+            if (importFileButton != null) importFileButton.interactable = enabled;
+        }
+
+        // 仅供 T3 测试验证按钮存在与可交互状态。不在生产路径调用。
+        internal Button GetSaveFileButtonForTesting() => saveFileButton;
+        internal Button GetSaveAsFileButtonForTesting() => saveAsFileButton;
+        internal Button GetImportFileButtonForTesting() => importFileButton;
+
+        // 仅供 T3 测试直接触发按钮回调，验证 Running 二次保护与事件路由。
+        internal void InvokeSaveButtonForTesting() => HandleSaveButtonClicked();
+        internal void InvokeSaveAsButtonForTesting() => HandleSaveAsButtonClicked();
+        internal void InvokeImportButtonForTesting() => HandleImportButtonClicked();
 
         public void SelectComponent(SpiceWorkspaceComponentView component)
         {
@@ -662,10 +750,12 @@ namespace ElectricalSim.Spice.Workspace
         /// <summary>
         /// 仅供 T3 测试受控设置 ResultState，以验证 Running 等状态下的导入保护。
         /// 不在生产路径调用；不触发 ngspice，不修改视图或结果文本。
+        /// 同时刷新 C2 文件操作按钮可用性，便于测试验证 Running 时按钮禁用。
         /// </summary>
         internal void SetResultStateForTesting(SpiceWorkspaceResultState state)
         {
             ResultState = state;
+            RefreshFileOperationButtonsAvailability();
         }
 
         /// <summary>
@@ -1061,6 +1151,16 @@ namespace ElectricalSim.Spice.Workspace
             zoomIn.onClick.AddListener(viewController.ZoomIn);
             fitAll.onClick.AddListener(viewController.FitAll);
             resetView.onClick.AddListener(viewController.ResetView);
+
+            // C2 文件操作工具栏按钮：[保存][另存为][导入]
+            // 布局紧随视图命令按钮之后，与右侧 Status 文本之间保持留白，避免 1366×768 下重叠。
+            // 按钮宽度对齐既有 ToolbarButton 样式（70f），高度同“旋转/删除”按钮（40f）。
+            saveFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "SaveFile", "保存", MainUiTheme.ToolbarButton, HandleSaveButtonClicked);
+            SpiceWorkspaceUi.Anchor(saveFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(762f, -20f), new Vector2(832f, 20f));
+            saveAsFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "SaveAsFile", "另存为", MainUiTheme.ToolbarButton, HandleSaveAsButtonClicked);
+            SpiceWorkspaceUi.Anchor(saveAsFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(840f, -20f), new Vector2(910f, 20f));
+            importFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ImportFile", "导入", MainUiTheme.ToolbarButton, HandleImportButtonClicked);
+            SpiceWorkspaceUi.Anchor(importFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(918f, -20f), new Vector2(988f, 20f));
         }
 
         private static RectTransform FindDirectGridLayer(RectTransform workspace)

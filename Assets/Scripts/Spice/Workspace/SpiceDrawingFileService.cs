@@ -35,6 +35,24 @@ namespace ElectricalSim.Spice.Workspace
         public static string DefaultDirectory => Path.Combine(Application.persistentDataPath, "SavedSpiceDrawings");
 
         /// <summary>
+        /// 确保 SPICE 默认目录存在。仅在 C2 文件对话框打开前调用；
+        /// 失败不抛异常，返回 false 由调用方决定是否仍打开对话框（Windows 也会自行处理路径）。
+        /// 不写日志：本方法是 UI 前置准备，文件级错误仍由 TrySaveUtf8Atomically/TryReadUtf8File 负责。
+        /// </summary>
+        public static bool EnsureDefaultDirectoryExists()
+        {
+            try
+            {
+                Directory.CreateDirectory(DefaultDirectory);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// 规范化文件路径的扩展名：
         /// - 无扩展名时自动追加 .spicejson；
         /// - 已有 .spicejson 或 .SPICEJSON 时不重复追加；
