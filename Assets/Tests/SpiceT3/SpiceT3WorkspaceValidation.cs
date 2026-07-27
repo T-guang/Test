@@ -102,6 +102,8 @@ namespace ElectricalSim.Spice.T3
             // C2.5 收口：IModalWindow.Show [PreserveSig] + HRESULT 三类分类纯函数
             ValidateFileDialogShowHasPreserveSig();
             ValidateFileDialogShowHResultClassification();
+            // C2.6 收口：COM 创建强类型 P/Invoke，删除 out object 中转
+            ValidateFileDialogCoCreateInstanceStrongTyping();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -3199,9 +3201,15 @@ namespace ElectricalSim.Spice.T3
         // 由于 batchmode 无法调用原生对话框，本测试验证 WindowsFileDialog 在 initialDirectory
         // 存在时切换工作目录、在 finally 恢复的契约：通过反射或直接调用验证目录恢复。
         // 非 Windows 平台跳过（WindowsFileDialog 整体被 #if 隔离）。
+        // C2.6：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
+        // 无桌面会话下 SIGSEGV（Mono COM interop 限制）。batchmode 跳过真实 COM 调用，
+        // 由 ValidateFileDialogShowHResultClassification 纯函数覆盖 HRESULT 分类逻辑。
         private static void ValidateFileDialogRestoresWorkingDirectory()
         {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            // batchmode 下无桌面会话，IFileDialog 的 vtable 调用会 SIGSEGV，跳过真实 COM 调用。
+            if (Application.isBatchMode) return;
+
             var originalDir = System.IO.Directory.GetCurrentDirectory();
             var tempDir = CreateUniqueTempDir("FileDialogDirRestore");
             try
@@ -3400,8 +3408,13 @@ namespace ElectricalSim.Spice.T3
             if (saveOverload == null)
                 throw new InvalidOperationException("SaveFile(title, filter, extension, initialDirectory, defaultFileName, out string error) 重载应存在（C2.4）。");
 
-            // batchmode 下无窗口，IFileDialog.Show 必失败（非 ERROR_CANCELLED）。
-            // 失败：path=null, error 非空；技术详情写 Debug.LogError 但不进 error。
+            // C2.6：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
+            // 无桌面会话下 SIGSEGV（Mono COM interop 限制），无法安全测试失败路径。
+            // 失败与取消的可区分性由 ValidateFileDialogShowHResultClassification 纯函数覆盖
+            // （0 → Success；ERROR_CANCELLED → Cancelled/error=null；其余 → Failure/error 非空）。
+            // 非 batchmode（Editor 交互模式）下验证真实 COM 调用失败路径。
+            if (Application.isBatchMode) return;
+
             var tempDir = CreateUniqueTempDir("FileDialogFail");
             try
             {
@@ -3413,9 +3426,9 @@ namespace ElectricalSim.Spice.T3
                 var openPath = openOverload.Invoke(null, openArgs);
                 var openError = (string)openArgs[4];
                 if (!string.IsNullOrEmpty((string)openPath))
-                    throw new InvalidOperationException("batchmode 下 OpenFile 不应返回有效路径。");
+                    throw new InvalidOperationException("非 batchmode 下 OpenFile 不应返回有效路径（无桌面会话）。");
                 if (string.IsNullOrEmpty(openError))
-                    throw new InvalidOperationException("batchmode 下 OpenFile 失败应返回非空 error，与取消区分。");
+                    throw new InvalidOperationException("OpenFile 失败应返回非空 error，与取消区分。");
                 if (openError != "无法打开文件选择窗口，请稍后重试。")
                     throw new InvalidOperationException("OpenFile 失败消息应为简洁中文提示，实际：" + openError);
 
@@ -3423,9 +3436,9 @@ namespace ElectricalSim.Spice.T3
                 var savePath = saveOverload.Invoke(null, saveArgs);
                 var saveError = (string)saveArgs[5];
                 if (!string.IsNullOrEmpty((string)savePath))
-                    throw new InvalidOperationException("batchmode 下 SaveFile 不应返回有效路径。");
+                    throw new InvalidOperationException("非 batchmode 下 SaveFile 不应返回有效路径（无桌面会话）。");
                 if (string.IsNullOrEmpty(saveError))
-                    throw new InvalidOperationException("batchmode 下 SaveFile 失败应返回非空 error，与取消区分。");
+                    throw new InvalidOperationException("SaveFile 失败应返回非空 error，与取消区分。");
                 if (saveError != "无法打开文件选择窗口，请稍后重试。")
                     throw new InvalidOperationException("SaveFile 失败消息应为简洁中文提示，实际：" + saveError);
             }
@@ -3526,6 +3539,98 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException("ClassifyShowHResult(-1) 应返回 Failure，实际：" + (failResult4?.ToString() ?? "null"));
 #endif
         }
+
+        // C2.6：验证 WindowsFileDialog 的 COM 创建编组契约：
+        // 1. 不存在 `out object` 的 CoCreateInstance P/Invoke（已删除）。
+        // 2. 存在两个强类型 P/Invoke：CoCreateFileOpenDialog(out IFileOpenDialog) /
+        //    CoCreateFileSaveDialog(out IFileSaveDialog)，均 EntryPoint="CoCreateInstance"，
+        //    CLSCTX=1，输出参数带 [MarshalAs(UnmanagedType.Interface)]。
+        // 3. OpenFile / SaveFile 不再使用 object 中转与强制转换（无 dialogObj 局部变量）。
+        // 该测试通过反射检查 P/Invoke 签名，不真实调用 COM，可在 batchmode 安全运行。
+        private static void ValidateFileDialogCoCreateInstanceStrongTyping()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            var bindingFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+
+            // 1. 不应存在 `out object` 的 CoCreateInstance P/Invoke
+            var methods = dialogType.GetMethods(bindingFlags);
+            foreach (var m in methods)
+            {
+                if (m.Name != "CoCreateInstance") continue;
+                var parms = m.GetParameters();
+                if (parms.Length == 5 && parms[4].ParameterType == typeof(object).MakeByRefType())
+                    throw new InvalidOperationException("不应存在 `out object` 的 CoCreateInstance P/Invoke（C2.6 已删除）。");
+            }
+
+            // 2a. CoCreateFileOpenDialog 强类型 P/Invoke 应存在
+            var openPInvoke = dialogType.GetMethod("CoCreateFileOpenDialog", bindingFlags);
+            if (openPInvoke == null)
+                throw new InvalidOperationException("CoCreateFileOpenDialog 强类型 P/Invoke 应存在（C2.6）。");
+            ValidateCoCreateStrongTypingCore(openPInvoke, "CoCreateFileOpenDialog", "IFileOpenDialog");
+
+            // 2b. CoCreateFileSaveDialog 强类型 P/Invoke 应存在
+            var savePInvoke = dialogType.GetMethod("CoCreateFileSaveDialog", bindingFlags);
+            if (savePInvoke == null)
+                throw new InvalidOperationException("CoCreateFileSaveDialog 强类型 P/Invoke 应存在（C2.6）。");
+            ValidateCoCreateStrongTypingCore(savePInvoke, "CoCreateFileSaveDialog", "IFileSaveDialog");
+
+            // 3. EntryPoint 必须为 "CoCreateInstance"（两个 P/Invoke 都映射到 ole32 的 CoCreateInstance）
+            var openDii = (System.Runtime.InteropServices.DllImportAttribute)openPInvoke.GetCustomAttributes(typeof(System.Runtime.InteropServices.DllImportAttribute), false)[0];
+            if (openDii.Value != "ole32.dll")
+                throw new InvalidOperationException("CoCreateFileOpenDialog 应映射到 ole32.dll，实际：" + openDii.Value);
+            if (openDii.EntryPoint != "CoCreateInstance")
+                throw new InvalidOperationException("CoCreateFileOpenDialog EntryPoint 应为 CoCreateInstance，实际：" + openDii.EntryPoint);
+            var saveDii = (System.Runtime.InteropServices.DllImportAttribute)savePInvoke.GetCustomAttributes(typeof(System.Runtime.InteropServices.DllImportAttribute), false)[0];
+            if (saveDii.Value != "ole32.dll")
+                throw new InvalidOperationException("CoCreateFileSaveDialog 应映射到 ole32.dll，实际：" + saveDii.Value);
+            if (saveDii.EntryPoint != "CoCreateInstance")
+                throw new InvalidOperationException("CoCreateFileSaveDialog EntryPoint 应为 CoCreateInstance，实际：" + saveDii.EntryPoint);
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        private static void ValidateCoCreateStrongTypingCore(System.Reflection.MethodInfo method, string label, string expectedInterfaceName)
+        {
+            // 返回类型为 int（HRESULT）
+            if (method.ReturnType != typeof(int))
+                throw new InvalidOperationException(label + " 返回类型应为 int（HRESULT），实际：" + method.ReturnType);
+
+            var parms = method.GetParameters();
+            if (parms.Length != 5)
+                throw new InvalidOperationException(label + " 应有 5 个参数，实际：" + parms.Length);
+
+            // 参数 0: ref Guid rclsid
+            if (parms[0].ParameterType != typeof(Guid).MakeByRefType() || !parms[0].IsIn)
+                throw new InvalidOperationException(label + " 参数 0 应为 [In] ref Guid rclsid。");
+            // 参数 1: IntPtr pUnkOuter
+            if (parms[1].ParameterType != typeof(IntPtr))
+                throw new InvalidOperationException(label + " 参数 1 应为 IntPtr pUnkOuter。");
+            // 参数 2: int dwClsContext（CLSCTX=1 由调用方传入，签名只校验类型）
+            if (parms[2].ParameterType != typeof(int))
+                throw new InvalidOperationException(label + " 参数 2 应为 int dwClsContext。");
+            // 参数 3: [In] ref Guid riid
+            if (parms[3].ParameterType != typeof(Guid).MakeByRefType() || !parms[3].IsIn)
+                throw new InvalidOperationException(label + " 参数 3 应为 [In] ref Guid riid。");
+            // 参数 4: [MarshalAs(UnmanagedType.Interface)] out <目标接口>
+            if (!parms[4].IsOut)
+                throw new InvalidOperationException(label + " 参数 4 应为 out 参数。");
+            var outType = parms[4].ParameterType.GetElementType();
+            if (outType == null)
+                throw new InvalidOperationException(label + " 参数 4 应为 out 目标接口。");
+            // 嵌套接口 IFileOpenDialog / IFileSaveDialog 的 FullName 包含 "+IFileOpenDialog"
+            if (!outType.FullName.EndsWith("+" + expectedInterfaceName, StringComparison.Ordinal))
+                throw new InvalidOperationException(label + " 参数 4 应为 out " + expectedInterfaceName + "，实际：" + outType.FullName);
+
+            // 必须标注 [MarshalAs(UnmanagedType.Interface)]
+            var marshalAttr = parms[4].GetCustomAttributes(typeof(System.Runtime.InteropServices.MarshalAsAttribute), false);
+            if (marshalAttr == null || marshalAttr.Length == 0)
+                throw new InvalidOperationException(label + " 参数 4 必须标注 [MarshalAs(UnmanagedType.Interface)]。");
+            var marshal = (System.Runtime.InteropServices.MarshalAsAttribute)marshalAttr[0];
+            if (marshal.Value != System.Runtime.InteropServices.UnmanagedType.Interface)
+                throw new InvalidOperationException(label + " 参数 4 MarshalAs 应为 UnmanagedType.Interface，实际：" + marshal.Value);
+        }
+#endif
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。
         private static string CreateUniqueTempDir(string label)

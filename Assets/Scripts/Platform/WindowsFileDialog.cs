@@ -206,8 +206,18 @@ namespace ElectricalSim.Platform
         [DllImport("user32.dll")]
         private static extern IntPtr GetActiveWindow();
 
-        [DllImport("ole32.dll")]
-        private static extern int CoCreateInstance([In] ref Guid rclsid, IntPtr pUnkOuter, int dwClsContext, [In] ref Guid riid, out object ppv);
+        // C2.6：删除 `out object` 的单一 CoCreateInstance P/Invoke，改为两个强类型 P/Invoke。
+        // 原因：Unity Mono 的 COM interop 在 `out object` 时编组器会以 IUnknown 语义创建
+        // 临时 RCW，再强制转换到目标接口可能丢失 vtable 偏移或触发额外 QueryInterface，
+        // 在某些 Unity/Mono 版本下导致调用 GetResults/SetSaveAsItem 时崩溃或返回错误 HRESULT。
+        // 强类型 `out IFileOpenDialog` / `out IFileSaveDialog` 让编组器直接以目标接口指针
+        // 返回，跳过中间 object RCW。两个 P/Invoke 都映射到 ole32.dll 的 CoCreateInstance，
+        // CLSCTX = 1 (CLSCTX_INPROC_SERVER)，与原调用一致。
+        [DllImport("ole32.dll", EntryPoint = "CoCreateInstance")]
+        private static extern int CoCreateFileOpenDialog([In] ref Guid rclsid, IntPtr pUnkOuter, int dwClsContext, [In] ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IFileOpenDialog ppv);
+
+        [DllImport("ole32.dll", EntryPoint = "CoCreateInstance")]
+        private static extern int CoCreateFileSaveDialog([In] ref Guid rclsid, IntPtr pUnkOuter, int dwClsContext, [In] ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IFileSaveDialog ppv);
 
         // ==================== OpenFile 重载 ====================
 
@@ -239,14 +249,14 @@ namespace ElectricalSim.Platform
             {
                 var clsid = ClsidFileOpenDialog;
                 var iid = IidIFileOpenDialog;
-                var hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out var dialogObj);
-                if (hr != 0 || dialogObj == null)
+                // C2.6：调用强类型 P/Invoke，直接得到 IFileOpenDialog，无需 object 中转与强制转换。
+                var hr = CoCreateFileOpenDialog(ref clsid, IntPtr.Zero, 1, ref iid, out dialog);
+                if (hr != 0 || dialog == null)
                 {
                     error = UserFacingFailureMessage;
                     Debug.LogError("[WindowsFileDialog] CoCreateInstance(IFileOpenDialog) failed: hr=0x" + hr.ToString("X8"));
                     return null;
                 }
-                dialog = (IFileOpenDialog)dialogObj;
 
                 // Open 选项：C2.4 删除 FOS_PICKFILES，新增 FOS_FORCEFILESYSTEM。
                 uint options = FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
@@ -344,14 +354,14 @@ namespace ElectricalSim.Platform
             {
                 var clsid = ClsidFileSaveDialog;
                 var iid = IidIFileSaveDialog;
-                var hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out var dialogObj);
-                if (hr != 0 || dialogObj == null)
+                // C2.6：调用强类型 P/Invoke，直接得到 IFileSaveDialog，无需 object 中转与强制转换。
+                var hr = CoCreateFileSaveDialog(ref clsid, IntPtr.Zero, 1, ref iid, out dialog);
+                if (hr != 0 || dialog == null)
                 {
                     error = UserFacingFailureMessage;
                     Debug.LogError("[WindowsFileDialog] CoCreateInstance(IFileSaveDialog) failed: hr=0x" + hr.ToString("X8"));
                     return null;
                 }
-                dialog = (IFileSaveDialog)dialogObj;
 
                 // Save 选项：C2.4 删除 FOS_PICKFILES，新增 FOS_FORCEFILESYSTEM。
                 uint options = FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
