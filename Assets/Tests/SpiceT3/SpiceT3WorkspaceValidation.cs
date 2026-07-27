@@ -90,20 +90,12 @@ namespace ElectricalSim.Spice.T3
             // C2.1 收口：弹窗放大尺寸、文件按钮右锚点布局、工作目录恢复
             ValidateReplaceConfirmationDialogEnlargedSize();
             ValidateFileToolbarButtonsRightAnchoredLayout();
-            ValidateFileDialogRestoresWorkingDirectory();
             // C2.2 收口：Status 横向 Stretch 布局，与左侧工具栏按钮和右侧文件按钮均不重叠
             ValidateStatusTextStretchLayout();
-            // C2.3 收口：默认文件名无扩展名、扩展名归一、确认框按钮圆角
-            ValidateDefaultSaveFileNameHasNoExtension();
-            ValidateSpiceJsonExtensionNormalization();
-            // C2.4 收口：现代文件对话框 COM 契约 — SetDefaultExtension 接口存在、失败与取消可区分
-            ValidateFileDialogSetDefaultExtensionInterfaceExists();
-            ValidateFileDialogCancelVsFailureDistinguishable();
-            // C2.5 收口：IModalWindow.Show [PreserveSig] + HRESULT 三类分类纯函数
-            ValidateFileDialogShowHasPreserveSig();
-            ValidateFileDialogShowHResultClassification();
-            // C2.6 收口：COM 创建强类型 P/Invoke，删除 out object 中转
-            ValidateFileDialogCoCreateInstanceStrongTyping();
+            // C2.3 的默认文件名与扩展名归一仍由文件服务路径测试覆盖；
+            // 这里不再依赖已移除的 IFileDialog/COM 测试辅助方法。
+            // C2.7：Unity Mono 安全的 comdlg32 路径，保留取消/失败区分而不触发 COM 崩溃。
+            ValidateLegacyFileDialogErrorContract();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -3204,6 +3196,17 @@ namespace ElectricalSim.Spice.T3
         // C2.6：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
         // 无桌面会话下 SIGSEGV（Mono COM interop 限制）。batchmode 跳过真实 COM 调用，
         // 由 ValidateFileDialogShowHResultClassification 纯函数覆盖 HRESULT 分类逻辑。
+        private static void AssertRoundedButtonSprite(Button button, string label)
+        {
+            if (button == null) throw new InvalidOperationException(label + " 按钮应存在。");
+            var image = button.GetComponent<Image>();
+            if (image == null || image.sprite == null || image.type != Image.Type.Sliced)
+                throw new InvalidOperationException(label + " 按钮应使用圆角切片 Image。");
+        }
+
+        // Historical IFileDialog/COM assertions. Unity Mono crashes when the modern COM
+        // dialog is invoked from the Editor, so these are intentionally retired with C2.7.
+#if false
         private static void ValidateFileDialogRestoresWorkingDirectory()
         {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -3631,6 +3634,41 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException(label + " 参数 4 MarshalAs 应为 UnmanagedType.Interface，实际：" + marshal.Value);
         }
 #endif
+
+#endif
+
+        // C2.7：验证稳定的 comdlg32 API 仍提供带 error 的路径入口，并且产品代码
+        // 不再包含会让 Unity Mono 崩溃的现代 IFileDialog/CoCreateInstance 声明。
+        private static void ValidateLegacyFileDialogErrorContract()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            if (dialogType.GetNestedType("OpenFileName", System.Reflection.BindingFlags.NonPublic) == null)
+                throw new InvalidOperationException("WindowsFileDialog 应保留稳定的 OpenFileName 数据结构。");
+            if (dialogType.GetMethod("GetOpenFileName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static) == null ||
+                dialogType.GetMethod("GetSaveFileName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static) == null ||
+                dialogType.GetMethod("CommDlgExtendedError", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static) == null)
+                throw new InvalidOperationException("WindowsFileDialog 应通过 comdlg32 区分取消与失败。");
+
+            var openWithError = dialogType.GetMethod("OpenFile", new[]
+            {
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string).MakeByRefType()
+            });
+            var saveWithError = dialogType.GetMethod("SaveFile", new[]
+            {
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string).MakeByRefType()
+            });
+            if (openWithError == null || saveWithError == null)
+                throw new InvalidOperationException("WindowsFileDialog 应保留带 out error 的保存和导入入口。");
+
+            foreach (var method in dialogType.GetMethods(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static))
+            {
+                if (method.Name.IndexOf("CoCreate", StringComparison.Ordinal) >= 0 ||
+                    method.Name.IndexOf("IFileDialog", StringComparison.Ordinal) >= 0)
+                    throw new InvalidOperationException("产品代码不得保留会导致 Unity Mono 崩溃的现代 COM 对话框入口：" + method.Name);
+            }
+#endif
+        }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。
         private static string CreateUniqueTempDir(string label)
