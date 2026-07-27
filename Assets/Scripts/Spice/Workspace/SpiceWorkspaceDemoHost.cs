@@ -454,16 +454,19 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 调整状态文本区域，避免与右锚点的文件操作按钮重叠。
-        /// 文件按钮最左边界为距右 288（保存按钮 rightOuter）；状态文本右边距 304，左边距 360（宽度可变，至少 200）。
+        /// 状态文本区域采用横向 Stretch：anchorMin=(0,0) anchorMax=(1,1)，
+        /// offsetMin=(762,0) offsetMax=(-304,0)。左侧避开"重置视图"（结束 754，留 8 间距），
+        /// 右侧避开保存按钮左边界（距右 288，留 16 间距）。1366 宽度下实际宽度约 300。
         /// </summary>
         private static void StyleStatusTextRightPadding(SpiceWorkspaceViewBindings bindings)
         {
             var toolbar = bindings.RunButton.transform.parent;
             var statusTransform = toolbar.Find("Status");
             if (statusTransform == null) return;
-            // 右锚点，offsetMin=(-360, 0) offsetMax=(-304, 0)，保证不与文件按钮重叠
-            Anchor(statusTransform as RectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-360f, 0f), new Vector2(-304f, 0f));
+            // 横向 Stretch：左侧避开"重置视图"结束位置 754（留 8 间距），
+            // 右侧避开保存按钮左边界（距右 288，留 16 间距 → offsetMax.x=-304）。
+            // 1366 宽度下实际宽度约 300，与左侧工具栏按钮和右侧文件按钮均不重叠。
+            Anchor(statusTransform as RectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(762f, 0f), new Vector2(-304f, 0f));
         }
 
         private static void StyleZoomLabel(SpiceWorkspaceViewBindings bindings)
