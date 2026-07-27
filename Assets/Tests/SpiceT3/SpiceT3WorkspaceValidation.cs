@@ -93,6 +93,9 @@ namespace ElectricalSim.Spice.T3
             ValidateFileDialogRestoresWorkingDirectory();
             // C2.2 收口：Status 横向 Stretch 布局，与左侧工具栏按钮和右侧文件按钮均不重叠
             ValidateStatusTextStretchLayout();
+            // C2.3 收口：默认文件名无扩展名、扩展名归一、确认框按钮圆角
+            ValidateDefaultSaveFileNameHasNoExtension();
+            ValidateSpiceJsonExtensionNormalization();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -2987,7 +2990,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // 替换确认弹窗放大尺寸为约 460 × 220，标题/正文/按钮不重叠。
+        // C2.3：替换确认弹窗尺寸 520 × 260，标题 20pt、正文 16pt、按钮 110×40、间距 14、圆角 sprite。
         private static void ValidateReplaceConfirmationDialogEnlargedSize()
         {
             var canvasRoot = new GameObject("SpiceReplaceSize", typeof(RectTransform), typeof(Canvas));
@@ -3006,8 +3009,8 @@ namespace ElectricalSim.Spice.T3
                 var panelTransform = popupLayer.Find("SpiceReplaceConfirmPanel");
                 if (panelTransform == null) throw new InvalidOperationException("测试前置：Panel 应存在。");
                 var size = panelTransform.GetComponent<RectTransform>().sizeDelta;
-                if (Math.Abs(size.x - 460f) > 0.01f || Math.Abs(size.y - 220f) > 0.01f)
-                    throw new InvalidOperationException("替换确认弹窗尺寸应为 460×220，实际：" + size);
+                if (Math.Abs(size.x - 520f) > 0.01f || Math.Abs(size.y - 260f) > 0.01f)
+                    throw new InvalidOperationException("替换确认弹窗尺寸应为 520×260，实际：" + size);
 
                 // 验证按钮在 Panel 内部，不重叠不截断
                 var cancelTransform = panelTransform.Find("Cancel");
@@ -3023,6 +3026,18 @@ namespace ElectricalSim.Spice.T3
                 // 按钮在 Panel 边界内（offsetMin.x >= -size.x/2，offsetMax.x <= size.x/2）
                 if (cancelRect.offsetMin.x < -size.x / 2f + 1f || confirmRect.offsetMax.x > size.x / 2f - 1f)
                     throw new InvalidOperationException("按钮超出 Panel 边界。");
+                // C2.3：按钮尺寸 110×40
+                var cancelWidth = cancelRect.rect.width;
+                var cancelHeight = cancelRect.rect.height;
+                var confirmWidth = confirmRect.rect.width;
+                var confirmHeight = confirmRect.rect.height;
+                if (Math.Abs(cancelWidth - 110f) > 0.5f || Math.Abs(cancelHeight - 40f) > 0.5f)
+                    throw new InvalidOperationException("取消按钮尺寸应为 110×40，实际：" + cancelWidth + "×" + cancelHeight);
+                if (Math.Abs(confirmWidth - 110f) > 0.5f || Math.Abs(confirmHeight - 40f) > 0.5f)
+                    throw new InvalidOperationException("继续导入按钮尺寸应为 110×40，实际：" + confirmWidth + "×" + confirmHeight);
+                // C2.3：两个按钮的 Image 应使用圆角 sprite 与 Sliced 类型
+                AssertRoundedButtonSprite(cancelTransform.GetComponent<Button>(), "取消");
+                AssertRoundedButtonSprite(confirmTransform.GetComponent<Button>(), "继续导入");
             }
             finally
             {
@@ -3189,18 +3204,17 @@ namespace ElectricalSim.Spice.T3
                 var initialDir = System.IO.Path.Combine(tempDir, "InitialDir");
                 System.IO.Directory.CreateDirectory(initialDir);
 
-                // 调用 OpenFile（batchmode 下 GetOpenFileName 会立即返回 false，不阻塞）
-                // 验证调用后工作目录恢复为 originalDir
+                // C2.3：现代 IFileDialog 实现不改进程工作目录（用 SetFolder 设置初始目录）。
+                // batchmode 下 IFileDialog 调用会失败返回 null，但不抛异常、不改工作目录。
                 ElectricalSim.Platform.WindowsFileDialog.OpenFile("测试", "All|*.*", "txt", initialDir);
                 var afterOpen = System.IO.Directory.GetCurrentDirectory();
                 if (afterOpen != originalDir)
-                    throw new InvalidOperationException("OpenFile 后工作目录应恢复，原：" + originalDir + " 实际：" + afterOpen);
+                    throw new InvalidOperationException("OpenFile 后工作目录应不变，原：" + originalDir + " 实际：" + afterOpen);
 
-                // 调用 SaveFile 同样验证
                 ElectricalSim.Platform.WindowsFileDialog.SaveFile("测试", "All|*.*", "txt", initialDir, "default.txt");
                 var afterSave = System.IO.Directory.GetCurrentDirectory();
                 if (afterSave != originalDir)
-                    throw new InvalidOperationException("SaveFile 后工作目录应恢复，原：" + originalDir + " 实际：" + afterSave);
+                    throw new InvalidOperationException("SaveFile 后工作目录应不变，原：" + originalDir + " 实际：" + afterSave);
 
                 // 验证 initialDirectory 不存在时也不抛异常、不改工作目录
                 var nonExistent = System.IO.Path.Combine(tempDir, "DoesNotExist");
@@ -3211,11 +3225,99 @@ namespace ElectricalSim.Spice.T3
             }
             finally
             {
-                // 确保测试自身也恢复工作目录
                 try { System.IO.Directory.SetCurrentDirectory(originalDir); } catch { }
                 CleanupTempDir(tempDir);
             }
 #endif
+        }
+
+        // C2.3：默认保存文件名不应预置 .spicejson 扩展名（由对话框补全）。
+        private static void ValidateDefaultSaveFileNameHasNoExtension()
+        {
+            // BuildDefaultSaveFileName 是 Host 的 private static 方法，通过反射调用验证契约。
+            // 也可以通过观察 Host 调用 SaveFile 时传入的 defaultFileName 验证，
+            // 但反射直接调用更简单且不依赖 Host 实例。
+            var hostType = typeof(SpiceWorkspaceDemoHost);
+            var method = hostType.GetMethod("BuildDefaultSaveFileName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (method == null) throw new InvalidOperationException("BuildDefaultSaveFileName 方法应存在。");
+            var fileName = (string)method.Invoke(null, null);
+            if (string.IsNullOrEmpty(fileName))
+                throw new InvalidOperationException("BuildDefaultSaveFileName 不应返回空。");
+            if (fileName.EndsWith(".spicejson", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("默认文件名不应预置 .spicejson 扩展名，实际：" + fileName);
+            if (!fileName.StartsWith("SPICE电路_", StringComparison.Ordinal))
+                throw new InvalidOperationException("默认文件名应以 SPICE电路_ 开头，实际：" + fileName);
+        }
+
+        // C2.3：.spicejson 扩展名归一测试。
+        // 无扩展名 → 追加 .spicejson；已有小写/大写 .spicejson → 不重复；已有重复 → 去重为一个。
+        private static void ValidateSpiceJsonExtensionNormalization()
+        {
+            // C1 的 NormalizeExtension：无扩展名追加，已有 .spicejson（任意大小写）不追加。
+            // C2.3 的 StripTrailingDuplicateSpiceJson：去除末尾重复的 .spicejson.spicejson。
+            // 组合后：无扩展名 → .spicejson；已有小写 → .spicejson；已大写 → .SPICEJSON（保持）；
+            // 已有重复 → 去重为一个 .spicejson。
+
+            // 1. C1 NormalizeExtension 契约
+            var noExt = SpiceDrawingFileService.NormalizeExtension("C:\\path\\SPICE电路_20260727_120000");
+            if (!noExt.EndsWith(".spicejson", StringComparison.Ordinal))
+                throw new InvalidOperationException("无扩展名应追加 .spicejson，实际：" + noExt);
+
+            var lowerExt = SpiceDrawingFileService.NormalizeExtension("C:\\path\\SPICE电路_20260727_120000.spicejson");
+            if (lowerExt != "C:\\path\\SPICE电路_20260727_120000.spicejson")
+                throw new InvalidOperationException("已有小写 .spicejson 不应改变，实际：" + lowerExt);
+
+            var upperExt = SpiceDrawingFileService.NormalizeExtension("C:\\path\\SPICE电路_20260727_120000.SPICEJSON");
+            if (upperExt != "C:\\path\\SPICE电路_20260727_120000.SPICEJSON")
+                throw new InvalidOperationException("已大写 .SPICEJSON 应保持不变（C1 不强制小写），实际：" + upperExt);
+
+            // 2. C2.3 StripTrailingDuplicateSpiceJson 通过反射验证
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            var stripMethod = dialogType.GetMethod("StripTrailingDuplicateSpiceJson", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (stripMethod == null) throw new InvalidOperationException("StripTrailingDuplicateSpiceJson 方法应存在。");
+
+            var dedupLower = (string)stripMethod.Invoke(null, new object[] { "C:\\path\\file.spicejson.spicejson" });
+            if (dedupLower != "C:\\path\\file.spicejson")
+                throw new InvalidOperationException("重复 .spicejson.spicejson 应去重为一个，实际：" + dedupLower);
+
+            var dedupUpper = (string)stripMethod.Invoke(null, new object[] { "C:\\path\\file.SPICEJSON.SPICEJSON" });
+            if (dedupUpper != "C:\\path\\file.SPICEJSON")
+                throw new InvalidOperationException("重复 .SPICEJSON.SPICEJSON 应去重为一个，实际：" + dedupUpper);
+
+            var dedupMixed = (string)stripMethod.Invoke(null, new object[] { "C:\\path\\file.spicejson.SPICEJSON" });
+            if (dedupMixed != "C:\\path\\file.spicejson")
+                throw new InvalidOperationException("混合大小写重复应去重，实际：" + dedupMixed);
+
+            // 3. 单个 .spicejson 不被去除
+            var single = (string)stripMethod.Invoke(null, new object[] { "C:\\path\\file.spicejson" });
+            if (single != "C:\\path\\file.spicejson")
+                throw new InvalidOperationException("单个 .spicejson 不应被去除，实际：" + single);
+
+            // 4. StripSpiceJsonExtension 验证（默认文件名预处理）
+            var stripNameMethod = dialogType.GetMethod("StripSpiceJsonExtension", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (stripNameMethod == null) throw new InvalidOperationException("StripSpiceJsonExtension 方法应存在。");
+
+            var stripped = (string)stripNameMethod.Invoke(null, new object[] { "SPICE电路_20260727_120000.spicejson" });
+            if (stripped != "SPICE电路_20260727_120000")
+                throw new InvalidOperationException("StripSpiceJsonExtension 应去除末尾 .spicejson，实际：" + stripped);
+
+            var strippedUpper = (string)stripNameMethod.Invoke(null, new object[] { "SPICE电路_20260727_120000.SPICEJSON" });
+            if (strippedUpper != "SPICE电路_20260727_120000")
+                throw new InvalidOperationException("StripSpiceJsonExtension 应去除末尾 .SPICEJSON，实际：" + strippedUpper);
+
+            var noStrip = (string)stripNameMethod.Invoke(null, new object[] { "SPICE电路_20260727_120000" });
+            if (noStrip != "SPICE电路_20260727_120000")
+                throw new InvalidOperationException("无扩展名不应被改变，实际：" + noStrip);
+        }
+
+        // C2.3：断言按钮使用圆角 sprite 与 Sliced 类型。
+        private static void AssertRoundedButtonSprite(Button button, string label)
+        {
+            if (button == null) throw new InvalidOperationException(label + " 按钮应存在。");
+            var image = button.GetComponent<Image>();
+            if (image == null) throw new InvalidOperationException(label + " 按钮应有 Image 组件。");
+            if (image.sprite == null) throw new InvalidOperationException(label + " 按钮应有 sprite。");
+            if (image.type != Image.Type.Sliced) throw new InvalidOperationException(label + " 按钮 Image 类型应为 Sliced。");
         }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。

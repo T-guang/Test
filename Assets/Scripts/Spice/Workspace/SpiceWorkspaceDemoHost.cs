@@ -247,7 +247,9 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string BuildDefaultSaveFileName()
         {
-            return "SPICE电路_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + "." + FileDialogExtension;
+            // 默认文件名不含扩展名，由原生对话框的默认扩展名机制补成一次 .spicejson。
+            // C1 的 NormalizeExtension 仍会做二次保障，确保不产生 .spicejson.spicejson。
+            return "SPICE电路_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         }
 
         private static string ExtractFileName(string path)

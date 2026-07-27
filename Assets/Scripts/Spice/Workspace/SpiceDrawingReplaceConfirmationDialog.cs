@@ -131,7 +131,7 @@ namespace ElectricalSim.Spice.Workspace
             panel.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             panel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             panel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            panel.rectTransform.sizeDelta = new Vector2(460f, 220f);
+            panel.rectTransform.sizeDelta = new Vector2(520f, 260f);
             panel.rectTransform.anchoredPosition = Vector2.zero;
             var outline = panelGo.AddComponent<Outline>();
             outline.effectColor = MainUiTheme.Divider;
@@ -140,21 +140,27 @@ namespace ElectricalSim.Spice.Workspace
             shadow.effectColor = new Color(0f, 0f, 0f, 0.18f);
             shadow.effectDistance = new Vector2(0f, -4f);
 
-            // 标题（顶部带 20 边距）
-            var title = SpiceWorkspaceUi.CreateText(panel.transform, "Title", "导入图纸", 18, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
-            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -52f), new Vector2(-24f, -10f));
+            // 标题（顶部，20pt，四周边距 28）
+            var title = SpiceWorkspaceUi.CreateText(panel.transform, "Title", "导入图纸", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
+            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(28f, -56f), new Vector2(-28f, -12f));
 
-            // 正文（标题下方，留出呼吸空间）
-            body = SpiceWorkspaceUi.CreateText(panel.transform, "Body", "导入图纸将替换当前 SPICE 画布，是否继续？", 15, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.NormalText);
-            SpiceWorkspaceUi.Anchor(body.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(24f, -108f), new Vector2(-24f, -60f));
+            // 正文（标题下方，16pt，四周边距 28）
+            body = SpiceWorkspaceUi.CreateText(panel.transform, "Body", "导入图纸将替换当前 SPICE 画布，是否继续？", 16, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.NormalText);
+            SpiceWorkspaceUi.Anchor(body.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(28f, -122f), new Vector2(-28f, -66f));
 
-            // 取消 / 继续导入 按钮（底部右侧，按钮宽 96，高 36，间距 12，右边距 24）
+            // 取消 / 继续导入 按钮（底部右侧，按钮 110×40，间距 14，右边距 24）
+            // Panel 宽 520，半宽 260；两按钮总宽 110+14+110=234，右边距 24，左边界距右 24+234=258 < 260 ✓
+            // Confirm 右边界距右 24：offsetMax.x=-24；左边界距右 24+110=134：offsetMin.x=-134
+            // Cancel 右边界距右 24+110+14=148：offsetMax.x=-148；左边界距右 148+110=258：offsetMin.x=-258
             cancelButton = SpiceWorkspaceUi.CreateButton(panel.transform, "Cancel", "取消", Color.white, Cancel);
-            SpiceWorkspaceUi.Anchor(cancelButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-228f, 24f), new Vector2(-132f, 60f));
+            SpiceWorkspaceUi.Anchor(cancelButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-258f, 28f), new Vector2(-148f, 68f));
             confirmButton = SpiceWorkspaceUi.CreateButton(panel.transform, "Confirm", "继续导入", MainUiTheme.PrimaryBlue, HandleConfirmClicked, true);
-            SpiceWorkspaceUi.Anchor(confirmButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-120f, 24f), new Vector2(-24f, 60f));
+            SpiceWorkspaceUi.Anchor(confirmButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-134f, 28f), new Vector2(-24f, 68f));
             ConfigureButtonColors(cancelButton, false);
             ConfigureButtonColors(confirmButton, true);
+            // 显式设置两个按钮的圆角 sprite 与 Sliced 类型
+            ApplyRoundedButtonSprite(cancelButton);
+            ApplyRoundedButtonSprite(confirmButton);
         }
 
         private void HandleConfirmClicked()
@@ -172,6 +178,19 @@ namespace ElectricalSim.Spice.Workspace
             colors.pressedColor = primary ? MainUiTheme.Hex("1E40AF") : MainUiTheme.Hex("EAF2FF");
             colors.selectedColor = colors.highlightedColor;
             button.colors = colors;
+        }
+
+        /// <summary>
+        /// 显式设置按钮 Image 的圆角 sprite 与 Sliced 类型，确保按钮呈圆角外观。
+        /// 对 Cancel 与 Confirm 均调用，不依赖 CreateButton 的默认样式。
+        /// </summary>
+        private static void ApplyRoundedButtonSprite(Button button)
+        {
+            if (button == null) return;
+            var image = button.GetComponent<Image>();
+            if (image == null) return;
+            image.sprite = UiThemeTokens.GetRoundedSprite(8);
+            image.type = Image.Type.Sliced;
         }
     }
 }
