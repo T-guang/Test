@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
@@ -55,6 +56,15 @@ namespace ElectricalSim.Spice.T3
             // Batch B 收口：运行态保护、必填坐标 JSON 校验
             ValidateDrawingImportRejectedWhileRunning();
             ValidateDrawingImportMissingPositionRejected();
+            // Batch C1：文件操作核心与路径会话状态
+            ValidateDrawingFileServiceExtensionNormalization();
+            ValidateDrawingFileSaveRoundTrip();
+            ValidateDrawingFileSaveOverwrite();
+            ValidateDrawingFileCurrentPathManagement();
+            ValidateDrawingFileImportFailurePreservesWorkspace();
+            ValidateDrawingFileRunningGuardBeforeFileAccess();
+            ValidateDrawingFileClearResetsPath();
+            ValidateDrawingFileChineseAndSpacePath();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -1767,6 +1777,411 @@ namespace ElectricalSim.Spice.T3
             if (SpiceDrawingSerializer.TryFromDto(nullPositionDto, out _, out var errorE))
                 throw new InvalidOperationException("DTO 级 position=null 应继续被拒绝。");
             if (string.IsNullOrEmpty(errorE)) throw new InvalidOperationException("position=null 应返回错误信息。");
+        }
+
+        // ===== Batch C1：文件操作核心与路径会话状态 =====
+
+        // 扩展名规范化：无扩展名补 .spicejson；.spicejson/.SPICEJSON 不重复追加；非 .spicejson 保持不改。
+        private static void ValidateDrawingFileServiceExtensionNormalization()
+        {
+            if (SpiceDrawingFileService.NormalizeExtension("circuit") != "circuit.spicejson")
+                throw new InvalidOperationException("无扩展名应自动追加 .spicejson。");
+            if (SpiceDrawingFileService.NormalizeExtension("circuit.spicejson") != "circuit.spicejson")
+                throw new InvalidOperationException(".spicejson 不应重复追加。");
+            if (SpiceDrawingFileService.NormalizeExtension("circuit.SPICEJSON") != "circuit.SPICEJSON")
+                throw new InvalidOperationException(".SPICEJSON 不应重复追加。");
+            if (SpiceDrawingFileService.NormalizeExtension("circuit.txt") != "circuit.txt")
+                throw new InvalidOperationException("非 .spicejson 的现有扩展名应保持不改。");
+            if (SpiceDrawingFileService.NormalizeExtension("path/with/dir/circuit") != "path/with/dir/circuit.spicejson")
+                throw new InvalidOperationException("带目录的无扩展名路径应自动追加 .spicejson。");
+        }
+
+        // 保存有效电路到新路径：文件存在、非空、UTF-8、format/schemaVersion 正确、可被 Batch B 导入、不改变原 Workspace。
+        private static void ValidateDrawingFileSaveRoundTrip()
+        {
+            var tempDir = CreateUniqueTempDir("SaveRoundTrip");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileSaveRoundTrip", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 50f);
+                    var sourceComp = workspace.Model.Components[0];
+                    var resistorComp = workspace.Model.Components[1];
+                    workspace.Connect(sourceComp.InstanceId, "positive", resistorComp.InstanceId, "positive");
+
+                    var beforeModel = workspace.Model;
+                    var beforeComponentCount = workspace.Model.Components.Count;
+                    var beforeWireCount = workspace.Model.Wires.Count;
+
+                    var path = Path.Combine(tempDir, "round_trip");
+                    if (!workspace.TrySaveWorkspaceToPath(path, out var error))
+                        throw new InvalidOperationException("保存应成功：" + error);
+
+                    // 文件存在、非空
+                    var savedPath = Path.Combine(tempDir, "round_trip.spicejson");
+                    if (!File.Exists(savedPath)) throw new InvalidOperationException("保存后文件应存在。");
+                    var fileBytes = new FileInfo(savedPath).Length;
+                    if (fileBytes <= 0) throw new InvalidOperationException("保存的文件不应为空。");
+
+                    // UTF-8 可读
+                    var json = File.ReadAllText(savedPath, System.Text.Encoding.UTF8);
+                    if (!json.Contains("\"format\": \"ElectricalSimulation2D.SpiceDrawing\""))
+                        throw new InvalidOperationException("保存的 JSON 应包含正确的 format。");
+                    if (!json.Contains("\"schemaVersion\": 1"))
+                        throw new InvalidOperationException("保存的 JSON 应包含 schemaVersion=1。");
+
+                    // 保存不改变原 Workspace
+                    if (!ReferenceEquals(workspace.Model, beforeModel))
+                        throw new InvalidOperationException("保存不应改变 Model 引用。");
+                    if (workspace.Model.Components.Count != beforeComponentCount)
+                        throw new InvalidOperationException("保存不应改变组件数量。");
+                    if (workspace.Model.Wires.Count != beforeWireCount)
+                        throw new InvalidOperationException("保存不应改变导线数量。");
+
+                    // 当前路径已更新为规范化路径
+                    if (workspace.CurrentSpiceFilePath != savedPath)
+                        throw new InvalidOperationException("保存后当前路径应为规范化路径：" + savedPath + " 实际 " + workspace.CurrentSpiceFilePath);
+
+                    // 内容可被 Batch B 导入（用另一个工作区导入）
+                    var importRoot = new GameObject("SpiceFileSaveRoundTripImport", typeof(RectTransform), typeof(Canvas));
+                    try
+                    {
+                        var importWorkspace = CreateInitializedWorkspaceForCopy(importRoot.transform, out _);
+                        if (!importWorkspace.TryImportWorkspaceFromPath(savedPath, out var importError))
+                            throw new InvalidOperationException("保存的文件应可被导入：" + importError);
+                        if (importWorkspace.Model.Components.Count != beforeComponentCount)
+                            throw new InvalidOperationException("导入后组件数量应匹配。");
+                        if (importWorkspace.Model.Wires.Count != beforeWireCount)
+                            throw new InvalidOperationException("导入后导线数量应匹配。");
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(importRoot);
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 覆盖已有文件：最终文件为新 JSON、无 .tmp 残留、不产生 0 字节文件。
+        private static void ValidateDrawingFileSaveOverwrite()
+        {
+            var tempDir = CreateUniqueTempDir("SaveOverwrite");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileSaveOverwrite", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    var path = Path.Combine(tempDir, "overwrite.spicejson");
+
+                    // 第一次保存：1 个电阻
+                    workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                    if (!workspace.TrySaveWorkspaceToPath(path, out var error1))
+                        throw new InvalidOperationException("第一次保存应成功：" + error1);
+                    var firstContent = File.ReadAllText(path, System.Text.Encoding.UTF8);
+                    var firstBytes = new FileInfo(path).Length;
+
+                    // 第二次保存：清空后改为 2 个电阻，覆盖
+                    workspace.ClearWorkspace();
+                    workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                    workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 50f);
+                    if (!workspace.TrySaveWorkspaceToPath(path, out var error2))
+                        throw new InvalidOperationException("第二次保存（覆盖）应成功：" + error2);
+                    var secondContent = File.ReadAllText(path, System.Text.Encoding.UTF8);
+                    var secondBytes = new FileInfo(path).Length;
+
+                    if (firstContent == secondContent)
+                        throw new InvalidOperationException("覆盖后文件内容应不同。");
+                    if (secondBytes <= 0)
+                        throw new InvalidOperationException("覆盖后不应产生 0 字节文件。");
+                    if (firstBytes == secondBytes)
+                        throw new InvalidOperationException("覆盖后文件大小应反映新内容。");
+
+                    // 无 .tmp 残留
+                    var tmpFiles = Directory.GetFiles(tempDir, "*.tmp*", SearchOption.TopDirectoryOnly);
+                    if (tmpFiles.Length > 0)
+                        throw new InvalidOperationException("覆盖后不应残留 .tmp 文件：" + tmpFiles.Length + " 个。");
+                    var backupFiles = Directory.GetFiles(tempDir, "*.backup*", SearchOption.TopDirectoryOnly);
+                    if (backupFiles.Length > 0)
+                        throw new InvalidOperationException("覆盖后不应残留 .backup 文件：" + backupFiles.Length + " 个。");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 当前路径管理：SaveToPath 设置路径；TrySaveCurrentWorkspace 写回；切换路径；保存失败不改旧路径。
+        private static void ValidateDrawingFileCurrentPathManagement()
+        {
+            var tempDir = CreateUniqueTempDir("CurrentPath");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFilePathManagement", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    if (workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("初始状态不应有当前路径。");
+
+                    // 空路径时 TrySaveCurrentWorkspace 失败
+                    if (workspace.TrySaveCurrentWorkspace(out var emptyError))
+                        throw new InvalidOperationException("空路径时 TrySaveCurrentWorkspace 应失败。");
+                    if (string.IsNullOrEmpty(emptyError))
+                        throw new InvalidOperationException("空路径应返回错误信息。");
+
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var path1 = Path.Combine(tempDir, "file1");
+                    if (!workspace.TrySaveWorkspaceToPath(path1, out var error1))
+                        throw new InvalidOperationException("保存到 path1 应成功：" + error1);
+                    if (!workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("保存后应有当前路径。");
+
+                    // TrySaveCurrentWorkspace 写回该路径
+                    if (!workspace.TrySaveCurrentWorkspace(out var error2))
+                        throw new InvalidOperationException("TrySaveCurrentWorkspace 应成功：" + error2);
+
+                    // 另一个 SaveToPath 成功后切换为新路径
+                    var path2 = Path.Combine(tempDir, "file2.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(path2, out var error3))
+                        throw new InvalidOperationException("保存到 path2 应成功：" + error3);
+                    if (workspace.CurrentSpiceFilePath != path2)
+                        throw new InvalidOperationException("当前路径应切换为 path2：" + workspace.CurrentSpiceFilePath);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 导入失败：损坏 JSON、未知版本、缺失 position/x/y、非法 Wire 均失败；失败后 Workspace 和当前路径不变。
+        private static void ValidateDrawingFileImportFailurePreservesWorkspace()
+        {
+            var tempDir = CreateUniqueTempDir("ImportFailure");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileImportFailure", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    // 建立非空旧画布并保存到一个文件，确立当前路径
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var validPath = Path.Combine(tempDir, "valid.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(validPath, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+
+                    var oldModel = workspace.Model;
+                    var oldComponentCount = workspace.Model.Components.Count;
+                    var oldPath = workspace.CurrentSpiceFilePath;
+
+                    // 各种无效文件内容
+                    var invalidCases = new (string name, string content)[]
+                    {
+                        ("损坏 JSON", "{ this is not valid json"),
+                        ("未知 schemaVersion", "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":99,\"components\":[],\"wires\":[]}"),
+                        ("缺失 position", "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}"),
+                        ("缺失 position.x", "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"source-001\",\"componentType\":\"DcVoltageSource\",\"position\":{\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"10\"}],\"wires\":[]}"),
+                        ("非法 Wire", "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[],\"wires\":[{\"startComponentId\":\"resistor-001\",\"startTerminalId\":\"positive\",\"endComponentId\":\"resistor-002\",\"endTerminalId\":\"negative\",\"routeMode\":\"Auto\"}]}"),
+                    };
+
+                    foreach (var (name, content) in invalidCases)
+                    {
+                        var badPath = Path.Combine(tempDir, "bad_" + name.GetHashCode() + ".spicejson");
+                        File.WriteAllText(badPath, content, System.Text.Encoding.UTF8);
+
+                        if (workspace.TryImportWorkspaceFromPath(badPath, out var error))
+                            throw new InvalidOperationException("[" + name + "] 导入应失败。");
+                        if (string.IsNullOrEmpty(error))
+                            throw new InvalidOperationException("[" + name + "] 应返回错误信息。");
+
+                        // Workspace 和当前路径不变
+                        if (!ReferenceEquals(workspace.Model, oldModel))
+                            throw new InvalidOperationException("[" + name + "] Model 引用不应改变。");
+                        if (workspace.Model.Components.Count != oldComponentCount)
+                            throw new InvalidOperationException("[" + name + "] 组件数量不应改变。");
+                        if (workspace.CurrentSpiceFilePath != oldPath)
+                            throw new InvalidOperationException("[" + name + "] 当前路径不应改变。");
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 运行中保护：保存和导入均在读取/写入前拒绝；导入传不存在路径错误仍为"计算进行中"。
+        private static void ValidateDrawingFileRunningGuardBeforeFileAccess()
+        {
+            var tempDir = CreateUniqueTempDir("RunningGuard");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileRunningGuard", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+
+                    workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+
+                    // 保存拒绝：不创建目录、不写临时文件
+                    var savePath = Path.Combine(tempDir, "should_not_exist.spicejson");
+                    if (workspace.TrySaveWorkspaceToPath(savePath, out var saveError))
+                        throw new InvalidOperationException("Running 状态下保存应被拒绝。");
+                    if (File.Exists(savePath))
+                        throw new InvalidOperationException("Running 拒绝保存不应创建文件。");
+                    if (saveError.IndexOf("计算", StringComparison.Ordinal) < 0 && saveError.IndexOf("运行", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("Running 保存错误应包含'计算'或'运行'：" + saveError);
+
+                    // 导入拒绝：传不存在的路径，错误仍必须是"计算进行中"而不是"文件不存在"
+                    var importPath = Path.Combine(tempDir, "definitely_does_not_exist.spicejson");
+                    if (workspace.TryImportWorkspaceFromPath(importPath, out var importError))
+                        throw new InvalidOperationException("Running 状态下导入应被拒绝。");
+                    if (importError.IndexOf("计算", StringComparison.Ordinal) < 0 && importError.IndexOf("运行", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("Running 导入错误应为'计算进行中'而非'文件不存在'：" + importError);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 清空：保存或导入后执行 ClearWorkspace；CurrentSpiceFilePath 变 null；TrySaveCurrentWorkspace 失败提示另存。
+        private static void ValidateDrawingFileClearResetsPath()
+        {
+            var tempDir = CreateUniqueTempDir("ClearResetsPath");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileClearReset", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var path = Path.Combine(tempDir, "clear_test.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(path, out _))
+                        throw new InvalidOperationException("测试前置：保存应成功。");
+                    if (!workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("保存后应有当前路径。");
+
+                    workspace.ClearWorkspace();
+
+                    if (workspace.HasCurrentSpiceFilePath)
+                        throw new InvalidOperationException("清空后当前路径应已清除。");
+                    if (workspace.Model.Components.Count != 0)
+                        throw new InvalidOperationException("清空后画布应为空。");
+
+                    // 再调用 TrySaveCurrentWorkspace 必须失败且提示需要另存路径
+                    if (workspace.TrySaveCurrentWorkspace(out var error))
+                        throw new InvalidOperationException("清空后无路径时 TrySaveCurrentWorkspace 应失败。");
+                    if (string.IsNullOrEmpty(error) || error.IndexOf("另存", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("清空后错误应提示另存路径：" + error);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 中文与空格路径：临时目录包含中文和空格；保存与导入都成功。
+        private static void ValidateDrawingFileChineseAndSpacePath()
+        {
+            var tempDir = CreateUniqueTempDir("中文 路径 测试");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceFileChinesePath", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 50f);
+
+                    var path = Path.Combine(tempDir, "我的 电路.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(path, out var saveError))
+                        throw new InvalidOperationException("中文+空格路径保存应成功：" + saveError);
+                    if (!File.Exists(path))
+                        throw new InvalidOperationException("中文+空格路径保存后文件应存在。");
+
+                    // 导入
+                    var importRoot = new GameObject("SpiceFileChinesePathImport", typeof(RectTransform), typeof(Canvas));
+                    try
+                    {
+                        var importWorkspace = CreateInitializedWorkspaceForCopy(importRoot.transform, out _);
+                        if (!importWorkspace.TryImportWorkspaceFromPath(path, out var importError))
+                            throw new InvalidOperationException("中文+空格路径导入应成功：" + importError);
+                        if (importWorkspace.Model.Components.Count != 2)
+                            throw new InvalidOperationException("中文+空格路径导入后组件数量应匹配。");
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(importRoot);
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。
+        private static string CreateUniqueTempDir(string label)
+        {
+            var path = Path.Combine(Path.GetTempPath(), "SpiceT3_" + label + "_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        // 清理临时目录及其所有文件。测试不得把临时 JSON 留在仓库。
+        private static void CleanupTempDir(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
+            try
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine("[SpiceT3] 清理临时目录失败：" + path + " " + exception);
+            }
         }
     }
 }

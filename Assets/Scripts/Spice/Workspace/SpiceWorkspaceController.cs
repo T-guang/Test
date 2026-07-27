@@ -69,6 +69,7 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceWorkspaceViewController viewController;
         private Text zoomLabel;
         private Button copyResultButton;
+        private readonly SpiceDrawingFileService fileService = new SpiceDrawingFileService();
         // 缓存最近一次正式结果/阻断诊断的权威输出文本（与正式可见 ResultText 一致），
         // 用于复制资格判断和复制输出；不读取隐藏 DiagnosticRoot，不重新格式化结果。
         private string lastOutcomeText;
@@ -616,6 +617,9 @@ namespace ElectricalSim.Spice.Workspace
             RefreshCopyResultButton();
             // 清空 SPICE 画布后重置为 100% 和初始中心
             if (viewController != null) viewController.ResetView();
+            // 清空画布成功后清除当前会话文件路径（仅在 ClearWorkspace 末尾调用一次，
+            // 不在清空按钮 UI 回调中复制清除路径逻辑）。
+            ClearCurrentSpiceFilePath();
         }
 
         /// <summary>
@@ -662,6 +666,96 @@ namespace ElectricalSim.Spice.Workspace
         internal void SetResultStateForTesting(SpiceWorkspaceResultState state)
         {
             ResultState = state;
+        }
+
+        /// <summary>当前会话的图纸文件路径。保存或导入成功后更新；清空画布后清除。</summary>
+        public string CurrentSpiceFilePath => fileService.CurrentSpiceFilePath;
+
+        /// <summary>是否已绑定当前会话文件路径。C2 的“保存”按钮据此决定是否改走“另存为”。</summary>
+        public bool HasCurrentSpiceFilePath => fileService.HasCurrentSpiceFilePath;
+
+        /// <summary>
+        /// 将当前 Workspace 保存到指定路径（原子写入 UTF-8）。
+        /// 复用 Batch A 的 SpiceDrawingSerializer.ToJson；不保存结果、网表、诊断、选择、pending Wire、缩放或平移。
+        /// 保存成功后 CurrentSpiceFilePath 更新为规范化路径；失败时保持旧值。
+        /// 仿真计算进行中拒绝保存。
+        /// </summary>
+        public bool TrySaveWorkspaceToPath(string path, out string error)
+        {
+            EnsureInitialized();
+            if (!CanImportDrawing(out error))
+            {
+                // 仿真进行中拒绝保存：不创建目录、不写临时文件、不取消 ngspice。
+                error = "仿真计算进行中，请稍后保存图纸。";
+                return false;
+            }
+            var json = SpiceDrawingSerializer.ToJson(Model);
+            var normalizedPath = SpiceDrawingFileService.NormalizeExtension(path);
+            if (!fileService.TrySaveUtf8Atomically(normalizedPath, json, out error))
+            {
+                // 保存失败：CurrentSpiceFilePath 保持旧值。
+                return false;
+            }
+            fileService.SetCurrentSpiceFilePath(normalizedPath);
+            if (statusText != null) statusText.text = "图纸已保存到：" + normalizedPath;
+            return true;
+        }
+
+        /// <summary>
+        /// 将当前 Workspace 保存到已绑定的 CurrentSpiceFilePath。
+        /// 当前路径为空时返回清晰失败，不自行打开对话框。
+        /// </summary>
+        public bool TrySaveCurrentWorkspace(out string error)
+        {
+            EnsureInitialized();
+            if (!fileService.HasCurrentSpiceFilePath)
+            {
+                error = "尚未指定保存路径，请使用另存为。";
+                return false;
+            }
+            return TrySaveWorkspaceToPath(fileService.CurrentSpiceFilePath, out error);
+        }
+
+        /// <summary>
+        /// 从指定路径导入图纸：先进行文件级检查和 UTF-8 读取，
+        /// 再将原始 JSON 原封不动交给 Batch B 的 TryImportDrawingJson。
+        /// 不在文件层解析器件、坐标、端子或 Wire；不调用 ClearWorkspace；不提前清空当前画布。
+        /// Batch B 失败时原样保留当前 Workspace 和当前路径。
+        /// 导入成功后 CurrentSpiceFilePath 更新为导入路径。
+        /// </summary>
+        public bool TryImportWorkspaceFromPath(string path, out string error)
+        {
+            EnsureInitialized();
+            // 第一道防线：运行中拒绝导入（在读取文件之前）。
+            // 保持 Batch B 的运行中导入保护作为第二道防线。
+            if (!CanImportDrawing(out error))
+            {
+                error = "仿真计算进行中，请稍后导入图纸。";
+                return false;
+            }
+            if (!fileService.TryReadUtf8File(path, out var json, out error))
+            {
+                // 读取失败：CurrentSpiceFilePath 保持旧值。
+                return false;
+            }
+            // 保存旧路径，便于 Batch B 失败时恢复。
+            var previousPath = fileService.CurrentSpiceFilePath;
+            if (!TryImportDrawingJson(json, out error))
+            {
+                // Batch B 失败：当前 Workspace 和当前路径均不变。
+                fileService.SetCurrentSpiceFilePath(previousPath);
+                return false;
+            }
+            // 导入成功：更新当前路径（导入路径不规范化扩展名，保持用户传入的路径）。
+            fileService.SetCurrentSpiceFilePath(path);
+            if (statusText != null) statusText.text = "图纸已从以下路径导入：" + path;
+            return true;
+        }
+
+        /// <summary>清除当前会话文件路径。仅在 ClearWorkspace 成功后调用。</summary>
+        private void ClearCurrentSpiceFilePath()
+        {
+            fileService.ClearCurrentSpiceFilePath();
         }
 
         /// <summary>
