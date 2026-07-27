@@ -83,6 +83,10 @@ namespace ElectricalSim.Spice.T3
             ValidateReplaceConfirmationCancelDoesNotImport();
             ValidateReplaceConfirmationConfirmCallsImportOnce();
             ValidateClearWorkspaceRoutesSaveToSaveAs();
+            // C2 收口：弹窗生命周期、Blocker 层级、默认目录失败保护
+            ValidateReplaceConfirmationDisposeDestroysAllObjects();
+            ValidateReplaceConfirmationOpenSiblingOrder();
+            ValidateDefaultDirectoryFailureSkipsDialog();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -2834,6 +2838,146 @@ namespace ElectricalSim.Spice.T3
             finally
             {
                 CleanupTempDir(tempDir);
+            }
+        }
+
+        // Dispose 后三个确认 UI 对象（Blocker / Panel / 弹窗根对象）均被销毁。
+        private static void ValidateReplaceConfirmationDisposeDestroysAllObjects()
+        {
+            var canvasRoot = new GameObject("SpiceReplaceDispose", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+
+                var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                popupLayer.SetParent(canvasRoot.transform, false);
+                host.InitializeFileWorkflowForTesting(popupLayer);
+
+                var dialog = host.GetReplaceConfirmationDialogForTesting();
+                dialog.Open();
+
+                // 在 Dispose 前捕获三个 GameObject 引用（通过 popupLayer 子级名称定位，非 GameObject.Find）。
+                var blockerGo = popupLayer.Find("SpiceReplaceConfirmBlocker")?.gameObject;
+                var panelGo = popupLayer.Find("SpiceReplaceConfirmPanel")?.gameObject;
+                var dialogGo = popupLayer.Find("SpiceReplaceConfirmDialog")?.gameObject;
+                if (blockerGo == null || panelGo == null || dialogGo == null)
+                    throw new InvalidOperationException("测试前置：三个确认 UI 对象应存在。");
+
+                dialog.Dispose();
+
+                // Unity 的重载 == 运算符对已销毁对象返回 null。
+                if (blockerGo != null) throw new InvalidOperationException("Dispose 后 Blocker 应被销毁。");
+                if (panelGo != null) throw new InvalidOperationException("Dispose 后 Panel 应被销毁。");
+                if (dialogGo != null) throw new InvalidOperationException("Dispose 后弹窗根对象应被销毁。");
+
+                // PopupLayer 下不得残留任何确认 UI 对象。
+                if (popupLayer.Find("SpiceReplaceConfirmBlocker") != null)
+                    throw new InvalidOperationException("PopupLayer 不应残留 Blocker。");
+                if (popupLayer.Find("SpiceReplaceConfirmPanel") != null)
+                    throw new InvalidOperationException("PopupLayer 不应残留 Panel。");
+                if (popupLayer.Find("SpiceReplaceConfirmDialog") != null)
+                    throw new InvalidOperationException("PopupLayer 不应残留弹窗根对象。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // Open 后 sibling 顺序为 Blocker < Panel，且 Panel 位于最上层。
+        private static void ValidateReplaceConfirmationOpenSiblingOrder()
+        {
+            var canvasRoot = new GameObject("SpiceReplaceSibling", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+
+                var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                popupLayer.SetParent(canvasRoot.transform, false);
+
+                // 在弹窗创建前先放一个既有内容，验证 Open 后 Blocker/Panel 位于其上。
+                var existingContent = new GameObject("ExistingPopupContent", typeof(RectTransform));
+                existingContent.transform.SetParent(popupLayer, false);
+
+                host.InitializeFileWorkflowForTesting(popupLayer);
+                var dialog = host.GetReplaceConfirmationDialogForTesting();
+                dialog.Open();
+
+                var blockerTransform = popupLayer.Find("SpiceReplaceConfirmBlocker");
+                var panelTransform = popupLayer.Find("SpiceReplaceConfirmPanel");
+                if (blockerTransform == null || panelTransform == null)
+                    throw new InvalidOperationException("测试前置：Blocker 和 Panel 应存在。");
+
+                var blockerIndex = blockerTransform.GetSiblingIndex();
+                var panelIndex = panelTransform.GetSiblingIndex();
+                if (blockerIndex >= panelIndex)
+                    throw new InvalidOperationException("Blocker 的 sibling 应小于 Panel（Blocker < Panel）。实际 Blocker=" + blockerIndex + " Panel=" + panelIndex);
+                if (panelIndex != popupLayer.childCount - 1)
+                    throw new InvalidOperationException("Panel 应位于 PopupLayer 最顶层（最后一个子级）。实际 Panel=" + panelIndex + " childCount=" + popupLayer.childCount);
+                // 既有内容应在 Blocker 之下
+                if (existingContent.transform.GetSiblingIndex() >= blockerIndex)
+                    throw new InvalidOperationException("既有 PopupLayer 内容应位于 Blocker 之下。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        // 默认目录创建失败时不打开文件对话框、不改路径、不改 Workspace。
+        private static void ValidateDefaultDirectoryFailureSkipsDialog()
+        {
+            var canvasRoot = new GameObject("SpiceDefaultDirFail", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var host = canvasRoot.GetComponentInChildren<SpiceWorkspaceDemoHost>();
+
+                var popupLayer = new GameObject("TestPopupLayer", typeof(RectTransform)).GetComponent<RectTransform>();
+                popupLayer.SetParent(canvasRoot.transform, false);
+                host.InitializeFileWorkflowForTesting(popupLayer);
+
+                // 注入默认目录创建失败
+                host.EnsureDefaultDirectoryExistsOverrideForTesting = () => false;
+
+                var oldComponentCount = workspace.Model.Components.Count;
+                var oldPath = workspace.CurrentSpiceFilePath;
+                workspace.SetStatusTextForTesting("初始状态");
+
+                // 另存为：默认目录失败应直接返回，不打开对话框
+                workspace.InvokeSaveAsButtonForTesting();
+                var statusAfterSaveAs = workspace.GetStatusTextForTesting();
+                if (statusAfterSaveAs == null || statusAfterSaveAs.IndexOf("无法创建默认目录", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("默认目录失败时另存为应显示目录错误，实际：" + statusAfterSaveAs);
+                if (workspace.CurrentSpiceFilePath != oldPath)
+                    throw new InvalidOperationException("默认目录失败时路径不应改变。");
+                if (workspace.Model.Components.Count != oldComponentCount)
+                    throw new InvalidOperationException("默认目录失败时组件数量不应改变。");
+
+                // 导入：默认目录失败应直接返回，不打开对话框
+                workspace.SetStatusTextForTesting("初始状态");
+                workspace.InvokeImportButtonForTesting();
+                var statusAfterImport = workspace.GetStatusTextForTesting();
+                if (statusAfterImport == null || statusAfterImport.IndexOf("无法创建默认目录", StringComparison.Ordinal) < 0)
+                    throw new InvalidOperationException("默认目录失败时导入应显示目录错误，实际：" + statusAfterImport);
+                if (workspace.CurrentSpiceFilePath != oldPath)
+                    throw new InvalidOperationException("默认目录失败时路径不应改变。");
+                if (workspace.Model.Components.Count != oldComponentCount)
+                    throw new InvalidOperationException("默认目录失败时组件数量不应改变。");
+
+                // 替换确认弹窗不应被打开（导入未进入非空画布确认流程）
+                var dialog = host.GetReplaceConfirmationDialogForTesting();
+                if (dialog != null && dialog.IsOpen)
+                    throw new InvalidOperationException("默认目录失败时不应打开替换确认弹窗。");
+
+                // 恢复：覆盖设为 null 后应走生产路径（目录实际存在，对话框在 batchmode 返回 null，无副作用）
+                host.EnsureDefaultDirectoryExistsOverrideForTesting = null;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
         }
 

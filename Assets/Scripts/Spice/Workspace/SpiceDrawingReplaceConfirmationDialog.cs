@@ -42,6 +42,9 @@ namespace ElectricalSim.Spice.Workspace
             if (!initialized || panel == null) return;
             blocker.gameObject.SetActive(true);
             panel.gameObject.SetActive(true);
+            // 先把 Blocker 提到 PopupLayer 最上层（覆盖既有 PopupLayer 内容与全局 UI），
+            // 再把 Panel 提到 Blocker 之上。结果：Blocker < Panel，Panel 位于最顶层。
+            blocker.rectTransform.SetAsLastSibling();
             panel.rectTransform.SetAsLastSibling();
         }
 
@@ -73,10 +76,32 @@ namespace ElectricalSim.Spice.Workspace
 
         public void Dispose()
         {
-            CloseWithoutApply();
+            if (blocker != null)
+            {
+                DestroyObject(blocker.gameObject);
+                blocker = null;
+            }
+            if (panel != null)
+            {
+                DestroyObject(panel.gameObject);
+                panel = null;
+            }
             ConfirmRequested = null;
-            if (blocker != null) Destroy(blocker.gameObject);
-            blocker = null;
+            Cancelled = null;
+            body = null;
+            cancelButton = null;
+            confirmButton = null;
+            // 销毁弹窗根对象（挂载本组件的 GameObject），确保 PopupLayer 下无残留。
+            // 在 Host.OnDestroy 中调用安全：Host 调用后不再访问本引用。
+            if (gameObject != null) DestroyObject(gameObject);
+        }
+
+        // 运行时用 Destroy（延迟到帧末，安全），编辑模式用 DestroyImmediate（立即销毁，测试可验证）。
+        private static void DestroyObject(GameObject go)
+        {
+            if (go == null) return;
+            if (Application.isPlaying) Destroy(go);
+            else DestroyImmediate(go);
         }
 
         private void Update()

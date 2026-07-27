@@ -115,6 +115,8 @@ namespace ElectricalSim.Spice.Workspace
                 replaceConfirmationDialog.ConfirmRequested -= HandleReplaceConfirmationConfirmed;
                 replaceConfirmationDialog.Cancelled -= HandleReplaceConfirmationCancelled;
                 replaceConfirmationDialog.Dispose();
+                // Dispose 已销毁弹窗根对象及其 Blocker/Panel，清空引用避免悬空访问。
+                replaceConfirmationDialog = null;
             }
 
             if (modeController != null)
@@ -155,7 +157,11 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleSaveAsRequested()
         {
-            SpiceDrawingFileService.EnsureDefaultDirectoryExists();
+            if (!EnsureDefaultDirectoryForFileWorkflow())
+            {
+                workspaceController.ShowFileOperationStatus("保存失败，无法创建默认目录。");
+                return;
+            }
             var defaultFileName = BuildDefaultSaveFileName();
             var path = WindowsFileDialog.SaveFile(SaveDialogTitle, FileDialogFilter, FileDialogExtension, SpiceDrawingFileService.DefaultDirectory, defaultFileName);
             if (string.IsNullOrEmpty(path))
@@ -173,7 +179,11 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleImportRequested()
         {
-            SpiceDrawingFileService.EnsureDefaultDirectoryExists();
+            if (!EnsureDefaultDirectoryForFileWorkflow())
+            {
+                workspaceController.ShowFileOperationStatus("导入失败，无法创建默认目录。");
+                return;
+            }
             var path = WindowsFileDialog.OpenFile(ImportDialogTitle, FileDialogFilter, FileDialogExtension, SpiceDrawingFileService.DefaultDirectory);
             if (string.IsNullOrEmpty(path))
             {
@@ -189,6 +199,16 @@ namespace ElectricalSim.Spice.Workspace
             }
             pendingImportPath = path;
             replaceConfirmationDialog?.Open();
+        }
+
+        /// <summary>
+        /// 确保默认目录存在。失败时不打开文件对话框、不改路径、不改 Workspace。
+        /// 测试可通过 EnsureDefaultDirectoryExistsOverrideForTesting 注入失败结果。
+        /// </summary>
+        private bool EnsureDefaultDirectoryForFileWorkflow()
+        {
+            return EnsureDefaultDirectoryExistsOverrideForTesting?.Invoke()
+                ?? SpiceDrawingFileService.EnsureDefaultDirectoryExists();
         }
 
         private void HandleReplaceConfirmationConfirmed()
@@ -253,6 +273,13 @@ namespace ElectricalSim.Spice.Workspace
         // ============ C2 内部测试接缝（不用于生产路径） ============
         // 仅供 T3 验证 Host 协调逻辑，不暴露文件对话框或确认弹窗的内部状态。
         internal SpiceDrawingReplaceConfirmationDialog GetReplaceConfirmationDialogForTesting() => replaceConfirmationDialog;
+
+        /// <summary>
+        /// 仅供 T3 测试：覆盖默认目录检查结果。设为返回 false 的委托可验证
+        /// "默认目录创建失败时不打开文件对话框、不改路径、不改 Workspace"。
+        /// 设为 null 恢复生产路径（调用 SpiceDrawingFileService.EnsureDefaultDirectoryExists）。
+        /// </summary>
+        internal Func<bool> EnsureDefaultDirectoryExistsOverrideForTesting { private get; set; }
 
         /// <summary>
         /// 仅供 T3 测试：直接将候选路径送入非空画布导入流程，跳过 Windows 文件对话框
@@ -324,6 +351,10 @@ namespace ElectricalSim.Spice.Workspace
             StyleToolbarButton(FindToolbarButton(bindings, "ZoomIn"), "＋", false, false, 564f, 598f);
             StyleToolbarButton(FindToolbarButton(bindings, "FitAll"), "适配全部", false, false, 606f, 676f);
             StyleToolbarButton(FindToolbarButton(bindings, "ResetView"), "重置视图", false, false, 684f, 754f);
+            // C2 文件操作工具栏按钮：保存 / 另存为 / 导入，沿用既有样式与坐标。
+            StyleToolbarButton(FindToolbarButton(bindings, "SaveFile"), "保存", false, false, 762f, 832f);
+            StyleToolbarButton(FindToolbarButton(bindings, "SaveAsFile"), "另存为", false, false, 840f, 910f);
+            StyleToolbarButton(FindToolbarButton(bindings, "ImportFile"), "导入", false, false, 918f, 988f);
             StyleZoomLabel(bindings);
 
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
