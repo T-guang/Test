@@ -96,6 +96,9 @@ namespace ElectricalSim.Spice.T3
             // C2.3 收口：默认文件名无扩展名、扩展名归一、确认框按钮圆角
             ValidateDefaultSaveFileNameHasNoExtension();
             ValidateSpiceJsonExtensionNormalization();
+            // C2.4 收口：现代文件对话框 COM 契约 — SetDefaultExtension 接口存在、失败与取消可区分
+            ValidateFileDialogSetDefaultExtensionInterfaceExists();
+            ValidateFileDialogCancelVsFailureDistinguishable();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -3318,6 +3321,116 @@ namespace ElectricalSim.Spice.T3
             if (image == null) throw new InvalidOperationException(label + " 按钮应有 Image 组件。");
             if (image.sprite == null) throw new InvalidOperationException(label + " 按钮应有 sprite。");
             if (image.type != Image.Type.Sliced) throw new InvalidOperationException(label + " 按钮 Image 类型应为 Sliced。");
+        }
+
+        // C2.4：验证 IFileOpenDialog / IFileSaveDialog 都声明了 SetDefaultExtension 方法，
+        // 且位于 GetResult 之后、派生扩展（GetResults / SetSaveAsItem）之前。
+        // vtable 槽位错位会导致调用 SetDefaultExtension 实际触发 GetResults/SetSaveAsItem。
+        private static void ValidateFileDialogSetDefaultExtensionInterfaceExists()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            // 通过反射访问 private 嵌套接口 IFileOpenDialog / IFileSaveDialog
+            var openType = dialogType.GetNestedType("IFileOpenDialog", System.Reflection.BindingFlags.NonPublic);
+            if (openType == null) throw new InvalidOperationException("IFileOpenDialog 接口应存在。");
+            var saveType = dialogType.GetNestedType("IFileSaveDialog", System.Reflection.BindingFlags.NonPublic);
+            if (saveType == null) throw new InvalidOperationException("IFileSaveDialog 接口应存在。");
+
+            var openSetDef = openType.GetMethod("SetDefaultExtension");
+            if (openSetDef == null)
+                throw new InvalidOperationException("IFileOpenDialog 应声明 SetDefaultExtension 方法（C2.4 vtable 修复）。");
+
+            var saveSetDef = saveType.GetMethod("SetDefaultExtension");
+            if (saveSetDef == null)
+                throw new InvalidOperationException("IFileSaveDialog 应声明 SetDefaultExtension 方法（C2.4 vtable 修复）。");
+
+            // 参数应为单个 string
+            var openParams = openSetDef.GetParameters();
+            if (openParams.Length != 1 || openParams[0].ParameterType != typeof(string))
+                throw new InvalidOperationException("IFileOpenDialog.SetDefaultExtension 应接受单个 string 参数。");
+            var saveParams = saveSetDef.GetParameters();
+            if (saveParams.Length != 1 || saveParams[0].ParameterType != typeof(string))
+                throw new InvalidOperationException("IFileSaveDialog.SetDefaultExtension 应接受单个 string 参数。");
+
+            // vtable 顺序：GetResult(17) → AddPlace(18) → SetDefaultExtension(19)
+            // 验证 GetResult 在 SetDefaultExtension 之前声明（GetMethod 顺序不保证，改用声明行号）
+            var openMethods = openType.GetMethods();
+            int openGetResultIdx = -1, openSetDefIdx = -1, openGetResultsIdx = -1;
+            for (int i = 0; i < openMethods.Length; i++)
+            {
+                if (openMethods[i].Name == "GetResult") openGetResultIdx = i;
+                else if (openMethods[i].Name == "SetDefaultExtension") openSetDefIdx = i;
+                else if (openMethods[i].Name == "GetResults") openGetResultsIdx = i;
+            }
+            if (openGetResultIdx < 0 || openSetDefIdx < 0 || openGetResultsIdx < 0)
+                throw new InvalidOperationException("IFileOpenDialog 方法声明不完整：GetResult/SetDefaultExtension/GetResults 都应存在。");
+            if (!(openGetResultIdx < openSetDefIdx && openSetDefIdx < openGetResultsIdx))
+                throw new InvalidOperationException("IFileOpenDialog vtable 顺序错：应为 GetResult < SetDefaultExtension < GetResults。");
+
+            int saveGetResultIdx = -1, saveSetDefIdx = -1, saveSetSaveAsIdx = -1;
+            var saveMethods = saveType.GetMethods();
+            for (int i = 0; i < saveMethods.Length; i++)
+            {
+                if (saveMethods[i].Name == "GetResult") saveGetResultIdx = i;
+                else if (saveMethods[i].Name == "SetDefaultExtension") saveSetDefIdx = i;
+                else if (saveMethods[i].Name == "SetSaveAsItem") saveSetSaveAsIdx = i;
+            }
+            if (saveGetResultIdx < 0 || saveSetDefIdx < 0 || saveSetSaveAsIdx < 0)
+                throw new InvalidOperationException("IFileSaveDialog 方法声明不完整：GetResult/SetDefaultExtension/SetSaveAsItem 都应存在。");
+            if (!(saveGetResultIdx < saveSetDefIdx && saveSetDefIdx < saveSetSaveAsIdx))
+                throw new InvalidOperationException("IFileSaveDialog vtable 顺序错：应为 GetResult < SetDefaultExtension < SetSaveAsItem。");
+#endif
+        }
+
+        // C2.4：验证带 out error 的新签名存在，且 batchmode（-nographics，无桌面会话）下
+        // IFileDialog.Show 必失败（非 ERROR_CANCELLED），error 应非空 —— 失败与取消可区分。
+        // 取消路径无法在 batchmode 自动测试（需真实用户交互），仅验证签名与失败路径。
+        private static void ValidateFileDialogCancelVsFailureDistinguishable()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            // 验证带 out string error 的重载存在
+            var openOverload = dialogType.GetMethod("OpenFile", new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(string).MakeByRefType() });
+            if (openOverload == null)
+                throw new InvalidOperationException("OpenFile(title, filter, extension, initialDirectory, out string error) 重载应存在（C2.4）。");
+            var saveOverload = dialogType.GetMethod("SaveFile", new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string).MakeByRefType() });
+            if (saveOverload == null)
+                throw new InvalidOperationException("SaveFile(title, filter, extension, initialDirectory, defaultFileName, out string error) 重载应存在（C2.4）。");
+
+            // batchmode 下无窗口，IFileDialog.Show 必失败（非 ERROR_CANCELLED）。
+            // 失败：path=null, error 非空；技术详情写 Debug.LogError 但不进 error。
+            var tempDir = CreateUniqueTempDir("FileDialogFail");
+            try
+            {
+                var initialDir = System.IO.Path.Combine(tempDir, "Initial");
+                System.IO.Directory.CreateDirectory(initialDir);
+
+                // 反射调用：返回值是 path，out 参数（error）回填到 args 最后一项
+                var openArgs = new object[] { "测试", "All|*.*", "txt", initialDir, null };
+                var openPath = openOverload.Invoke(null, openArgs);
+                var openError = (string)openArgs[4];
+                if (!string.IsNullOrEmpty((string)openPath))
+                    throw new InvalidOperationException("batchmode 下 OpenFile 不应返回有效路径。");
+                if (string.IsNullOrEmpty(openError))
+                    throw new InvalidOperationException("batchmode 下 OpenFile 失败应返回非空 error，与取消区分。");
+                if (openError != "无法打开文件选择窗口，请稍后重试。")
+                    throw new InvalidOperationException("OpenFile 失败消息应为简洁中文提示，实际：" + openError);
+
+                var saveArgs = new object[] { "测试", "All|*.*", "txt", initialDir, "default", null };
+                var savePath = saveOverload.Invoke(null, saveArgs);
+                var saveError = (string)saveArgs[5];
+                if (!string.IsNullOrEmpty((string)savePath))
+                    throw new InvalidOperationException("batchmode 下 SaveFile 不应返回有效路径。");
+                if (string.IsNullOrEmpty(saveError))
+                    throw new InvalidOperationException("batchmode 下 SaveFile 失败应返回非空 error，与取消区分。");
+                if (saveError != "无法打开文件选择窗口，请稍后重试。")
+                    throw new InvalidOperationException("SaveFile 失败消息应为简洁中文提示，实际：" + saveError);
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
+            }
+#endif
         }
 
         // 创建唯一临时目录（可包含中文/空格），位于系统 Temp 下，避免污染仓库。

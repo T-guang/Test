@@ -1,20 +1,29 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using UnityEngine;
 
 namespace ElectricalSim.Platform
 {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
     /// <summary>
     /// Windows 原生打开/保存文件对话框封装。仅 Windows 平台引用 COM 与 PInvoke；
-    /// 非 Windows 平台不引用任何 Windows API，由调用方在编译期被 #if 隔离。
-    /// 所有方法在用户取消或调用失败时返回 null，不抛异常；支持中文路径。
+    /// 非 Windows 平台不引用任何 Windows API，由调用方在编译期被 #if 隔离。支持中文路径。
     ///
-    /// 强制默认目录策略：使用现代 IFileDialog（IFileOpenDialog / IFileSaveDialog），
-    /// 调用 SetFolder 设置初始目录（非 SetDefaultFolder），对抗 Windows 目录记忆。
-    /// 每次打开都回到指定的 initialDirectory，用户改选其他目录后下次仍回 initialDirectory。
-    /// COM 对象与 IShellItem 在 finally 中释放。若 IFileDialog 调用失败返回 null，
-    /// 由 Host 显示简洁错误，不偷偷回退到记忆目录。
+    /// C2.4 契约：
+    /// 1. 使用现代 IFileDialog（IFileOpenDialog / IFileSaveDialog + IShellItem）。
+    /// 2. IFileDialog 基础接口 vtable 顺序严格按 shobjidl_core.h：
+    ///    IUnknown(3) + IModalWindow.Show(1) + IFileDialog(19) + 派生扩展。
+    ///    GetResult 后、派生扩展前，必须按顺序补全 AddPlace / SetDefaultExtension /
+    ///    Close / SetClientGuid / ClearClientData / SetFilter 六个方法，否则 vtable 槽位错位。
+    /// 3. OpenFile 不设置默认扩展名；SaveFile 调用 SetDefaultExtension("spicejson")。
+    ///    不得用 SetFileNameLabel 设置扩展名。
+    /// 4. FOS_FORCEFILESYSTEM = 0x40 确保 GetDisplayName(SIGDN_FILESYSPATH) 总能取得真实路径。
+    /// 5. 失败与取消严格区分：用户取消（ERROR_CANCELLED）返回 null 且 error=null；
+    ///    COM 创建、SetFolder、Show 非取消失败、GetResult、GetDisplayName 失败返回 null
+    ///    且 error="无法打开文件选择窗口，请稍后重试。"。技术详情写 Debug.LogError，
+    ///    不向用户展示 HRESULT、路径或堆栈。不得回退到旧 GetOpenFileName/GetSaveFileName。
+    /// 6. COM 对象与 IShellItem 在 finally 中通过 Marshal.ReleaseComObject 释放。
     /// </summary>
     public static class WindowsFileDialog
     {
@@ -25,20 +34,33 @@ namespace ElectricalSim.Platform
         private static readonly Guid IidIFileSaveDialog = new Guid("84BCCD23-5FDE-4CDB-AEA4-AF64B83D78AB");
         private static readonly Guid IidIShellItem = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
 
-        // FILEOPENDIALOGOPTIONS 标志位
-        private const uint FOS_PICKFILES = 0x00000001;
-        private const uint FOS_PATHMUSTEXIST = 0x00000800;
-        private const uint FOS_FILEMUSTEXIST = 0x00001000;
+        // FILEOPENDIALOGOPTIONS 标志位（shobjidl_core.h FILEOPENDIALOGOPTIONS）
+        // C2.4：删除语义不明确的 FOS_PICKFILES = 0x1；新增 FOS_FORCEFILESYSTEM = 0x40。
         private const uint FOS_OVERWRITEPROMPT = 0x00000002;
         private const uint FOS_NOCHANGEDIR = 0x00000008;
+        private const uint FOS_FORCEFILESYSTEM = 0x00000040;
+        private const uint FOS_PATHMUSTEXIST = 0x00000800;
+        private const uint FOS_FILEMUSTEXIST = 0x00001000;
 
         // SIGDN
         private const uint SIGDN_FILESYSPATH = 0x80058000;
 
-        // COM 接口 vtable 顺序（IUnknown 3 方法 + IModalWindow 1 + IFileDialog 11 + 各自扩展）
-        // IFileOpenDialog: IUnknown(3) + IModalWindow.Show(1) + IFileDialog(11) + IFileOpenDialog(1) = 16 slots
-        // IFileSaveDialog: IUnknown(3) + IModalWindow.Show(1) + IFileDialog(11) + IFileSaveDialog(5) = 20 slots
-        // 这里只用到 IFileDialog 公共部分 + IFileSaveDialog.SetSaveAsItem。
+        // 用户取消的 HRESULT（ERROR_CANCELLED 包装为 HRESULT）
+        private const int ERROR_CANCELLED_HRESULT = unchecked((int)0x800704C7);
+
+        // 用户可见错误消息（不暴露技术详情）
+        private const string UserFacingFailureMessage = "无法打开文件选择窗口，请稍后重试。";
+
+        // COM 接口 vtable 顺序说明：
+        // IUnknown(3) + IModalWindow.Show(1) + IFileDialog(19) + 派生扩展。
+        // IFileDialog 19 个方法按顺序：
+        //   SetFileTypes, SetFileTypeIndex, GetFileTypeIndex, Advise, Unadvise,
+        //   SetOptions, GetOptions, SetDefaultFolder, SetFolder, GetFolder,
+        //   GetCurrentSelection, SetFileName, GetFileName, SetTitle, SetOkButtonLabel,
+        //   SetFileNameLabel, GetResult, AddPlace, SetDefaultExtension,
+        //   Close, SetClientGuid, ClearClientData, SetFilter
+        // 之前误把派生方法（GetResults/SetSaveAsItem）紧接 GetResult 后放置，导致
+        // vtable 槽位错位；C2.4 在 GetResult 后、派生扩展前补全 6 个基础方法。
 
         [ComImport]
         [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -64,7 +86,7 @@ namespace ElectricalSim.Platform
             uint Release();
             // IModalWindow
             uint Show([In] IntPtr hwndOwner);
-            // IFileDialog
+            // IFileDialog（19 个方法，顺序与 IFileSaveDialog 完全一致）
             void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
             void SetFileTypeIndex([In] uint iFileType);
             void GetFileTypeIndex(out uint piFileType);
@@ -82,7 +104,14 @@ namespace ElectricalSim.Platform
             void SetOkButtonLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszText);
             void SetFileNameLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
             void GetResult(out IShellItem ppsi);
-            // IFileOpenDialog 扩展
+            // IFileDialog 续：C2.4 补全的 6 个基础方法（之前缺失导致 vtable 错位）
+            void AddPlace([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi, [In] int fdcp);
+            void SetDefaultExtension([In, MarshalAs(UnmanagedType.LPWStr)] string pszSpec);
+            void Close([In] int hr);
+            void SetClientGuid([In] ref Guid guid);
+            void ClearClientData();
+            void SetFilter([In, MarshalAs(UnmanagedType.Interface)] object pFilter);
+            // IFileOpenDialog 派生扩展
             void GetResults(out IntPtr ppenum);
             void GetSelectedItems(out IntPtr ppsai);
         }
@@ -98,7 +127,7 @@ namespace ElectricalSim.Platform
             uint Release();
             // IModalWindow
             uint Show([In] IntPtr hwndOwner);
-            // IFileDialog
+            // IFileDialog（19 个方法，顺序与 IFileOpenDialog 完全一致）
             void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
             void SetFileTypeIndex([In] uint iFileType);
             void GetFileTypeIndex(out uint piFileType);
@@ -116,7 +145,14 @@ namespace ElectricalSim.Platform
             void SetOkButtonLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszText);
             void SetFileNameLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
             void GetResult(out IShellItem ppsi);
-            // IFileSaveDialog 扩展
+            // IFileDialog 续：C2.4 补全的 6 个基础方法（之前缺失导致 vtable 错位）
+            void AddPlace([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi, [In] int fdcp);
+            void SetDefaultExtension([In, MarshalAs(UnmanagedType.LPWStr)] string pszSpec);
+            void Close([In] int hr);
+            void SetClientGuid([In] ref Guid guid);
+            void ClearClientData();
+            void SetFilter([In, MarshalAs(UnmanagedType.Interface)] object pFilter);
+            // IFileSaveDialog 派生扩展
             void SetSaveAsItem([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi);
             void SetProperties([In, MarshalAs(UnmanagedType.Interface)] object pStore);
             void SetCollectedProperties([In, MarshalAs(UnmanagedType.Interface)] object pList, [In] bool fAppendDefault);
@@ -137,19 +173,32 @@ namespace ElectricalSim.Platform
         [DllImport("user32.dll")]
         private static extern IntPtr GetActiveWindow();
 
-        /// <summary>旧版兼容入口：保留原有签名，默认不指定初始目录。</summary>
+        [DllImport("ole32.dll")]
+        private static extern int CoCreateInstance([In] ref Guid rclsid, IntPtr pUnkOuter, int dwClsContext, [In] ref Guid riid, out object ppv);
+
+        // ==================== OpenFile 重载 ====================
+
+        /// <summary>旧版兼容入口：保留原有 3 参签名，默认不指定初始目录。失败与取消都返回 null（不区分）。</summary>
         public static string OpenFile(string title, string filter, string extension)
         {
-            return OpenFile(title, filter, extension, null);
+            return OpenFile(title, filter, extension, null, out _);
+        }
+
+        /// <summary>4 参兼容入口：不区分失败与取消。新调用方应使用 5 参带 out error 重载。</summary>
+        public static string OpenFile(string title, string filter, string extension, string initialDirectory)
+        {
+            return OpenFile(title, filter, extension, initialDirectory, out _);
         }
 
         /// <summary>
-        /// 打开文件对话框，可指定初始目录。用户取消或调用失败返回 null。
-        /// 使用现代 IFileOpenDialog + SetFolder 强制初始目录；对抗 Windows 目录记忆。
-        /// 过滤器格式 "名称|*.ext"，内部转换为 COMDLG_FILTERSPEC。
+        /// 打开文件对话框（主入口）。用户取消返回 null 且 error=null；
+        /// COM 创建、SetFolder、Show 非取消失败、GetResult、GetDisplayName 失败返回 null 且 error=用户可见消息。
+        /// OpenFile 不设置默认扩展名。强制初始目录通过 SetFolder 实现，对抗 Windows 目录记忆。
+        /// 过滤器格式 "名称|*.ext"，内部转换为单个 COMDLG_FILTERSPEC。
         /// </summary>
-        public static string OpenFile(string title, string filter, string extension, string initialDirectory)
+        public static string OpenFile(string title, string filter, string extension, string initialDirectory, out string error)
         {
+            error = null;
             IFileOpenDialog dialog = null;
             IShellItem folderItem = null;
             IShellItem resultItem = null;
@@ -158,17 +207,20 @@ namespace ElectricalSim.Platform
                 var clsid = ClsidFileOpenDialog;
                 var iid = IidIFileOpenDialog;
                 var hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out var dialogObj);
-                if (hr != 0 || dialogObj == null) return null;
+                if (hr != 0 || dialogObj == null)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] CoCreateInstance(IFileOpenDialog) failed: hr=0x" + hr.ToString("X8"));
+                    return null;
+                }
                 dialog = (IFileOpenDialog)dialogObj;
 
-                // 设置选项
-                uint options = FOS_PICKFILES | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST | FOS_NOCHANGEDIR;
+                // Open 选项：C2.4 删除 FOS_PICKFILES，新增 FOS_FORCEFILESYSTEM。
+                uint options = FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
                 dialog.SetOptions(options);
 
-                // 设置过滤器
                 SetDialogFilter(dialog, filter);
 
-                // 设置标题
                 if (!string.IsNullOrEmpty(title)) dialog.SetTitle(title);
 
                 // 强制初始目录：SetFolder（非 SetDefaultFolder），对抗目录记忆
@@ -176,26 +228,50 @@ namespace ElectricalSim.Platform
                 {
                     var iidShell = IidIShellItem;
                     hr = SHCreateItemFromParsingName(initialDirectory, IntPtr.Zero, ref iidShell, out folderItem);
-                    if (hr == 0 && folderItem != null)
+                    if (hr != 0 || folderItem == null)
                     {
-                        dialog.SetFolder(folderItem);
+                        error = UserFacingFailureMessage;
+                        Debug.LogError("[WindowsFileDialog] SHCreateItemFromParsingName failed: hr=0x" + hr.ToString("X8") + " dir=" + initialDirectory);
+                        return null;
                     }
+                    dialog.SetFolder(folderItem);
                 }
 
-                // 设置默认扩展名
-                if (!string.IsNullOrEmpty(extension)) dialog.SetFileNameLabel(extension);
+                // OpenFile 不设置默认扩展名（C2.4 契约）
 
                 var showHr = dialog.Show(GetActiveWindow());
-                if (showHr != 0) return null; // 用户取消或失败
+                if (showHr != 0)
+                {
+                    if (showHr != ERROR_CANCELLED_HRESULT)
+                    {
+                        error = UserFacingFailureMessage;
+                        Debug.LogError("[WindowsFileDialog] IFileOpenDialog.Show failed: hr=0x" + showHr.ToString("X8"));
+                    }
+                    // else 用户取消：error 保持 null
+                    return null;
+                }
 
                 dialog.GetResult(out resultItem);
-                if (resultItem == null) return null;
+                if (resultItem == null)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileOpenDialog.GetResult returned null.");
+                    return null;
+                }
 
                 resultItem.GetDisplayName(SIGDN_FILESYSPATH, out var path);
+                if (string.IsNullOrEmpty(path))
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileOpenDialog.GetDisplayName returned empty path.");
+                    return null;
+                }
                 return path;
             }
-            catch
+            catch (Exception ex)
             {
+                error = UserFacingFailureMessage;
+                Debug.LogError("[WindowsFileDialog] OpenFile exception: " + ex);
                 return null;
             }
             finally
@@ -206,14 +282,24 @@ namespace ElectricalSim.Platform
             }
         }
 
-        /// <summary>
-        /// 保存文件对话框。用户取消或调用失败返回 null。
-        /// 使用现代 IFileSaveDialog + SetFolder 强制初始目录；对抗 Windows 目录记忆。
-        /// Windows 自身处理覆盖确认（FOS_OVERWRITEPROMPT）。默认扩展名通过 SetFileNameLabel 设置。
-        /// 返回前去除末尾重复的 .spicejson 扩展名，避免 .spicejson.spicejson。
-        /// </summary>
+        // ==================== SaveFile 重载 ====================
+
+        /// <summary>5 参兼容入口：不区分失败与取消。新调用方应使用 6 参带 out error 重载。</summary>
         public static string SaveFile(string title, string filter, string extension, string initialDirectory, string defaultFileName)
         {
+            return SaveFile(title, filter, extension, initialDirectory, defaultFileName, out _);
+        }
+
+        /// <summary>
+        /// 保存文件对话框（主入口）。用户取消返回 null 且 error=null；
+        /// COM 创建、SetFolder、Show 非取消失败、GetResult、GetDisplayName 失败返回 null 且 error=用户可见消息。
+        /// 使用 SetDefaultExtension 设置默认扩展名（C2.4 修复：不再误用 SetFileNameLabel）。
+        /// 默认文件名不含扩展名，由对话框补全；返回前 StripTrailingDuplicateSpiceJson 去重，
+        /// C1 的 NormalizeExtension 仍会做二次保障，确保不产生 .spicejson.spicejson。
+        /// </summary>
+        public static string SaveFile(string title, string filter, string extension, string initialDirectory, string defaultFileName, out string error)
+        {
+            error = null;
             IFileSaveDialog dialog = null;
             IShellItem folderItem = null;
             IShellItem resultItem = null;
@@ -222,21 +308,27 @@ namespace ElectricalSim.Platform
                 var clsid = ClsidFileSaveDialog;
                 var iid = IidIFileSaveDialog;
                 var hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out var dialogObj);
-                if (hr != 0 || dialogObj == null) return null;
+                if (hr != 0 || dialogObj == null)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] CoCreateInstance(IFileSaveDialog) failed: hr=0x" + hr.ToString("X8"));
+                    return null;
+                }
                 dialog = (IFileSaveDialog)dialogObj;
 
-                // 设置选项
-                uint options = FOS_PICKFILES | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT | FOS_NOCHANGEDIR;
+                // Save 选项：C2.4 删除 FOS_PICKFILES，新增 FOS_FORCEFILESYSTEM。
+                uint options = FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR;
                 dialog.SetOptions(options);
 
-                // 设置过滤器
                 SetDialogFilter(dialog, filter);
 
-                // 设置默认扩展名（IFileDialog 通过 SetFileNameLabel 不直接设置扩展名，
-                // 真正的默认扩展名由用户输入文件名 + defExt 补全。这里用 SetFileName 设置不含扩展名的默认文件名）
-                if (!string.IsNullOrEmpty(extension)) dialog.SetFileNameLabel(extension);
+                // C2.4 修复：用 SetDefaultExtension 设置默认扩展名（不再误用 SetFileNameLabel）。
+                // SetDefaultExtension 位于 IFileDialog vtable 第 18 槽位，之前因 vtable 错位而无法调用。
+                if (!string.IsNullOrEmpty(extension))
+                {
+                    dialog.SetDefaultExtension(extension);
+                }
 
-                // 设置标题
                 if (!string.IsNullOrEmpty(title)) dialog.SetTitle(title);
 
                 // 强制初始目录：SetFolder（非 SetDefaultFolder），对抗目录记忆
@@ -244,32 +336,57 @@ namespace ElectricalSim.Platform
                 {
                     var iidShell = IidIShellItem;
                     hr = SHCreateItemFromParsingName(initialDirectory, IntPtr.Zero, ref iidShell, out folderItem);
-                    if (hr == 0 && folderItem != null)
+                    if (hr != 0 || folderItem == null)
                     {
-                        dialog.SetFolder(folderItem);
+                        error = UserFacingFailureMessage;
+                        Debug.LogError("[WindowsFileDialog] SHCreateItemFromParsingName failed: hr=0x" + hr.ToString("X8") + " dir=" + initialDirectory);
+                        return null;
                     }
+                    dialog.SetFolder(folderItem);
                 }
 
-                // 设置默认文件名（不含扩展名，由对话框默认扩展名机制补全）
+                // 默认文件名（不含扩展名，由对话框默认扩展名机制补全）
                 if (!string.IsNullOrEmpty(defaultFileName))
                 {
-                    // 去除默认文件名中可能预置的扩展名，由对话框统一补全
                     var nameNoExt = StripSpiceJsonExtension(defaultFileName);
                     dialog.SetFileName(nameNoExt);
                 }
 
                 var showHr = dialog.Show(GetActiveWindow());
-                if (showHr != 0) return null; // 用户取消或失败
+                if (showHr != 0)
+                {
+                    if (showHr != ERROR_CANCELLED_HRESULT)
+                    {
+                        error = UserFacingFailureMessage;
+                        Debug.LogError("[WindowsFileDialog] IFileSaveDialog.Show failed: hr=0x" + showHr.ToString("X8"));
+                    }
+                    // else 用户取消：error 保持 null
+                    return null;
+                }
 
                 dialog.GetResult(out resultItem);
-                if (resultItem == null) return null;
+                if (resultItem == null)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileSaveDialog.GetResult returned null.");
+                    return null;
+                }
 
                 resultItem.GetDisplayName(SIGDN_FILESYSPATH, out var path);
-                // 去除末尾重复的 .spicejson 扩展名，避免 .spicejson.spicejson
+                if (string.IsNullOrEmpty(path))
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileSaveDialog.GetDisplayName returned empty path.");
+                    return null;
+                }
+                // 去除末尾重复的 .spicejson 扩展名，避免 .spicejson.spicejson。
+                // C1 的 NormalizeExtension 仍会做二次保障。
                 return StripTrailingDuplicateSpiceJson(path);
             }
-            catch
+            catch (Exception ex)
             {
+                error = UserFacingFailureMessage;
+                Debug.LogError("[WindowsFileDialog] SaveFile exception: " + ex);
                 return null;
             }
             finally
@@ -350,9 +467,6 @@ namespace ElectricalSim.Platform
             }
             return path;
         }
-
-        [DllImport("ole32.dll")]
-        private static extern int CoCreateInstance([In] ref Guid rclsid, IntPtr pUnkOuter, int dwClsContext, [In] ref Guid riid, out object ppv);
     }
 #endif
 }
