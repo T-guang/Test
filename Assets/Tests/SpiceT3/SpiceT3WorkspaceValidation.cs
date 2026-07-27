@@ -99,6 +99,9 @@ namespace ElectricalSim.Spice.T3
             // C2.4 收口：现代文件对话框 COM 契约 — SetDefaultExtension 接口存在、失败与取消可区分
             ValidateFileDialogSetDefaultExtensionInterfaceExists();
             ValidateFileDialogCancelVsFailureDistinguishable();
+            // C2.5 收口：IModalWindow.Show [PreserveSig] + HRESULT 三类分类纯函数
+            ValidateFileDialogShowHasPreserveSig();
+            ValidateFileDialogShowHResultClassification();
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);
@@ -3430,6 +3433,97 @@ namespace ElectricalSim.Spice.T3
             {
                 CleanupTempDir(tempDir);
             }
+#endif
+        }
+
+        // C2.5：验证 IFileOpenDialog / IFileSaveDialog 的 Show 方法标注了 [PreserveSig] 且返回 int。
+        // 缺失 [PreserveSig] 时 .NET COM interop 会把失败 HRESULT（含 ERROR_CANCELLED）转成
+        // COMException 抛出，导致取消被 catch 块误判为 failure，error 被错误设为非空。
+        private static void ValidateFileDialogShowHasPreserveSig()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            var openType = dialogType.GetNestedType("IFileOpenDialog", System.Reflection.BindingFlags.NonPublic);
+            if (openType == null) throw new InvalidOperationException("IFileOpenDialog 接口应存在。");
+            var saveType = dialogType.GetNestedType("IFileSaveDialog", System.Reflection.BindingFlags.NonPublic);
+            if (saveType == null) throw new InvalidOperationException("IFileSaveDialog 接口应存在。");
+
+            ValidateShowPreserveSigOnInterface(openType, "IFileOpenDialog");
+            ValidateShowPreserveSigOnInterface(saveType, "IFileSaveDialog");
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        private static void ValidateShowPreserveSigOnInterface(System.Type interfaceType, string label)
+        {
+            var showMethod = interfaceType.GetMethod("Show");
+            if (showMethod == null)
+                throw new InvalidOperationException(label + " 应声明 Show 方法。");
+            // 返回类型必须为 int（HRESULT 有符号 32 位），不得为 uint 或 void
+            if (showMethod.ReturnType != typeof(int))
+                throw new InvalidOperationException(label + ".Show 返回类型应为 int（HRESULT），实际：" + showMethod.ReturnType);
+            // 必须标注 [PreserveSig]，否则失败 HRESULT 会被 interop 转成异常
+            var preserveSigAttrs = showMethod.GetCustomAttributes(typeof(System.Runtime.InteropServices.PreserveSigAttribute), false);
+            if (preserveSigAttrs == null || preserveSigAttrs.Length == 0)
+                throw new InvalidOperationException(label + ".Show 必须标注 [PreserveSig]（C2.5），否则 ERROR_CANCELLED 会被误判为 failure。");
+        }
+#endif
+
+        // C2.5：通过纯函数 ClassifyShowHResult 覆盖三类 HRESULT 分支：
+        //   0                      → Success
+        //   ERROR_CANCELLED_HRESULT → Cancelled（用户取消，error=null）
+        //   任意其他非零            → Failure
+        // 该测试不依赖 COM 运行时，直接反射调用 internal 纯函数验证分类逻辑。
+        private static void ValidateFileDialogShowHResultClassification()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            var dialogType = typeof(ElectricalSim.Platform.WindowsFileDialog);
+            var helper = dialogType.GetMethod("ClassifyShowHResult", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (helper == null)
+                throw new InvalidOperationException("ClassifyShowHResult 纯函数应存在（C2.5）。");
+            if (helper.ReturnType == null || helper.ReturnType.FullName != "ElectricalSim.Platform.WindowsFileDialog+DialogShowResult")
+                throw new InvalidOperationException("ClassifyShowHResult 返回类型应为 DialogShowResult 枚举。");
+            var parameters = helper.GetParameters();
+            if (parameters.Length != 1 || parameters[0].ParameterType != typeof(int))
+                throw new InvalidOperationException("ClassifyShowHResult 应接受单个 int 参数（HRESULT）。");
+
+            // 取消的 HRESULT 常量值（ERROR_CANCELLED 包装为 HRESULT）
+            const int ErrorCancelledHresult = unchecked((int)0x800704C7);
+            // 任意其他失败 HRESULT（E_FAIL = 0x80004005；E_INVALIDARG = 0x80070057）
+            const int EFailHresult = unchecked((int)0x80004005);
+            const int EInvalidargHresult = unchecked((int)0x80070057);
+            // batchmode 下 Show 常返回的 HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE) = 0x800706F4
+            const int ErrorInvalidWindowHandleHresult = unchecked((int)0x800706F4);
+
+            // 分支 1：hr == 0 → Success
+            var successResult = helper.Invoke(null, new object[] { 0 });
+            if (successResult == null || successResult.ToString() != "Success")
+                throw new InvalidOperationException("ClassifyShowHResult(0) 应返回 Success，实际：" + (successResult?.ToString() ?? "null"));
+
+            // 分支 2：hr == ERROR_CANCELLED_HRESULT → Cancelled
+            var cancelledResult = helper.Invoke(null, new object[] { ErrorCancelledHresult });
+            if (cancelledResult == null || cancelledResult.ToString() != "Cancelled")
+                throw new InvalidOperationException("ClassifyShowHResult(ERROR_CANCELLED) 应返回 Cancelled，实际：" + (cancelledResult?.ToString() ?? "null"));
+
+            // 分支 3a：E_FAIL → Failure
+            var failResult1 = helper.Invoke(null, new object[] { EFailHresult });
+            if (failResult1 == null || failResult1.ToString() != "Failure")
+                throw new InvalidOperationException("ClassifyShowHResult(E_FAIL) 应返回 Failure，实际：" + (failResult1?.ToString() ?? "null"));
+
+            // 分支 3b：E_INVALIDARG → Failure
+            var failResult2 = helper.Invoke(null, new object[] { EInvalidargHresult });
+            if (failResult2 == null || failResult2.ToString() != "Failure")
+                throw new InvalidOperationException("ClassifyShowHResult(E_INVALIDARG) 应返回 Failure，实际：" + (failResult2?.ToString() ?? "null"));
+
+            // 分支 3c：batchmode 常见的 ERROR_INVALID_WINDOW_HANDLE → Failure
+            var failResult3 = helper.Invoke(null, new object[] { ErrorInvalidWindowHandleHresult });
+            if (failResult3 == null || failResult3.ToString() != "Failure")
+                throw new InvalidOperationException("ClassifyShowHResult(ERROR_INVALID_WINDOW_HANDLE) 应返回 Failure，实际：" + (failResult3?.ToString() ?? "null"));
+
+            // 负数 HRESULT（如 0xFFFFFFFF 作为 int = -1）也应为 Failure，不应误判为 Success 或 Cancelled
+            var failResult4 = helper.Invoke(null, new object[] { -1 });
+            if (failResult4 == null || failResult4.ToString() != "Failure")
+                throw new InvalidOperationException("ClassifyShowHResult(-1) 应返回 Failure，实际：" + (failResult4?.ToString() ?? "null"));
 #endif
         }
 

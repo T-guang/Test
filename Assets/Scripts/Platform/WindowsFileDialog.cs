@@ -24,6 +24,15 @@ namespace ElectricalSim.Platform
     ///    且 error="无法打开文件选择窗口，请稍后重试。"。技术详情写 Debug.LogError，
     ///    不向用户展示 HRESULT、路径或堆栈。不得回退到旧 GetOpenFileName/GetSaveFileName。
     /// 6. COM 对象与 IShellItem 在 finally 中通过 Marshal.ReleaseComObject 释放。
+    ///
+    /// C2.5 契约（取消 HRESULT 判定修正）：
+    /// 7. IModalWindow.Show 必须标注 [PreserveSig] 并返回 int（HRESULT）。
+    ///    缺失 [PreserveSig] 时 .NET COM interop 会把失败 HRESULT 转成 COMException 抛出，
+    ///    导致 ERROR_CANCELLED 走 catch 分支被误判为 failure，error 被错误设为非空。
+    /// 8. 取消判定通过纯函数 ClassifyShowHResult(int hr) 分类：
+    ///    hr==0 → Success；hr==ERROR_CANCELLED_HRESULT → Cancelled（error=null）；
+    ///    其余 → Failure（error=UserFacingFailureMessage）。
+    ///    该 helper 是 internal 纯函数，可被 T3 反射测试覆盖三类分支。
     /// </summary>
     public static class WindowsFileDialog
     {
@@ -50,6 +59,24 @@ namespace ElectricalSim.Platform
 
         // 用户可见错误消息（不暴露技术详情）
         private const string UserFacingFailureMessage = "无法打开文件选择窗口，请稍后重试。";
+
+        // C2.5：IModalWindow.Show 的 HRESULT 分类。供 OpenFile/SaveFile 与 T3 测试共用。
+        // 提取为纯函数是为了让 T3 能在不真实打开 COM 对话框的前提下覆盖三类分支。
+        internal enum DialogShowResult { Success, Cancelled, Failure }
+
+        /// <summary>
+        /// C2.5：对 IModalWindow.Show 返回的 HRESULT 进行分类。
+        ///   hr == 0                      → Success（继续 GetResult）
+        ///   hr == ERROR_CANCELLED_HRESULT → Cancelled（用户取消，error=null，不写日志）
+        ///   其余非零                      → Failure（error=用户可见消息，技术详情写 Debug.LogError）
+        /// 该方法是纯函数，无副作用，可被 T3 反射直接覆盖三类分支。
+        /// </summary>
+        internal static DialogShowResult ClassifyShowHResult(int hr)
+        {
+            if (hr == 0) return DialogShowResult.Success;
+            if (hr == ERROR_CANCELLED_HRESULT) return DialogShowResult.Cancelled;
+            return DialogShowResult.Failure;
+        }
 
         // COM 接口 vtable 顺序说明：
         // IUnknown(3) + IModalWindow.Show(1) + IFileDialog(19) + 派生扩展。
@@ -85,7 +112,10 @@ namespace ElectricalSim.Platform
             uint AddRef();
             uint Release();
             // IModalWindow
-            uint Show([In] IntPtr hwndOwner);
+            // C2.5：[PreserveSig] 保留 HRESULT 返回值，避免 interop 把 ERROR_CANCELLED 转成异常。
+            // 返回 int（HRESULT 是有符号 32 位）。无此属性时取消会被 catch 块误判为 failure。
+            [PreserveSig]
+            int Show([In] IntPtr hwndOwner);
             // IFileDialog（19 个方法，顺序与 IFileSaveDialog 完全一致）
             void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
             void SetFileTypeIndex([In] uint iFileType);
@@ -126,7 +156,10 @@ namespace ElectricalSim.Platform
             uint AddRef();
             uint Release();
             // IModalWindow
-            uint Show([In] IntPtr hwndOwner);
+            // C2.5：[PreserveSig] 保留 HRESULT 返回值，避免 interop 把 ERROR_CANCELLED 转成异常。
+            // 返回 int（HRESULT 是有符号 32 位）。无此属性时取消会被 catch 块误判为 failure。
+            [PreserveSig]
+            int Show([In] IntPtr hwndOwner);
             // IFileDialog（19 个方法，顺序与 IFileOpenDialog 完全一致）
             void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
             void SetFileTypeIndex([In] uint iFileType);
@@ -240,16 +273,20 @@ namespace ElectricalSim.Platform
                 // OpenFile 不设置默认扩展名（C2.4 契约）
 
                 var showHr = dialog.Show(GetActiveWindow());
-                if (showHr != 0)
+                // C2.5：用纯函数 ClassifyShowHResult 分类，确保取消与失败严格区分。
+                var showClassification = ClassifyShowHResult(showHr);
+                if (showClassification == DialogShowResult.Cancelled)
                 {
-                    if (showHr != ERROR_CANCELLED_HRESULT)
-                    {
-                        error = UserFacingFailureMessage;
-                        Debug.LogError("[WindowsFileDialog] IFileOpenDialog.Show failed: hr=0x" + showHr.ToString("X8"));
-                    }
-                    // else 用户取消：error 保持 null
+                    // 用户取消：error 保持 null，不写日志
                     return null;
                 }
+                if (showClassification == DialogShowResult.Failure)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileOpenDialog.Show failed: hr=0x" + showHr.ToString("X8"));
+                    return null;
+                }
+                // Success：继续 GetResult
 
                 dialog.GetResult(out resultItem);
                 if (resultItem == null)
@@ -353,16 +390,20 @@ namespace ElectricalSim.Platform
                 }
 
                 var showHr = dialog.Show(GetActiveWindow());
-                if (showHr != 0)
+                // C2.5：用纯函数 ClassifyShowHResult 分类，确保取消与失败严格区分。
+                var showClassification = ClassifyShowHResult(showHr);
+                if (showClassification == DialogShowResult.Cancelled)
                 {
-                    if (showHr != ERROR_CANCELLED_HRESULT)
-                    {
-                        error = UserFacingFailureMessage;
-                        Debug.LogError("[WindowsFileDialog] IFileSaveDialog.Show failed: hr=0x" + showHr.ToString("X8"));
-                    }
-                    // else 用户取消：error 保持 null
+                    // 用户取消：error 保持 null，不写日志
                     return null;
                 }
+                if (showClassification == DialogShowResult.Failure)
+                {
+                    error = UserFacingFailureMessage;
+                    Debug.LogError("[WindowsFileDialog] IFileSaveDialog.Show failed: hr=0x" + showHr.ToString("X8"));
+                    return null;
+                }
+                // Success：继续 GetResult
 
                 dialog.GetResult(out resultItem);
                 if (resultItem == null)
