@@ -17,7 +17,8 @@ namespace ElectricalSim.Spice.Core
         Inductor,
         Ground,
         VoltageProbe,
-        CurrentProbe
+        CurrentProbe,
+        AcVoltageSource
     }
 
     public enum SpiceParameterKey
@@ -27,7 +28,8 @@ namespace ElectricalSim.Spice.Core
         SwitchClosed,
         Resistance,
         Capacitance,
-        Inductance
+        Inductance,
+        AcMagnitude
     }
 
     /// <summary>
@@ -42,19 +44,27 @@ namespace ElectricalSim.Spice.Core
 
         private readonly Dictionary<SpiceParameterKey, double> parameters = new Dictionary<SpiceParameterKey, double>();
 
-        public SpiceComponentModel(string instanceId, SpiceComponentKind kind)
+        public SpiceComponentModel(string instanceId, SpiceComponentKind kind, double acPhaseDegrees = 0d)
         {
             InstanceId = instanceId;
             Kind = kind;
+            AcPhaseDegrees = acPhaseDegrees;
         }
 
         public string InstanceId { get; }
         public SpiceComponentKind Kind { get; }
         public IReadOnlyDictionary<SpiceParameterKey, double> Parameters => parameters;
+        public double AcPhaseDegrees { get; }
 
         public static SpiceComponentModel DcVoltageSource(string instanceId, double volts)
         {
             return new SpiceComponentModel(instanceId, SpiceComponentKind.DcVoltageSource).With(SpiceParameterKey.DcVoltage, volts);
+        }
+
+        public static SpiceComponentModel AcVoltageSource(string instanceId, double magnitudeVolts, double phaseDegrees)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.AcVoltageSource, SpiceAnalysisLimits.NormalizePhaseDegrees(phaseDegrees))
+                .With(SpiceParameterKey.AcMagnitude, magnitudeVolts);
         }
 
         public static SpiceComponentModel Resistor(string instanceId, double ohms)
@@ -185,6 +195,17 @@ namespace ElectricalSim.Spice.Core
     /// </summary>
     public sealed class SpiceCircuitModel
     {
+        public SpiceCircuitModel()
+            : this(new SpiceAnalysisSettings(SpiceAnalysisMode.DcOperatingPoint, SpiceAnalysisLimits.DefaultFrequencyHz))
+        {
+        }
+
+        public SpiceCircuitModel(SpiceAnalysisSettings analysisSettings)
+        {
+            AnalysisSettings = (analysisSettings ?? throw new ArgumentNullException(nameof(analysisSettings))).Copy();
+        }
+
+        public SpiceAnalysisSettings AnalysisSettings { get; }
         public List<SpiceComponentModel> Components { get; } = new List<SpiceComponentModel>();
         public List<SpiceWireModel> Wires { get; } = new List<SpiceWireModel>();
     }

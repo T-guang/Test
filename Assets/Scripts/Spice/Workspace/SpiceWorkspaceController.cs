@@ -783,6 +783,31 @@ namespace ElectricalSim.Spice.Workspace
             return true;
         }
 
+        /// <summary>
+        /// Changes analysis semantics through the workspace model so D1 revision protection
+        /// invalidates any in-flight calculation. Formal AC UI is intentionally deferred.
+        /// </summary>
+        public bool TrySetAnalysisMode(SpiceAnalysisMode mode)
+        {
+            EnsureInitialized();
+            return CanModifyElectricalModel() && Model.TrySetAnalysisMode(mode);
+        }
+
+        public bool TrySetAcFrequency(double frequencyHz)
+        {
+            EnsureInitialized();
+            return CanModifyElectricalModel() && Model.TrySetAcFrequency(frequencyHz);
+        }
+
+        public bool TrySetAcVoltageSourceParameters(string instanceId, double magnitudeVolts, double phaseDegrees)
+        {
+            EnsureInitialized();
+            if (!CanModifyElectricalModel() || !Model.TrySetAcVoltageSourceParameters(instanceId, magnitudeVolts, phaseDegrees)) return false;
+            if (componentViews.TryGetValue(instanceId, out var view)) view.RefreshAnnotation();
+            if (selectedComponent != null && string.Equals(selectedComponent.InstanceId, instanceId, StringComparison.Ordinal)) RefreshParameterPanel();
+            return true;
+        }
+
         internal SpiceWorkspaceComponentView GetComponentViewForTesting(string instanceId)
         {
             componentViews.TryGetValue(instanceId, out var view);

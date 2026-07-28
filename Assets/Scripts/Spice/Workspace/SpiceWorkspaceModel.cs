@@ -16,9 +16,13 @@ namespace ElectricalSim.Spice.Workspace
         private readonly List<SpiceWorkspaceComponentData> components = new List<SpiceWorkspaceComponentData>();
         private readonly List<SpiceWorkspaceWireData> wires = new List<SpiceWorkspaceWireData>();
         private readonly Dictionary<SpiceComponentKind, int> nextInstanceNumbers = new Dictionary<SpiceComponentKind, int>();
+        private SpiceAnalysisSettings analysisSettings = new SpiceAnalysisSettings(SpiceAnalysisMode.DcOperatingPoint, SpiceAnalysisLimits.DefaultFrequencyHz);
 
         public IReadOnlyList<SpiceWorkspaceComponentData> Components => components;
         public IReadOnlyList<SpiceWorkspaceWireData> Wires => wires;
+        public SpiceAnalysisMode AnalysisMode => analysisSettings.Mode;
+        public double AcFrequencyHz => analysisSettings.FrequencyHz;
+        public SpiceAnalysisSettings AnalysisSettingsSnapshot => analysisSettings.Copy();
         public event Action<SpiceWorkspaceChange> Changed;
 
         public SpiceWorkspaceComponentData AddComponent(SpiceComponentKind kind, Vector2 position)
@@ -115,7 +119,43 @@ namespace ElectricalSim.Spice.Workspace
         {
             var component = FindComponent(instanceId);
             if (component == null || !IsValidParameter(component.Kind, value)) return false;
+            if (component.SiValue == value) return true;
             component.SiValue = value;
+            Changed?.Invoke(SpiceWorkspaceChange.Parameter);
+            return true;
+        }
+
+        public bool TrySetAnalysisMode(SpiceAnalysisMode mode)
+        {
+            if (!Enum.IsDefined(typeof(SpiceAnalysisMode), mode)) return false;
+            if (analysisSettings.Mode == mode) return true;
+            analysisSettings = new SpiceAnalysisSettings(mode, analysisSettings.FrequencyHz);
+            Changed?.Invoke(SpiceWorkspaceChange.Parameter);
+            return true;
+        }
+
+        public bool TrySetAcFrequency(double frequencyHz)
+        {
+            if (!SpiceAnalysisLimits.IsValidFrequency(frequencyHz)) return false;
+            if (analysisSettings.FrequencyHz == frequencyHz) return true;
+            analysisSettings = new SpiceAnalysisSettings(analysisSettings.Mode, frequencyHz);
+            Changed?.Invoke(SpiceWorkspaceChange.Parameter);
+            return true;
+        }
+
+        public bool TrySetAcVoltageSourceParameters(string instanceId, double magnitudeVolts, double phaseDegrees)
+        {
+            var component = FindComponent(instanceId);
+            if (component == null || component.Kind != SpiceComponentKind.AcVoltageSource ||
+                !SpiceAnalysisLimits.IsValidAcMagnitude(magnitudeVolts) || !SpiceAnalysisLimits.IsFinite(phaseDegrees))
+            {
+                return false;
+            }
+
+            var normalizedPhase = SpiceAnalysisLimits.NormalizePhaseDegrees(phaseDegrees);
+            if (component.SiValue == magnitudeVolts && component.AcPhaseDegrees == normalizedPhase) return true;
+            component.SiValue = magnitudeVolts;
+            component.AcPhaseDegrees = normalizedPhase;
             Changed?.Invoke(SpiceWorkspaceChange.Parameter);
             return true;
         }
@@ -139,7 +179,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public SpiceCircuitModel BuildCircuitModel()
         {
-            var circuit = new SpiceCircuitModel();
+            var circuit = new SpiceCircuitModel(analysisSettings.Copy());
             foreach (var component in components)
             {
                 circuit.Components.Add(component.ToSpiceComponentModel());
@@ -162,6 +202,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
             if (kind == SpiceComponentKind.IdealSwitch) return value == 0d || value == 1d;
+            if (kind == SpiceComponentKind.AcVoltageSource) return SpiceAnalysisLimits.IsValidAcMagnitude(value);
             // 二极管使用固定 D_GENERIC 模型，GND 与两类探针无参数；均不允许通过参数区写入内部值。
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
                 (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && value > 0d);
@@ -174,7 +215,8 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
                 kind == SpiceComponentKind.Resistor || kind == SpiceComponentKind.Capacitor ||
-                kind == SpiceComponentKind.Inductor || kind == SpiceComponentKind.IdealSwitch;
+                kind == SpiceComponentKind.Inductor || kind == SpiceComponentKind.IdealSwitch ||
+                kind == SpiceComponentKind.AcVoltageSource;
         }
 
         /// <summary>
@@ -185,6 +227,7 @@ namespace ElectricalSim.Spice.Workspace
             switch (kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return "source";
+                case SpiceComponentKind.AcVoltageSource: return "ac-source";
                 case SpiceComponentKind.DcCurrentSource: return "current-source";
                 case SpiceComponentKind.IdealSwitch: return "switch";
                 case SpiceComponentKind.SiliconDiode: return "diode";
@@ -221,21 +264,13 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string BuildInstanceId(SpiceComponentKind kind, int number)
         {
-            var prefix = kind == SpiceComponentKind.DcVoltageSource ? "source" :
-                kind == SpiceComponentKind.DcCurrentSource ? "current-source" :
-                kind == SpiceComponentKind.IdealSwitch ? "switch" :
-                kind == SpiceComponentKind.SiliconDiode ? "diode" :
-                kind == SpiceComponentKind.Resistor ? "resistor" :
-                kind == SpiceComponentKind.Capacitor ? "capacitor" :
-                kind == SpiceComponentKind.Inductor ? "inductor" :
-                kind == SpiceComponentKind.VoltageProbe ? "voltage-probe" :
-                kind == SpiceComponentKind.CurrentProbe ? "current-probe" : "ground";
-            return prefix + "-" + number.ToString("D3", CultureInfo.InvariantCulture);
+            return GetExpectedPrefix(kind) + "-" + number.ToString("D3", CultureInfo.InvariantCulture);
         }
 
         private static double DefaultValue(SpiceComponentKind kind)
         {
             return kind == SpiceComponentKind.DcVoltageSource ? 10d :
+                kind == SpiceComponentKind.AcVoltageSource ? 1d :
                 kind == SpiceComponentKind.DcCurrentSource ? 0.001d :
                 kind == SpiceComponentKind.IdealSwitch ? 0d :
                 kind == SpiceComponentKind.SiliconDiode ? 0d :
@@ -256,12 +291,13 @@ namespace ElectricalSim.Spice.Workspace
         {
         }
 
-        public SpiceWorkspaceComponentData(string instanceId, SpiceComponentKind kind, Vector2 position, double siValue, int rotationQuarterTurns)
+        public SpiceWorkspaceComponentData(string instanceId, SpiceComponentKind kind, Vector2 position, double siValue, int rotationQuarterTurns, double acPhaseDegrees = 0d)
         {
             InstanceId = instanceId;
             Kind = kind;
             Position = position;
             SiValue = siValue;
+            AcPhaseDegrees = SpiceAnalysisLimits.NormalizePhaseDegrees(acPhaseDegrees);
             RotationQuarterTurns = ((rotationQuarterTurns % 4) + 4) % 4;
         }
 
@@ -269,6 +305,7 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceComponentKind Kind { get; }
         public Vector2 Position { get; set; }
         public double SiValue { get; set; }
+        public double AcPhaseDegrees { get; set; }
         /// <summary>
         /// 离散旋转状态（0-3，表示顺时针 90 度的倍数）。
         /// 旋转只影响视觉布局，不写入 SpiceCircuitModel，也不使 DC 结果过期。
@@ -283,6 +320,7 @@ namespace ElectricalSim.Spice.Workspace
             switch (Kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return SpiceComponentModel.DcVoltageSource(InstanceId, SiValue);
+                case SpiceComponentKind.AcVoltageSource: return SpiceComponentModel.AcVoltageSource(InstanceId, SiValue, AcPhaseDegrees);
                 case SpiceComponentKind.DcCurrentSource: return SpiceComponentModel.DcCurrentSource(InstanceId, SiValue);
                 case SpiceComponentKind.IdealSwitch: return SpiceComponentModel.IdealSwitch(InstanceId, SiValue > 0.5d);
                 case SpiceComponentKind.SiliconDiode: return SpiceComponentModel.SiliconDiode(InstanceId);
@@ -366,7 +404,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public static string[] UnitsFor(SpiceComponentKind kind)
         {
-            return kind == SpiceComponentKind.DcVoltageSource ? VoltageUnits :
+            return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.AcVoltageSource ? VoltageUnits :
                 kind == SpiceComponentKind.DcCurrentSource ? CurrentUnits :
                 kind == SpiceComponentKind.Resistor ? ResistanceUnits :
                 kind == SpiceComponentKind.Capacitor ? CapacitanceUnits :

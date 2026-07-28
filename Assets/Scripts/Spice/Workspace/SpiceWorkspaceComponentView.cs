@@ -242,6 +242,7 @@ namespace ElectricalSim.Spice.Workspace
             switch (data.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource:
+                case SpiceComponentKind.AcVoltageSource:
                     CreateCircle(symbol.transform, 21f, Vector2.zero);
                     CreateLine(symbol.transform, new Vector2(-13f, 0f), new Vector2(13f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(0f, -13f), new Vector2(0f, 13f), 3f);
@@ -353,7 +354,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
             var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
-            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : "GND";
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.AcVoltageSource ? "VAC" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : "GND";
             return prefix + index.ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -362,7 +363,7 @@ namespace ElectricalSim.Spice.Workspace
     {
         public static string FormatParameter(SpiceComponentKind kind, double value)
         {
-            if (kind == SpiceComponentKind.DcVoltageSource) return Format(value) + " V";
+            if (kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.AcVoltageSource) return Format(value) + " V";
             if (kind == SpiceComponentKind.DcCurrentSource) return value >= 1d ? Format(value) + " A" : value >= 1e-3d ? Format(value / 1e-3d) + " mA" : Format(value / 1e-6d) + " μA";
             if (kind == SpiceComponentKind.IdealSwitch) return value > 0.5d ? "闭合" : "断开";
             if (kind == SpiceComponentKind.SiliconDiode) return "D_GENERIC";

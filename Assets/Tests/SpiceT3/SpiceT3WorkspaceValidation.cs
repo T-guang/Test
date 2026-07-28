@@ -23,6 +23,8 @@ namespace ElectricalSim.Spice.T3
             ValidateFailedRunOutcomePresentation();
             ValidateInstanceNamingReset();
             ValidateElectricalRevisionAndRunningMutationGuards();
+            ValidateAcAnalysisSettingsAndSnapshot();
+            ValidateAcAnalysisControllerRevisionAndRunningGuard();
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
@@ -970,6 +972,108 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("D1 验证无法执行受控底层参数变更。");
                 if (workspace.ElectricalRevisionForTesting <= revisionBeforeGuardedChanges)
                     throw new InvalidOperationException("绕过 UI 的模型变更仍应递增电气修订号。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcAnalysisSettingsAndSnapshot()
+        {
+            var model = new SpiceWorkspaceModel();
+            if (model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || Math.Abs(model.AcFrequencyHz - SpiceAnalysisLimits.DefaultFrequencyHz) > 1e-12d)
+                throw new InvalidOperationException("AC analysis defaults are incorrect.");
+
+            var changes = 0;
+            model.Changed += _ => changes++;
+            if (!model.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || changes != 1)
+                throw new InvalidOperationException("Changing to AC analysis should raise exactly one model change.");
+            if (!model.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || changes != 1)
+                throw new InvalidOperationException("Writing the same analysis mode should not raise a model change.");
+
+            foreach (var invalidFrequency in new[] { 0d, -1d, double.NaN, double.PositiveInfinity, SpiceAnalysisLimits.MinFrequencyHz * 0.5d, SpiceAnalysisLimits.MaxFrequencyHz * 2d })
+            {
+                if (model.TrySetAcFrequency(invalidFrequency))
+                    throw new InvalidOperationException("Invalid AC frequency was accepted.");
+            }
+            if (!model.TrySetAcFrequency(SpiceAnalysisLimits.MinFrequencyHz) || !model.TrySetAcFrequency(SpiceAnalysisLimits.MaxFrequencyHz))
+                throw new InvalidOperationException("AC frequency boundary was rejected.");
+            if (!model.TrySetAcFrequency(1000d)) throw new InvalidOperationException("Valid AC frequency was rejected.");
+            var changesAfterFrequency = changes;
+            if (!model.TrySetAcFrequency(1000d) || changes != changesAfterFrequency)
+                throw new InvalidOperationException("Writing the same AC frequency should not raise a model change.");
+
+            if (SpiceAnalysisLimits.NormalizePhaseDegrees(180d) != -180d ||
+                SpiceAnalysisLimits.NormalizePhaseDegrees(190d) != -170d ||
+                SpiceAnalysisLimits.NormalizePhaseDegrees(-190d) != 170d ||
+                SpiceAnalysisLimits.NormalizePhaseDegrees(540d) != -180d ||
+                SpiceAnalysisLimits.NormalizePhaseDegrees(-540d) != -180d ||
+                BitConverter.DoubleToInt64Bits(SpiceAnalysisLimits.NormalizePhaseDegrees(-0d)) < 0)
+                throw new InvalidOperationException("AC phase normalization is incorrect.");
+
+            var acSource = model.AddComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+            if (acSource.InstanceId != "ac-source-001" || Math.Abs(acSource.SiValue - 1d) > 1e-12d || acSource.AcPhaseDegrees != 0d)
+                throw new InvalidOperationException("AC voltage source defaults are incorrect.");
+            if (!SpiceParameterUnits.TryToSi(SpiceComponentKind.AcVoltageSource, 2d, "V", out var magnitude) || magnitude != 2d)
+                throw new InvalidOperationException("AC voltage magnitude unit conversion failed.");
+
+            changes = 0;
+            if (!model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, 30d) || changes != 1 ||
+                acSource.SiValue != 2d || acSource.AcPhaseDegrees != 30d)
+                throw new InvalidOperationException("AC source atomic parameter update failed.");
+            if (model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 0d, 45d) ||
+                acSource.SiValue != 2d || acSource.AcPhaseDegrees != 30d || changes != 1)
+                throw new InvalidOperationException("Invalid AC magnitude should reject the entire atomic update.");
+            if (model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 3d, double.NaN) ||
+                acSource.SiValue != 2d || acSource.AcPhaseDegrees != 30d || changes != 1)
+                throw new InvalidOperationException("Invalid AC phase should reject the entire atomic update.");
+            if (!model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, 390d) || acSource.AcPhaseDegrees != 30d || changes != 1)
+                throw new InvalidOperationException("Equivalent normalized AC phase should not raise a model change.");
+
+            var snapshot = model.BuildCircuitModel();
+            if (ReferenceEquals(snapshot.AnalysisSettings, model.AnalysisSettingsSnapshot) ||
+                snapshot.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency || snapshot.AnalysisSettings.FrequencyHz != 1000d)
+                throw new InvalidOperationException("Circuit snapshot did not copy immutable AC analysis settings.");
+            var snapshottedSource = snapshot.Components.Single(component => component.InstanceId == acSource.InstanceId);
+            if (snapshottedSource.GetRequiredParameter(SpiceParameterKey.AcMagnitude) != 2d || snapshottedSource.AcPhaseDegrees != 30d)
+                throw new InvalidOperationException("Circuit snapshot did not preserve AC source parameters.");
+
+            if (!model.TrySetAcFrequency(10000d) || !model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 3d, -190d))
+                throw new InvalidOperationException("Unable to mutate workspace after AC snapshot.");
+            if (snapshot.AnalysisSettings.FrequencyHz != 1000d || snapshottedSource.GetRequiredParameter(SpiceParameterKey.AcMagnitude) != 2d || snapshottedSource.AcPhaseDegrees != 30d)
+                throw new InvalidOperationException("AC circuit snapshot retained mutable workspace data.");
+        }
+
+        private static void ValidateAcAnalysisControllerRevisionAndRunningGuard()
+        {
+            var canvasRoot = new GameObject("SpiceAcAnalysisControllerValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var initialRevision = workspace.ElectricalRevisionForTesting;
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.ElectricalRevisionForTesting != initialRevision + 1)
+                    throw new InvalidOperationException("Controller analysis mode update did not advance D1 revision exactly once.");
+                if (!workspace.TrySetAcFrequency(2000d) || workspace.ElectricalRevisionForTesting != initialRevision + 2)
+                    throw new InvalidOperationException("Controller AC frequency update did not advance D1 revision exactly once.");
+
+                var acSource = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                var revisionAfterCreate = workspace.ElectricalRevisionForTesting;
+                if (acSource == null || !workspace.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, 30d) ||
+                    workspace.ElectricalRevisionForTesting != revisionAfterCreate + 1)
+                    throw new InvalidOperationException("Controller AC source update did not advance D1 revision exactly once.");
+                if (!workspace.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, 390d) ||
+                    workspace.ElectricalRevisionForTesting != revisionAfterCreate + 1)
+                    throw new InvalidOperationException("Equivalent AC source update changed D1 revision.");
+
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+                var guardedRevision = workspace.ElectricalRevisionForTesting;
+                if (workspace.TrySetAnalysisMode(SpiceAnalysisMode.DcOperatingPoint) || workspace.TrySetAcFrequency(500d) ||
+                    workspace.TrySetAcVoltageSourceParameters(acSource.InstanceId, 3d, 45d))
+                    throw new InvalidOperationException("Running calculation accepted an AC analysis mutation.");
+                if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.Model.AcFrequencyHz != 2000d ||
+                    acSource.SiValue != 2d || acSource.AcPhaseDegrees != 30d || workspace.ElectricalRevisionForTesting != guardedRevision)
+                    throw new InvalidOperationException("Rejected AC mutation changed model state or D1 revision.");
             }
             finally
             {
