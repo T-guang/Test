@@ -30,6 +30,9 @@ namespace ElectricalSim.Spice.T3
             ValidateCopyableOutcomeFailedState();
             ValidateCopyableOutcomeNonCopyableStates();
             ValidateCopyEligibilityDoesNotMutate();
+            ValidateClearWorkspaceSimulationPresentationState();
+            ValidateStaleNetlistCannotBeCopied();
+            ValidateImportResetsSimulationPresentationState();
             ValidateDrawingDataContractRoundTrip();
             ValidateDrawingTenDeviceTypesRoundTrip();
             ValidateDrawingRotationAndSwitchState();
@@ -642,6 +645,216 @@ namespace ElectricalSim.Spice.T3
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
+        }
+
+        private static void ValidateClearWorkspaceSimulationPresentationState()
+        {
+            var canvasRoot = new GameObject("SpiceD3ClearStateValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                workspace.SetSimulationOverrideForTesting((_, __) =>
+                    System.Threading.Tasks.Task.FromResult(CreateD3SuccessfulResult(resistor.InstanceId, "R1 n001 0 1000")));
+
+                var result = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (result == null || !result.Success || workspace.ResultState != SpiceWorkspaceResultState.Current)
+                    throw new InvalidOperationException("D3 清空验证无法建立 Current 结果状态。");
+                if (!workspace.TryGetCopyableOutcomeText(out _) || !workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("D3 清空验证的当前结果或网表未进入可复制状态。");
+
+                workspace.ClearWorkspace();
+
+                var resultText = bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText")?.GetComponent<Text>();
+                var diagnosticText = bindings.DiagnosticRoot.Find("DiagnosticScrollView/Viewport/Content/DiagnosticText")?.GetComponent<Text>();
+                var copyResult = bindings.ResultRoot.Find("ResultHeader/CopyResult")?.GetComponent<Button>();
+                var copyNetlist = bindings.NetlistRoot.Find("NetlistHeader/Copy")?.GetComponent<Button>();
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun ||
+                    workspace.Model.Components.Count != 0 || workspace.Model.Wires.Count != 0)
+                    throw new InvalidOperationException("ClearWorkspace 未恢复 NeverRun 空画布状态。");
+                if (resultText == null || resultText.text.Contains("D3_RESULT_MARKER") ||
+                    diagnosticText == null || !string.IsNullOrEmpty(diagnosticText.text))
+                    throw new InvalidOperationException("ClearWorkspace 后仍残留旧结果或诊断文本。");
+                if (workspace.TryGetCopyableOutcomeText(out _) || workspace.TryGetCopyableNetlistText(out _) ||
+                    copyResult == null || copyResult.interactable || copyNetlist == null || copyNetlist.interactable)
+                    throw new InvalidOperationException("ClearWorkspace 后结果或网表仍可复制。");
+                if (workspace.HasCurrentSpiceFilePath)
+                    throw new InvalidOperationException("ClearWorkspace 后仍保留当前 SPICE 文件路径。");
+
+                var recreated = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                if (recreated == null || recreated.InstanceId != "resistor-001")
+                    throw new InvalidOperationException("ClearWorkspace 后器件编号未从 1 重新开始。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+
+            var failedRoot = new GameObject("SpiceD3ClearFailedValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(failedRoot.transform, out var bindings);
+                workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var failed = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (failed == null || failed.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("D3 清空验证无法建立 Failed 诊断状态。");
+
+                workspace.ClearWorkspace();
+                var resultText = bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText")?.GetComponent<Text>();
+                var diagnosticText = bindings.DiagnosticRoot.Find("DiagnosticScrollView/Viewport/Content/DiagnosticText")?.GetComponent<Text>();
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun ||
+                    workspace.TryGetCopyableOutcomeText(out _) ||
+                    resultText == null || resultText.text.Contains("SPICE_GROUND_MISSING") ||
+                    diagnosticText == null || !string.IsNullOrEmpty(diagnosticText.text))
+                    throw new InvalidOperationException("清空 Failed 工作区后仍残留阻断诊断。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(failedRoot);
+            }
+        }
+
+        private static void ValidateStaleNetlistCannotBeCopied()
+        {
+            var canvasRoot = new GameObject("SpiceD3NetlistRevisionValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 100f);
+                var switchData = workspace.CreateComponent(SpiceComponentKind.IdealSwitch, Vector2.up * 100f);
+                workspace.SetSimulationOverrideForTesting((_, __) =>
+                    System.Threading.Tasks.Task.FromResult(CreateD3SuccessfulResult(resistor.InstanceId, "R1 n001 0 1000")));
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+
+                var copyButton = bindings.NetlistRoot.Find("NetlistHeader/Copy")?.GetComponent<Button>();
+                var netlistText = bindings.NetlistRoot.Find("NetlistScrollView/Viewport/Content/NetlistText")?.GetComponent<Text>();
+                var netlistStatus = bindings.NetlistRoot.Find("NetlistHeader/Status")?.GetComponent<Text>();
+                if (!workspace.TryGetCopyableNetlistText(out var originalNetlist) ||
+                    originalNetlist != "R1 n001 0 1000" || copyButton == null || !copyButton.interactable)
+                    throw new InvalidOperationException("当前电气修订的网表未进入可复制状态。");
+
+                GUIUtility.systemCopyBuffer = "D3_CLIPBOARD_SENTINEL";
+                if (!workspace.TrySetParameter(resistor.InstanceId, 2d, "kOhm"))
+                    throw new InvalidOperationException("D3 网表修订验证无法修改电阻参数。");
+                if (workspace.ResultState != SpiceWorkspaceResultState.Stale ||
+                    workspace.TryGetCopyableNetlistText(out _) || copyButton.interactable)
+                    throw new InvalidOperationException("参数变化后旧网表仍可复制。");
+                copyButton.onClick.Invoke();
+                if (GUIUtility.systemCopyBuffer != "D3_CLIPBOARD_SENTINEL")
+                    throw new InvalidOperationException("旧网表的点击处理器绕过了修订资格检查。");
+                if (netlistText == null || netlistText.text != originalNetlist ||
+                    netlistStatus == null || !netlistStatus.text.Contains("已过期"))
+                    throw new InvalidOperationException("旧网表未按既有行为保留显示并明确标记过期。");
+
+                workspace.MoveComponent(resistor.InstanceId, Vector2.right * 50f);
+                var view = workspace.GetComponentViewForTesting(resistor.InstanceId);
+                workspace.SelectComponent(view);
+                workspace.RotateSelectedComponent();
+                if (workspace.ResultState != SpiceWorkspaceResultState.Stale)
+                    throw new InvalidOperationException("纯视觉移动或旋转不应改变既有 Stale 状态。");
+
+                workspace.SetSimulationOverrideForTesting((_, __) =>
+                    System.Threading.Tasks.Task.FromResult(CreateD3SuccessfulResult(resistor.InstanceId, "R1 n001 0 2000")));
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (!workspace.TryGetCopyableNetlistText(out var updatedNetlist) ||
+                    updatedNetlist != "R1 n001 0 2000" || !copyButton.interactable)
+                    throw new InvalidOperationException("重新运行后当前修订网表未恢复可复制状态。");
+
+                workspace.MoveComponent(resistor.InstanceId, Vector2.right * 75f);
+                workspace.SelectComponent(workspace.GetComponentViewForTesting(resistor.InstanceId));
+                workspace.RotateSelectedComponent();
+                if (workspace.ResultState != SpiceWorkspaceResultState.Current ||
+                    !workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("纯视觉移动或旋转不应使当前网表过期。");
+
+                if (!workspace.TrySetSwitchState(switchData.InstanceId, true) ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Stale ||
+                    workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("切换开关后旧网表仍可复制。");
+
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (!workspace.Connect(source.InstanceId, "positive", resistor.InstanceId, "positive") ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Stale ||
+                    workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("新增 Wire 后旧网表仍可复制。");
+
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                var wire = workspace.Model.Wires.First();
+                if (!workspace.Model.RemoveWire(wire) ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Stale ||
+                    workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("删除 Wire 后旧网表仍可复制。");
+
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (workspace.CreateComponent(SpiceComponentKind.Capacitor, Vector2.one * 120f) == null ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Stale ||
+                    workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("新增器件后旧网表仍可复制。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateImportResetsSimulationPresentationState()
+        {
+            var canvasRoot = new GameObject("SpiceD3ImportStateValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                workspace.SetSimulationOverrideForTesting((_, __) =>
+                    System.Threading.Tasks.Task.FromResult(CreateD3SuccessfulResult(resistor.InstanceId, "R1 n001 0 1000")));
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+
+                var imported = new SpiceWorkspaceModel();
+                imported.AddComponentWithIdentity(SpiceComponentKind.Capacitor, "capacitor-001", Vector2.one * 20f, 1e-6d, 0);
+                imported.RestoreInstanceNumbersFromExisting();
+                if (!workspace.TryImportDrawingJson(SpiceDrawingSerializer.ToJson(imported), out var error))
+                    throw new InvalidOperationException("D3 导入状态验证失败：" + error);
+
+                var resultText = bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText")?.GetComponent<Text>();
+                var diagnosticText = bindings.DiagnosticRoot.Find("DiagnosticScrollView/Viewport/Content/DiagnosticText")?.GetComponent<Text>();
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun ||
+                    workspace.TryGetCopyableOutcomeText(out _) || workspace.TryGetCopyableNetlistText(out _) ||
+                    resultText == null || resultText.text.Contains("D3_RESULT_MARKER") ||
+                    diagnosticText == null || !string.IsNullOrEmpty(diagnosticText.text))
+                    throw new InvalidOperationException("成功导入后旧结果、诊断或网表状态未清理。");
+
+                var stateBeforeFailure = workspace.ResultState;
+                var modelBeforeFailure = workspace.Model;
+                if (workspace.TryImportDrawingJson("{\"format\":\"broken\"}", out _))
+                    throw new InvalidOperationException("D3 导入状态验证的损坏 JSON 不应成功。");
+                if (!ReferenceEquals(modelBeforeFailure, workspace.Model) || workspace.ResultState != stateBeforeFailure)
+                    throw new InvalidOperationException("失败导入改变了当前模型或结果状态。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static SpiceSimulationResult CreateD3SuccessfulResult(string componentId, string netlist)
+        {
+            var result = new SpiceSimulationResult
+            {
+                Success = true,
+                GeneratedNetlistContent = netlist
+            };
+            result.ComponentResults[componentId] = new SpiceComponentResult
+            {
+                ComponentId = componentId,
+                ComponentKind = "Resistor",
+                Voltage = 1d,
+                Current = 0.001d,
+                VoltageDirection = "positive-to-negative",
+                CurrentDirection = "positive-to-negative",
+                Notes = "D3_RESULT_MARKER"
+            };
+            return result;
         }
 
         public static void ConnectSingleResistor(SpiceWorkspaceController workspace, string source, string resistor, string ground)

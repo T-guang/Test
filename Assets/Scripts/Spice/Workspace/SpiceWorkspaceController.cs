@@ -57,6 +57,7 @@ namespace ElectricalSim.Spice.Workspace
         private SpiceScrollableTextView diagnosticView;
         private bool netlistExpanded;
         private string generatedNetlistContent;
+        private long generatedNetlistRevision = -1;
         private string[] currentUnits = Array.Empty<string>();
         private int unitIndex;
         private bool initialized;
@@ -372,6 +373,9 @@ namespace ElectricalSim.Spice.Workspace
                 }
 
                 generatedNetlistContent = result.GeneratedNetlistContent;
+                generatedNetlistRevision = string.IsNullOrEmpty(generatedNetlistContent)
+                    ? -1
+                    : electricalRevision;
                 if (result.Success)
                 {
                     ResultState = SpiceWorkspaceResultState.Current;
@@ -416,6 +420,7 @@ namespace ElectricalSim.Spice.Workspace
 
                 ResultState = SpiceWorkspaceResultState.Failed;
                 generatedNetlistContent = null;
+                generatedNetlistRevision = -1;
                 statusText.text = "计算失败";
                 lastOutcomeText = exception.ToString();
                 SetDiagnosticText(exception.ToString());
@@ -733,7 +738,12 @@ namespace ElectricalSim.Spice.Workspace
             Model.Clear();
             Model.ResetInstanceNaming();
             generatedNetlistContent = null;
+            generatedNetlistRevision = -1;
             lastOutcomeText = null;
+            ResultState = SpiceWorkspaceResultState.NeverRun;
+            SetResultText(string.Empty);
+            SetDiagnosticText(string.Empty);
+            if (statusText != null) statusText.text = StateMessage();
             ClearParameterPanel();
             UpdateRotateAvailability();
             RefreshNetlistUi();
@@ -958,6 +968,7 @@ namespace ElectricalSim.Spice.Workspace
 
             // 7. 清除旧仿真结果、旧诊断、旧网表，恢复为未运行状态
             generatedNetlistContent = null;
+            generatedNetlistRevision = -1;
             lastOutcomeText = null;
             ResultState = SpiceWorkspaceResultState.NeverRun;
             SetResultText(string.Empty);
@@ -1279,6 +1290,8 @@ namespace ElectricalSim.Spice.Workspace
             {
                 ResultState = SpiceWorkspaceResultState.Stale;
                 lastOutcomeText = null;
+                SetResultText(string.Empty);
+                SetDiagnosticText(string.Empty);
             }
             if (ResultState != SpiceWorkspaceResultState.Running) statusText.text = StateMessage();
             RefreshNetlistUi();
@@ -1317,7 +1330,11 @@ namespace ElectricalSim.Spice.Workspace
             ResultState = Model.Components.Count == 0 && Model.Wires.Count == 0
                 ? SpiceWorkspaceResultState.NeverRun
                 : SpiceWorkspaceResultState.Stale;
+            SetResultText(string.Empty);
+            SetDiagnosticText(string.Empty);
             if (statusText != null) statusText.text = StateMessage();
+            RefreshNetlistUi();
+            RefreshCopyResultButton();
         }
 
         private Task<SpiceSimulationResult> SimulateCircuitAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken)
@@ -1336,9 +1353,22 @@ namespace ElectricalSim.Spice.Workspace
 
         private void CopyNetlist()
         {
-            if (string.IsNullOrEmpty(generatedNetlistContent)) return;
-            GUIUtility.systemCopyBuffer = generatedNetlistContent;
+            if (!TryGetCopyableNetlistText(out var text)) return;
+            GUIUtility.systemCopyBuffer = text;
             statusText.text = "已复制网表";
+        }
+
+        /// <summary>
+        /// 获取当前电气修订可复制的正式网表。显示中的旧网表可以保留用于对比，
+        /// 但只有修订一致且未处于运行中时才允许复制。
+        /// </summary>
+        public bool TryGetCopyableNetlistText(out string text)
+        {
+            var isCurrentRevision = generatedNetlistRevision == electricalRevision;
+            text = isCurrentRevision && ResultState != SpiceWorkspaceResultState.Running
+                ? generatedNetlistContent
+                : null;
+            return !string.IsNullOrEmpty(text);
         }
 
         /// <summary>
@@ -1375,7 +1405,7 @@ namespace ElectricalSim.Spice.Workspace
             if (netlistExpanded) RefreshScrollableText(netlistView, generatedNetlistContent ?? string.Empty);
             else netlistText.text = generatedNetlistContent ?? string.Empty;
             netlistToggleButton.GetComponentInChildren<Text>().text = netlistExpanded ? "收起" : "展开";
-            copyNetlistButton.interactable = hasNetlist;
+            copyNetlistButton.interactable = TryGetCopyableNetlistText(out _);
             netlistStatusText.text = NetlistStatusMessage(hasNetlist);
         }
 
