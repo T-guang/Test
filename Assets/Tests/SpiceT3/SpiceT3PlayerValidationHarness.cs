@@ -15,6 +15,11 @@ namespace ElectricalSim.Spice.T3
         public bool success;
         public double firstCurrent;
         public double updatedCurrent;
+        public bool d1StaleDiscardPassed;
+        public bool d2ImportLimitsPassed;
+        public bool d3ClearStatePassed;
+        public bool d3NetlistRevisionPassed;
+        public bool unexpectedErrorSanitizationPassed;
         public string failure;
     }
 
@@ -45,14 +50,48 @@ namespace ElectricalSim.Spice.T3
                 if (first == null || !first.Success || Math.Abs(first.ComponentResults[resistor.InstanceId].Current - 0.01d) > 1e-8d) throw new InvalidOperationException("Single-resistor Player flow failed.");
                 report.firstCurrent = first.ComponentResults[resistor.InstanceId].Current;
                 if (!workspace.TrySetParameter(resistor.InstanceId, 2d, "kOhm") || workspace.ResultState != SpiceWorkspaceResultState.Stale) throw new InvalidOperationException("Player parameter change did not stale the result.");
+                if (workspace.TryGetCopyableNetlistText(out _)) throw new InvalidOperationException("Stale Player netlist remained copyable.");
                 var updated = await workspace.RunCalculationAsync();
                 if (updated == null || !updated.Success || Math.Abs(updated.ComponentResults[resistor.InstanceId].Current - 0.005d) > 1e-8d) throw new InvalidOperationException("Updated Player result is incorrect.");
                 report.updatedCurrent = updated.ComponentResults[resistor.InstanceId].Current;
+                if (!workspace.TryGetCopyableNetlistText(out _)) throw new InvalidOperationException("Updated Player netlist was not copyable.");
+                report.d3NetlistRevisionPassed = true;
+
                 await ValidateD1StaleResultDiscard(workspace, resistor);
+                report.d1StaleDiscardPassed = true;
+                report.d2ImportLimitsPassed = ValidateD2PathImportLimit(workspace);
+
+                var currentAfterDiscard = await workspace.RunCalculationAsync();
+                if (currentAfterDiscard == null || !currentAfterDiscard.Success ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Current ||
+                    !workspace.TryGetCopyableOutcomeText(out _) ||
+                    !workspace.TryGetCopyableNetlistText(out _))
+                    throw new InvalidOperationException("Player flow did not recover a current result after D1 discard.");
+
+                workspace.ClearWorkspace();
+                if (workspace.ResultState != SpiceWorkspaceResultState.NeverRun ||
+                    workspace.TryGetCopyableOutcomeText(out _) ||
+                    workspace.TryGetCopyableNetlistText(out _) ||
+                    workspace.Model.Components.Count != 0 || workspace.Model.Wires.Count != 0)
+                    throw new InvalidOperationException("Player ClearWorkspace did not clear result and netlist state.");
+                report.d3ClearStatePassed = true;
+
+                source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
+                resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
+                ground = workspace.CreateComponent(SpiceComponentKind.Ground, new Vector2(0f, -140f));
+                SpiceT3WorkspaceValidation.ConnectSingleResistor(workspace, source.InstanceId, resistor.InstanceId, ground.InstanceId);
+                var rebuilt = await workspace.RunCalculationAsync();
+                if (rebuilt == null || !rebuilt.Success) throw new InvalidOperationException("Rebuilt Player circuit failed before invalid-topology regression.");
                 workspace.Model.RemoveWire(workspace.Model.Wires[0]);
                 if (workspace.ResultState != SpiceWorkspaceResultState.Stale) throw new InvalidOperationException("Player topology change did not stale the result.");
                 var invalid = await workspace.RunCalculationAsync();
                 if (invalid == null || invalid.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed) throw new InvalidOperationException("Invalid Player topology was incorrectly marked current.");
+
+                report.unexpectedErrorSanitizationPassed = await ValidateUnexpectedErrorSanitization(workspace);
+                if (!report.d1StaleDiscardPassed || !report.d2ImportLimitsPassed ||
+                    !report.d3ClearStatePassed || !report.d3NetlistRevisionPassed ||
+                    !report.unexpectedErrorSanitizationPassed)
+                    throw new InvalidOperationException("One or more stabilization Player checks did not pass.");
                 report.success = true;
             }
             catch (Exception exception)
@@ -65,6 +104,62 @@ namespace ElectricalSim.Spice.T3
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("[SpiceT3] Player validation report: " + path);
             Application.Quit(report.success ? 0 : 1);
+        }
+
+        private static bool ValidateD2PathImportLimit(SpiceWorkspaceController workspace)
+        {
+            var path = Path.Combine(Application.persistentDataPath, "SpiceT3_D2_ImportLimit_" + Guid.NewGuid().ToString("N") + ".spicejson");
+            try
+            {
+                var oversized = new SpiceWorkspaceModel();
+                for (var index = 0; index <= SpiceDrawingLimits.MaxComponents; index++)
+                    oversized.AddComponent(SpiceComponentKind.Resistor, new Vector2(index % 20, index / 20));
+                File.WriteAllText(path, SpiceDrawingSerializer.ToJson(oversized));
+                if (new FileInfo(path).Length >= SpiceDrawingLimits.MaxFileBytes)
+                    throw new InvalidOperationException("D2 Player fixture unexpectedly exceeded the file-size limit.");
+
+                var modelBefore = workspace.Model;
+                var componentCountBefore = workspace.Model.Components.Count;
+                var wireCountBefore = workspace.Model.Wires.Count;
+                var pathBefore = workspace.CurrentSpiceFilePath;
+                if (workspace.TryImportWorkspaceFromPath(path, out var error))
+                    throw new InvalidOperationException("D2 Player path import accepted an over-limit drawing.");
+                if (string.IsNullOrEmpty(error) || !error.Contains("器件数量"))
+                    throw new InvalidOperationException("D2 Player path import returned an unstable error message: " + error);
+                if (!ReferenceEquals(modelBefore, workspace.Model) ||
+                    workspace.Model.Components.Count != componentCountBefore ||
+                    workspace.Model.Wires.Count != wireCountBefore ||
+                    workspace.CurrentSpiceFilePath != pathBefore)
+                    throw new InvalidOperationException("D2 Player rejected import changed the workspace or current path.");
+                return true;
+            }
+            finally
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
+
+        private static async Task<bool> ValidateUnexpectedErrorSanitization(SpiceWorkspaceController workspace)
+        {
+            const string secretPath = @"C:\Users\TestUser\Secret\solver.tmp";
+            workspace.SetSimulationOverrideForTesting((_, __) =>
+                Task.FromException<SpiceSimulationResult>(
+                    new NullReferenceException("Unexpected Player solver failure at " + secretPath)));
+            try
+            {
+                var result = await workspace.RunCalculationAsync();
+                if (result != null || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("Unexpected Player error did not enter Failed state.");
+                if (!workspace.TryGetCopyableOutcomeText(out var text) ||
+                    !text.Contains("SPICE_RUNTIME_UNEXPECTED") ||
+                    text.Contains(secretPath) || text.Contains("NullReferenceException"))
+                    throw new InvalidOperationException("Unexpected Player error leaked internal details to the result.");
+                return true;
+            }
+            finally
+            {
+                workspace.SetSimulationOverrideForTesting(null);
+            }
         }
 
         private static async Task ValidateD1StaleResultDiscard(SpiceWorkspaceController workspace, SpiceWorkspaceComponentData resistor)

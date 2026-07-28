@@ -51,24 +51,30 @@ namespace ElectricalSim.EditorTools.SpiceT3
         public static void BuildAndRunPlayerValidation()
         {
             if (EditorApplication.isPlaying) throw new InvalidOperationException("Exit Play Mode before building the Spice T3 player validation.");
-            EnsureValidationScene();
             var runDirectory = Path.Combine(BuildRoot, "run_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
             Directory.CreateDirectory(runDirectory);
             var executable = Path.Combine(runDirectory, "SpiceT3-Prototype.exe");
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ValidationScenePath }, locationPathName = executable, target = BuildTarget.StandaloneWindows64, options = BuildOptions.None });
-            if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Spice T3 Player build failed: " + report.summary.result);
-            VerifyStreamingAssets(executable);
+            BuildExistingScenePlayer(ValidationScenePath, executable);
             RunPlayer(executable, runDirectory);
+        }
+
+        public static void BuildPlayerValidationFromCommandLine()
+        {
+            var executable = ReadCommandLinePath("--spice-t3-build=");
+            BuildExistingScenePlayer(ValidationScenePath, executable);
+            UnityEngine.Debug.Log("[SpiceT3] Player validation build passed: " + executable);
+        }
+
+        public static void BuildDemoPlayerFromCommandLine()
+        {
+            var executable = ReadCommandLinePath("--spice-demo-build=");
+            BuildExistingScenePlayer("Assets/Scenes/Demo.unity", executable);
+            UnityEngine.Debug.Log("[SpiceT3] Demo Player build passed: " + executable);
         }
 
         private static void EnsurePrototypeScene()
         {
             CreateScene(PrototypeScenePath, false);
-        }
-
-        private static void EnsureValidationScene()
-        {
-            CreateScene(ValidationScenePath, true);
         }
 
         private static void CreateScene(string path, bool includeHarness)
@@ -119,11 +125,45 @@ namespace ElectricalSim.EditorTools.SpiceT3
 
         private static void VerifyStreamingAssets(string executable)
         {
-            var root = Path.Combine(Path.GetDirectoryName(executable) ?? string.Empty, "SpiceT3-Prototype_Data", "StreamingAssets", "ThirdParty", "ngspice");
+            var dataDirectory = Path.GetFileNameWithoutExtension(executable) + "_Data";
+            var root = Path.Combine(Path.GetDirectoryName(executable) ?? string.Empty, dataDirectory, "StreamingAssets", "ThirdParty", "ngspice");
             foreach (var required in new[] { Path.Combine(root, "win-x64", "ngspice_con.exe"), Path.Combine(root, "win-x64", "libomp140.x86_64.dll"), Path.Combine(root, "COPYING") })
             {
                 if (!File.Exists(required)) throw new FileNotFoundException("Required ngspice StreamingAssets file is missing from the Player build.", required);
             }
+        }
+
+        private static void BuildExistingScenePlayer(string scenePath, string executable)
+        {
+            if (EditorApplication.isPlaying)
+                throw new InvalidOperationException("Exit Play Mode before building the Spice T3 player.");
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) == null)
+                throw new FileNotFoundException("Required Player scene is missing.", scenePath);
+            var outputDirectory = Path.GetDirectoryName(executable);
+            if (string.IsNullOrEmpty(outputDirectory))
+                throw new InvalidOperationException("Player output path must include a directory.");
+            Directory.CreateDirectory(outputDirectory);
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = new[] { scenePath },
+                locationPathName = executable,
+                target = BuildTarget.StandaloneWindows64,
+                options = BuildOptions.None
+            });
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new InvalidOperationException("Spice T3 Player build failed: " + report.summary.result);
+            VerifyStreamingAssets(executable);
+        }
+
+        private static string ReadCommandLinePath(string prefix)
+        {
+            foreach (var argument in Environment.GetCommandLineArgs())
+            {
+                if (!argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                var path = argument.Substring(prefix.Length).Trim('"');
+                if (!string.IsNullOrWhiteSpace(path)) return Path.GetFullPath(path);
+            }
+            throw new ArgumentException("Missing required command-line path: " + prefix + "<path>");
         }
 
         private static void RunPlayer(string executable, string runDirectory)
@@ -139,7 +179,15 @@ namespace ElectricalSim.EditorTools.SpiceT3
             }
             if (!File.Exists(resultPath)) throw new FileNotFoundException("The Spice T3 Player did not write its result file.", resultPath);
             var result = JsonUtility.FromJson<SpiceT3PlayerValidationReport>(File.ReadAllText(resultPath));
-            if (result == null || !result.success || Math.Abs(result.firstCurrent - 0.01d) > 1e-8d || Math.Abs(result.updatedCurrent - 0.005d) > 1e-8d) throw new InvalidOperationException("Spice T3 Player result did not match the single-resistor and parameter-update expectations.");
+            if (result == null || !result.success ||
+                Math.Abs(result.firstCurrent - 0.01d) > 1e-8d ||
+                Math.Abs(result.updatedCurrent - 0.005d) > 1e-8d ||
+                !result.d1StaleDiscardPassed ||
+                !result.d2ImportLimitsPassed ||
+                !result.d3ClearStatePassed ||
+                !result.d3NetlistRevisionPassed ||
+                !result.unexpectedErrorSanitizationPassed)
+                throw new InvalidOperationException("Spice T3 Player result did not satisfy the D1/D2/D3 stabilization expectations.");
             UnityEngine.Debug.Log("[SpiceT3] Player validation passed. Build: " + executable + " Result: " + resultPath + " Log: " + logPath);
         }
     }
