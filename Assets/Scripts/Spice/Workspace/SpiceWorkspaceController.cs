@@ -23,6 +23,9 @@ namespace ElectricalSim.Spice.Workspace
     /// </summary>
     public sealed class SpiceWorkspaceController : MonoBehaviour
     {
+        private const string UnexpectedSimulationErrorMessage =
+            "仿真运行失败，系统未能完成本次计算。\n请检查电路后重试；若问题持续出现，请将日志交给维护人员。\n错误编号：SPICE_RUNTIME_UNEXPECTED";
+
         private readonly Dictionary<string, SpiceWorkspaceComponentView> componentViews = new Dictionary<string, SpiceWorkspaceComponentView>(StringComparer.Ordinal);
         private readonly List<SpiceWorkspaceWireView> wireViews = new List<SpiceWorkspaceWireView>();
         private SpiceWorkspaceViewBindings bindings;
@@ -422,8 +425,11 @@ namespace ElectricalSim.Spice.Workspace
                 generatedNetlistContent = null;
                 generatedNetlistRevision = -1;
                 statusText.text = "计算失败";
-                lastOutcomeText = exception.ToString();
-                SetDiagnosticText(exception.ToString());
+                lastOutcomeText = UnexpectedSimulationErrorMessage;
+                SetDiagnosticText(UnexpectedSimulationErrorMessage);
+                Debug.LogException(new InvalidOperationException(
+                    "Unexpected SPICE simulation failure. requestId=" + requestId +
+                    " electricalRevision=" + revisionAtStart + ".", exception));
                 return null;
             }
             finally

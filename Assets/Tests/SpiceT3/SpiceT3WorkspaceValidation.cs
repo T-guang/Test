@@ -33,6 +33,7 @@ namespace ElectricalSim.Spice.T3
             ValidateClearWorkspaceSimulationPresentationState();
             ValidateStaleNetlistCannotBeCopied();
             ValidateImportResetsSimulationPresentationState();
+            ValidateUnexpectedSimulationErrorIsSanitized();
             ValidateDrawingDataContractRoundTrip();
             ValidateDrawingTenDeviceTypesRoundTrip();
             ValidateDrawingRotationAndSwitchState();
@@ -855,6 +856,58 @@ namespace ElectricalSim.Spice.T3
                 Notes = "D3_RESULT_MARKER"
             };
             return result;
+        }
+
+        private static void ValidateUnexpectedSimulationErrorIsSanitized()
+        {
+            const string secretPath = @"C:\Users\TestUser\Secret\solver.tmp";
+            var canvasRoot = new GameObject("SpiceD31UnexpectedErrorValidation", typeof(RectTransform), typeof(Canvas));
+            var technicalLogObserved = false;
+            Application.LogCallback logCallback = (condition, stackTrace, type) =>
+            {
+                if (type == LogType.Exception &&
+                    ((condition != null && condition.Contains(secretPath)) ||
+                     (stackTrace != null && stackTrace.Contains(secretPath))))
+                {
+                    technicalLogObserved = true;
+                }
+            };
+
+            Application.logMessageReceived += logCallback;
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out var bindings);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                workspace.SetSimulationOverrideForTesting((_, __) =>
+                    System.Threading.Tasks.Task.FromException<SpiceSimulationResult>(
+                        new NullReferenceException("Unexpected solver failure at " + secretPath)));
+
+                var result = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (result != null || workspace.ResultState != SpiceWorkspaceResultState.Failed)
+                    throw new InvalidOperationException("未预期异常未进入 Failed 状态。");
+                if (!workspace.TryGetCopyableOutcomeText(out var copyText))
+                    throw new InvalidOperationException("安全异常提示未作为正式失败结果提供。");
+                if (!copyText.Contains("SPICE_RUNTIME_UNEXPECTED") ||
+                    copyText.Contains(secretPath) || copyText.Contains("NullReferenceException"))
+                    throw new InvalidOperationException("可复制结果泄露了内部异常路径或类型。");
+
+                var presentation = bindings.ResultRoot.GetComponent<SpiceAssistantOutcomePresentation>();
+                presentation?.RefreshNow();
+                var resultText = bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText")?.GetComponent<Text>();
+                var diagnosticText = bindings.DiagnosticRoot.Find("DiagnosticScrollView/Viewport/Content/DiagnosticText")?.GetComponent<Text>();
+                if (resultText == null || !resultText.text.Contains("SPICE_RUNTIME_UNEXPECTED") ||
+                    resultText.text.Contains(secretPath) || resultText.text.Contains("NullReferenceException") ||
+                    diagnosticText == null || diagnosticText.text.Contains(secretPath) ||
+                    diagnosticText.text.Contains("NullReferenceException"))
+                    throw new InvalidOperationException("正式结果或诊断区域泄露了内部异常详情。");
+                if (!technicalLogObserved)
+                    throw new InvalidOperationException("开发日志未保留未预期异常的完整技术信息。");
+            }
+            finally
+            {
+                Application.logMessageReceived -= logCallback;
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
         }
 
         public static void ConnectSingleResistor(SpiceWorkspaceController workspace, string source, string resistor, string ground)
