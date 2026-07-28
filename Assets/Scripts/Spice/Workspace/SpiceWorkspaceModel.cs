@@ -120,7 +120,7 @@ namespace ElectricalSim.Spice.Workspace
             var component = FindComponent(instanceId);
             if (component == null || !IsValidParameter(component.Kind, value)) return false;
             if (component.SiValue == value) return true;
-            component.SiValue = value;
+            component.ApplySiValueFromModel(value);
             Changed?.Invoke(SpiceWorkspaceChange.Parameter);
             return true;
         }
@@ -154,8 +154,7 @@ namespace ElectricalSim.Spice.Workspace
 
             var normalizedPhase = SpiceAnalysisLimits.NormalizePhaseDegrees(phaseDegrees);
             if (component.SiValue == magnitudeVolts && component.AcPhaseDegrees == normalizedPhase) return true;
-            component.SiValue = magnitudeVolts;
-            component.AcPhaseDegrees = normalizedPhase;
+            component.ApplyAcVoltageSourceParametersFromModel(magnitudeVolts, normalizedPhase);
             Changed?.Invoke(SpiceWorkspaceChange.Parameter);
             return true;
         }
@@ -304,8 +303,20 @@ namespace ElectricalSim.Spice.Workspace
         public string InstanceId { get; }
         public SpiceComponentKind Kind { get; }
         public Vector2 Position { get; set; }
-        public double SiValue { get; set; }
-        public double AcPhaseDegrees { get; set; }
+        public double SiValue { get; private set; }
+        public double AcPhaseDegrees { get; private set; }
+
+        // Parameter writes are model-owned so every electrical change can raise Changed exactly once.
+        internal void ApplySiValueFromModel(double value)
+        {
+            SiValue = value;
+        }
+
+        internal void ApplyAcVoltageSourceParametersFromModel(double magnitudeVolts, double normalizedPhaseDegrees)
+        {
+            SiValue = magnitudeVolts;
+            AcPhaseDegrees = normalizedPhaseDegrees;
+        }
         /// <summary>
         /// 离散旋转状态（0-3，表示顺时针 90 度的倍数）。
         /// 旋转只影响视觉布局，不写入 SpiceCircuitModel，也不使 DC 结果过期。

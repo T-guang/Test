@@ -14,6 +14,26 @@ namespace ElectricalSim.Spice.Workspace
     {
         public const string Format = "ElectricalSimulation2D.SpiceDrawing";
         public const int SchemaVersion = 1;
+
+        public static bool IsSupportedComponentKindInSchemaV1(SpiceComponentKind kind)
+        {
+            switch (kind)
+            {
+                case SpiceComponentKind.DcVoltageSource:
+                case SpiceComponentKind.DcCurrentSource:
+                case SpiceComponentKind.Resistor:
+                case SpiceComponentKind.Capacitor:
+                case SpiceComponentKind.Inductor:
+                case SpiceComponentKind.Ground:
+                case SpiceComponentKind.IdealSwitch:
+                case SpiceComponentKind.SiliconDiode:
+                case SpiceComponentKind.VoltageProbe:
+                case SpiceComponentKind.CurrentProbe:
+                    return true;
+                default:
+                    return false;
+            }
+        }
     }
 
     /// <summary>
@@ -77,6 +97,36 @@ namespace ElectricalSim.Spice.Workspace
     /// </summary>
     public static class SpiceDrawingSerializer
     {
+        public static bool TryValidateSchemaV1SaveCompatibility(SpiceWorkspaceModel model, out string error)
+        {
+            error = null;
+            if (model == null)
+            {
+                error = "当前工作区不可保存。";
+                return false;
+            }
+
+            if (model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint ||
+                model.AcFrequencyHz != SpiceAnalysisLimits.DefaultFrequencyHz)
+            {
+                error = "当前保存格式 V1 无法完整保存单频 AC 配置，未执行保存。";
+                return false;
+            }
+
+            foreach (var component in model.Components)
+            {
+                if (!SpiceDrawingFormat.IsSupportedComponentKindInSchemaV1(component.Kind))
+                {
+                    error = component.Kind == SpiceComponentKind.AcVoltageSource
+                        ? "图纸格式 V1 不支持交流电压源。"
+                        : "当前保存格式 V1 不支持此器件类型，未执行保存。";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         /// <summary>
         /// 将工作区模型转换为 DTO。不包含结果、网表、诊断、选择或视图状态。
         /// 组件和导线按稳定顺序（InstanceId / 端点字典序）排序，确保 Wire 添加方向或列表顺序变化不影响输出。
@@ -84,6 +134,8 @@ namespace ElectricalSim.Spice.Workspace
         public static SpiceDrawingFileDto ToDto(SpiceWorkspaceModel model)
         {
             if (model == null) throw new ArgumentNullException(nameof(model));
+            if (!TryValidateSchemaV1SaveCompatibility(model, out var compatibilityError))
+                throw new InvalidOperationException(compatibilityError);
             var dto = new SpiceDrawingFileDto
             {
                 format = SpiceDrawingFormat.Format,
@@ -353,6 +405,14 @@ namespace ElectricalSim.Spice.Workspace
                     !Enum.IsDefined(typeof(SpiceComponentKind), kind))
                 {
                     error = "未知器件类型：" + (componentDto.componentType ?? "(null)");
+                    return false;
+                }
+
+                if (!SpiceDrawingFormat.IsSupportedComponentKindInSchemaV1(kind))
+                {
+                    error = kind == SpiceComponentKind.AcVoltageSource
+                        ? "图纸格式 V1 不支持交流电压源。"
+                        : "图纸格式 V1 不支持该器件类型。";
                     return false;
                 }
 

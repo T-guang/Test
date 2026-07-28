@@ -27,6 +27,8 @@ namespace ElectricalSim.Spice.T3
             ValidateAcAnalysisControllerRevisionAndRunningGuard();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();
+            ValidateAcParameterWriteEncapsulation();
+            ValidateDrawingV1AcCompatibilityBoundaries();
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
@@ -1109,16 +1111,169 @@ namespace ElectricalSim.Spice.T3
                     capturedCircuit.Components.Single(component => component.InstanceId == source.InstanceId).AcPhaseDegrees != 0d)
                     throw new InvalidOperationException("Delayed calculation did not capture an immutable AC analysis snapshot.");
 
-                if (!workspace.Model.TrySetAcFrequency(2000d))
-                    throw new InvalidOperationException("Controlled AC frequency mutation was rejected before D1 stale-result verification.");
+                if (!workspace.Model.TrySetAcVoltageSourceParameters(source.InstanceId, 2d, 30d))
+                    throw new InvalidOperationException("Controlled AC source parameter mutation was rejected before D1 stale-result verification.");
                 completion.SetResult(CreateD3SuccessfulResult(source.InstanceId, "* delayed AC result"));
                 if (calculation.GetAwaiter().GetResult() != null || workspace.ResultState != SpiceWorkspaceResultState.Stale)
-                    throw new InvalidOperationException("Delayed result was not discarded after AC frequency changed.");
+                    throw new InvalidOperationException("Delayed result was not discarded after AC source parameters changed.");
             }
             finally
             {
                 System.Threading.SynchronizationContext.SetSynchronizationContext(originalContext);
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcParameterWriteEncapsulation()
+        {
+            var siValueSetter = typeof(SpiceWorkspaceComponentData).GetProperty(nameof(SpiceWorkspaceComponentData.SiValue))?.GetSetMethod(true);
+            var phaseSetter = typeof(SpiceWorkspaceComponentData).GetProperty(nameof(SpiceWorkspaceComponentData.AcPhaseDegrees))?.GetSetMethod(true);
+            if (siValueSetter == null || siValueSetter.IsPublic || phaseSetter == null || phaseSetter.IsPublic)
+                throw new InvalidOperationException("Workspace electrical parameter setters must not be public.");
+
+            var model = new SpiceWorkspaceModel();
+            var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.zero);
+            var changes = 0;
+            model.Changed += _ => changes++;
+            if (!model.TrySetParameter(resistor.InstanceId, 2000d) || resistor.SiValue != 2000d || changes != 1)
+                throw new InvalidOperationException("Model parameter API did not update a resistor through one change notification.");
+            if (!model.TrySetParameter(resistor.InstanceId, 2000d) || changes != 1)
+                throw new InvalidOperationException("Equivalent generic parameter update should not raise Changed.");
+
+            if (!model.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) ||
+                !model.TrySetAnalysisMode(SpiceAnalysisMode.DcOperatingPoint) || changes != 3)
+                throw new InvalidOperationException("AC-to-DC mode transition did not use the model change path exactly once per change.");
+            if (model.TrySetAnalysisMode((SpiceAnalysisMode)999))
+                throw new InvalidOperationException("Undefined analysis mode was accepted.");
+
+            var acSource = model.AddComponent(SpiceComponentKind.AcVoltageSource, Vector2.right);
+            changes = 0;
+            foreach (var invalidMagnitude in new[] { -1d, 0d, SpiceAnalysisLimits.MaxAcMagnitudeVolts * 2d })
+            {
+                if (model.TrySetAcVoltageSourceParameters(acSource.InstanceId, invalidMagnitude, 45d))
+                    throw new InvalidOperationException("Invalid AC magnitude was accepted by the atomic model API.");
+            }
+            if (model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, double.PositiveInfinity) ||
+                model.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2d, double.NegativeInfinity) ||
+                changes != 0 || acSource.SiValue != 1d || acSource.AcPhaseDegrees != 0d)
+                throw new InvalidOperationException("Invalid AC phase partially changed atomic source parameters.");
+
+            var canvasRoot = new GameObject("SpiceGenericParameterRevisionValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var workspaceResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                var revisionBeforeParameter = workspace.ElectricalRevisionForTesting;
+                if (!workspace.TrySetParameter(workspaceResistor.InstanceId, 2d, "kOhm") ||
+                    workspace.ElectricalRevisionForTesting != revisionBeforeParameter + 1 ||
+                    Math.Abs(workspaceResistor.SiValue - 2000d) > 1e-12d)
+                    throw new InvalidOperationException("Controller generic parameter update did not advance D1 revision exactly once.");
+                if (!workspace.TrySetParameter(workspaceResistor.InstanceId, 2d, "kOhm") ||
+                    workspace.ElectricalRevisionForTesting != revisionBeforeParameter + 1)
+                    throw new InvalidOperationException("Equivalent Controller parameter update changed D1 revision.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateDrawingV1AcCompatibilityBoundaries()
+        {
+            const string acSourceJson = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"ac-source-001\",\"componentType\":\"AcVoltageSource\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"1\"}],\"wires\":[]}";
+            if (SpiceDrawingSerializer.TryFromJson(acSourceJson, out _, out var dtoError) || dtoError.IndexOf("V1", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Schema V1 must reject AcVoltageSource before constructing a temporary model.");
+            if (SpiceDrawingSerializer.TryFromJson(acSourceJson.Replace("AcVoltageSource", "acvoltagesource"), out _, out _))
+                throw new InvalidOperationException("Component type case changes must not bypass schema V1 validation.");
+
+            var dcModel = new SpiceWorkspaceModel();
+            dcModel.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+            var dcJson = SpiceDrawingSerializer.ToJson(dcModel);
+            string dcError = null;
+            if (dcJson.IndexOf("analysis", StringComparison.OrdinalIgnoreCase) >= 0 || dcJson.IndexOf("AcPhaseDegrees", StringComparison.Ordinal) >= 0 ||
+                !SpiceDrawingSerializer.TryFromJson(dcJson, out var restoredDcModel, out dcError) ||
+                restoredDcModel.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || restoredDcModel.AcFrequencyHz != SpiceAnalysisLimits.DefaultFrequencyHz)
+                throw new InvalidOperationException("Existing V1 DC drawing contract changed: " + dcError);
+
+            var acModel = new SpiceWorkspaceModel();
+            var acSource = acModel.AddComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+            acModel.TrySetAcVoltageSourceParameters(acSource.InstanceId, 1d, 60d);
+            if (SpiceDrawingSerializer.TryValidateSchemaV1SaveCompatibility(acModel, out var compatibilityError) ||
+                compatibilityError.IndexOf("V1", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Schema V1 save compatibility preflight accepted an AC source.");
+            var directSerializerRejected = false;
+            try
+            {
+                SpiceDrawingSerializer.ToJson(acModel);
+            }
+            catch (InvalidOperationException)
+            {
+                directSerializerRejected = true;
+            }
+            if (!directSerializerRejected)
+                throw new InvalidOperationException("Direct V1 serializer use silently accepted an AC source.");
+
+            var tempDir = CreateUniqueTempDir("AcV1Compatibility");
+            try
+            {
+                var canvasRoot = new GameObject("SpiceAcV1CompatibilityValidation", typeof(RectTransform), typeof(Canvas));
+                try
+                {
+                    var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                    workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                    var originalPath = Path.Combine(tempDir, "original.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(originalPath, out var originalSaveError))
+                        throw new InvalidOperationException("V1 compatibility test setup save failed: " + originalSaveError);
+
+                    var originalModel = workspace.Model;
+                    var originalRevision = workspace.ElectricalRevisionForTesting;
+                    var originalPathState = workspace.CurrentSpiceFilePath;
+                    var rejectedImportPath = Path.Combine(tempDir, "ac-source.spicejson");
+                    File.WriteAllText(rejectedImportPath, acSourceJson, System.Text.Encoding.UTF8);
+                    if (workspace.TryImportWorkspaceFromPath(rejectedImportPath, out var importError) ||
+                        importError.IndexOf("V1", StringComparison.Ordinal) < 0 ||
+                        !ReferenceEquals(workspace.Model, originalModel) ||
+                        workspace.ElectricalRevisionForTesting != originalRevision ||
+                        workspace.CurrentSpiceFilePath != originalPathState ||
+                        workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint ||
+                        workspace.Model.AcFrequencyHz != SpiceAnalysisLimits.DefaultFrequencyHz)
+                        throw new InvalidOperationException("Rejected V1 AC import changed workspace, revision, analysis settings, or current path.");
+
+                    var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.right);
+                    if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 1d, 60d))
+                        throw new InvalidOperationException("V1 save compatibility test could not configure AC source phase.");
+                    var rejectedSavePath = Path.Combine(tempDir, "must-not-exist.spicejson");
+                    if (workspace.TrySaveWorkspaceToPath(rejectedSavePath, out var sourceSaveError) || File.Exists(rejectedSavePath) ||
+                        workspace.CurrentSpiceFilePath != originalPathState || source.AcPhaseDegrees != 60d ||
+                        sourceSaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("V1 AC source save rejection wrote a file, changed path, or lost phase.");
+
+                    var sentinelPath = Path.Combine(tempDir, "sentinel.spicejson");
+                    const string sentinel = "DO_NOT_OVERWRITE";
+                    File.WriteAllText(sentinelPath, sentinel, System.Text.Encoding.UTF8);
+                    if (workspace.TrySaveWorkspaceToPath(sentinelPath, out _) || File.ReadAllText(sentinelPath, System.Text.Encoding.UTF8) != sentinel ||
+                        Directory.GetFiles(tempDir, "*.tmp*", SearchOption.TopDirectoryOnly).Length != 0 ||
+                        Directory.GetFiles(tempDir, "*.backup*", SearchOption.TopDirectoryOnly).Length != 0)
+                        throw new InvalidOperationException("V1 compatibility rejection overwrote a file or left atomic-write artifacts.");
+
+                    workspace.ClearWorkspace();
+                    if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) ||
+                        workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "ac-mode.spicejson"), out var acModeSaveError) ||
+                        acModeSaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("AC analysis mode must be rejected by the V1 writer.");
+                    if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.DcOperatingPoint) || !workspace.TrySetAcFrequency(2000d) ||
+                        workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "nondefault-frequency.spicejson"), out var frequencySaveError) ||
+                        frequencySaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
+                        throw new InvalidOperationException("Non-default AC frequency must not be silently lost in a V1 save.");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(canvasRoot);
+                }
+            }
+            finally
+            {
+                CleanupTempDir(tempDir);
             }
         }
 
@@ -1176,9 +1331,18 @@ namespace ElectricalSim.Spice.T3
             AddWire(missingSource, "resistor-001", "negative", "ground-001", "ground");
             AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(missingSource), "SPICE_AC_SOURCE_MISSING");
 
-            var unsupportedAc = CreateBasicAcCircuit();
-            unsupportedAc.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 5d));
-            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unsupportedAc), "SPICE_AC_COMPONENT_UNSUPPORTED");
+            var unsupportedAcFactories = new Func<SpiceComponentModel>[]
+            {
+                () => SpiceComponentModel.DcVoltageSource("source-001", 5d),
+                () => SpiceComponentModel.DcCurrentSource("current-source-001", 0.001d),
+                () => SpiceComponentModel.SiliconDiode("diode-001")
+            };
+            foreach (var createUnsupported in unsupportedAcFactories)
+            {
+                var unsupportedAc = CreateBasicAcCircuit();
+                unsupportedAc.Components.Add(createUnsupported());
+                AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unsupportedAc), "SPICE_AC_COMPONENT_UNSUPPORTED");
+            }
 
             var unsupportedDc = new SpiceCircuitModel();
             unsupportedDc.Components.AddRange(CreateBasicAcCircuit().Components);

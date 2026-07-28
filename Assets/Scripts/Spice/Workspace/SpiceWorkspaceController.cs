@@ -884,7 +884,22 @@ namespace ElectricalSim.Spice.Workspace
                 error = "仿真计算进行中，请稍后保存图纸。";
                 return false;
             }
-            var json = SpiceDrawingSerializer.ToJson(Model);
+            if (!SpiceDrawingSerializer.TryValidateSchemaV1SaveCompatibility(Model, out error))
+            {
+                return false;
+            }
+
+            string json;
+            try
+            {
+                json = SpiceDrawingSerializer.ToJson(Model);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                error = "保存失败，无法生成图纸内容。";
+                return false;
+            }
             var normalizedPath = SpiceDrawingFileService.NormalizeExtension(path);
             if (!fileService.TrySaveUtf8Atomically(normalizedPath, json, out error))
             {
