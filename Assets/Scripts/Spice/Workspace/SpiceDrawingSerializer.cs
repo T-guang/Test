@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using ElectricalSim.Spice.Core;
 using UnityEngine;
 
@@ -238,6 +239,12 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
 
+            if (Encoding.UTF8.GetByteCount(json) > SpiceDrawingLimits.MaxFileBytes)
+            {
+                error = "导入失败：图纸文件超过 1MB 限制。";
+                return false;
+            }
+
             SpiceDrawingFileDto dto;
             try
             {
@@ -267,6 +274,12 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
 
+            if (!SpiceDrawingLimits.IsStringLengthSupported(dto.format, SpiceDrawingLimits.MaxStringLength))
+            {
+                error = "导入失败：图纸包含过长或无效的格式标识。";
+                return false;
+            }
+
             if (!string.Equals(dto.format, SpiceDrawingFormat.Format, StringComparison.Ordinal))
             {
                 error = "未知文件格式：" + (dto.format ?? "(null)");
@@ -282,6 +295,39 @@ namespace ElectricalSim.Spice.Workspace
             if (dto.components == null) dto.components = new List<SpiceComponentDto>();
             if (dto.wires == null) dto.wires = new List<SpiceWireDto>();
 
+            if (dto.components.Count > SpiceDrawingLimits.MaxComponents)
+            {
+                error = "导入失败：图纸包含的器件数量超过当前支持上限。";
+                return false;
+            }
+
+            if (dto.wires.Count > SpiceDrawingLimits.MaxWires)
+            {
+                error = "导入失败：图纸包含的导线数量超过当前支持上限。";
+                return false;
+            }
+
+            long totalManualRoutePoints = 0;
+            foreach (var wireDto in dto.wires)
+            {
+                if (wireDto == null) continue;
+                if (!ValidateWireStringLengths(wireDto, out error)) return false;
+
+                var pointCount = wireDto.manualRoutePoints?.Count ?? 0;
+                if (pointCount > SpiceDrawingLimits.MaxManualRoutePointsPerWire)
+                {
+                    error = "导入失败：某条导线包含过多手工折点。";
+                    return false;
+                }
+
+                if (pointCount > SpiceDrawingLimits.MaxTotalManualRoutePoints - totalManualRoutePoints)
+                {
+                    error = "导入失败：图纸包含的手工折点总数超过当前支持上限。";
+                    return false;
+                }
+                totalManualRoutePoints += pointCount;
+            }
+
             var tempModel = new SpiceWorkspaceModel();
             var instanceIdSet = new HashSet<string>(StringComparer.Ordinal);
 
@@ -293,6 +339,8 @@ namespace ElectricalSim.Spice.Workspace
                     error = "图纸中存在无效组件（instanceId 为空）。";
                     return false;
                 }
+
+                if (!ValidateComponentStringLengths(componentDto, out error)) return false;
 
                 if (!instanceIdSet.Add(componentDto.instanceId))
                 {
@@ -331,6 +379,11 @@ namespace ElectricalSim.Spice.Workspace
                     if (double.IsNaN(siValue) || double.IsInfinity(siValue))
                     {
                         error = "参数值非法（NaN 或 Infinity）：" + componentDto.instanceId;
+                        return false;
+                    }
+                    if (!SpiceDrawingLimits.IsParameterSupported(siValue))
+                    {
+                        error = "导入失败：图纸包含超出当前支持范围的器件参数。";
                         return false;
                     }
                     if (!SpiceWorkspaceModel.IsValidParameter(kind, siValue))
@@ -508,6 +561,58 @@ namespace ElectricalSim.Spice.Workspace
                 error = "组件 " + instanceId + " 坐标字段非法（NaN 或 Infinity）：" + fieldName;
                 return false;
             }
+            if (!SpiceDrawingLimits.IsCoordinateSupported(value))
+            {
+                error = "导入失败：图纸包含超出画布支持范围的坐标。";
+                return false;
+            }
+            error = null;
+            return true;
+        }
+
+        private static bool ValidateComponentStringLengths(SpiceComponentDto componentDto, out string error)
+        {
+            if (!SpiceDrawingLimits.IsStringLengthSupported(componentDto.instanceId, SpiceDrawingLimits.MaxInstanceIdLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(componentDto.componentType, SpiceDrawingLimits.MaxStringLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(componentDto.siValueText, SpiceDrawingLimits.MaxStringLength) ||
+                (componentDto.position != null &&
+                    (!SpiceDrawingLimits.IsStringLengthSupported(componentDto.position.x, SpiceDrawingLimits.MaxStringLength) ||
+                     !SpiceDrawingLimits.IsStringLengthSupported(componentDto.position.y, SpiceDrawingLimits.MaxStringLength))))
+            {
+                error = "导入失败：图纸包含过长或无效的标识符。";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        private static bool ValidateWireStringLengths(SpiceWireDto wireDto, out string error)
+        {
+            if (!SpiceDrawingLimits.IsStringLengthSupported(wireDto.startComponentId, SpiceDrawingLimits.MaxInstanceIdLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(wireDto.endComponentId, SpiceDrawingLimits.MaxInstanceIdLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(wireDto.startTerminalId, SpiceDrawingLimits.MaxTerminalIdLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(wireDto.endTerminalId, SpiceDrawingLimits.MaxTerminalIdLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(wireDto.routeMode, SpiceDrawingLimits.MaxStringLength))
+            {
+                error = "导入失败：图纸包含过长或无效的标识符。";
+                return false;
+            }
+
+            if (wireDto.manualRoutePoints != null)
+            {
+                foreach (var point in wireDto.manualRoutePoints)
+                {
+                    if (point != null &&
+                        (!SpiceDrawingLimits.IsStringLengthSupported(point.x, SpiceDrawingLimits.MaxStringLength) ||
+                         !SpiceDrawingLimits.IsStringLengthSupported(point.y, SpiceDrawingLimits.MaxStringLength)))
+                    {
+                        error = "导入失败：图纸包含过长或无效的坐标文本。";
+                        return false;
+                    }
+                }
+            }
+
             error = null;
             return true;
         }

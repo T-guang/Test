@@ -17,7 +17,7 @@ namespace ElectricalSim.Spice.Workspace
         public const string Extension = ".spicejson";
 
         /// <summary>导入文件大小上限：1 MB。超出直接拒绝，避免读取异常大文件。</summary>
-        public const long MaxFileBytes = 1024 * 1024;
+        public const long MaxFileBytes = SpiceDrawingLimits.MaxFileBytes;
 
         private string currentSpiceFilePath;
 

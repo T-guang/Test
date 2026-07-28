@@ -49,6 +49,11 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingSameEndpointAutoAndManual();
             ValidateDrawingPositionNullRejected();
             ValidateDrawingPositionZeroAllowed();
+            ValidateDrawingImportCountLimits();
+            ValidateDrawingImportWaypointLimits();
+            ValidateDrawingImportCoordinateLimits();
+            ValidateDrawingImportStringLimits();
+            ValidateDrawingFileImportLimitPreservesWorkspace();
             // Batch B：事务式导入核心与失败保护
             ValidateDrawingImportSuccessFullCircuit();
             ValidateIdealSwitchVisualStateSynchronization();
@@ -703,6 +708,231 @@ namespace ElectricalSim.Spice.T3
             finally
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateDrawingImportCountLimits()
+        {
+            var acceptedComponents = CreateDrawingLimitDto();
+            for (var i = 1; i <= SpiceDrawingLimits.MaxComponents; i++)
+                acceptedComponents.components.Add(CreateLimitComponent("resistor-" + i.ToString("D3")));
+            if (!SpiceDrawingSerializer.TryFromDto(acceptedComponents, out var acceptedComponentModel, out var componentError) ||
+                acceptedComponentModel.Components.Count != SpiceDrawingLimits.MaxComponents)
+                throw new InvalidOperationException("组件数量上限应被接受：" + componentError);
+
+            acceptedComponents.components.Add(CreateLimitComponent("resistor-" + (SpiceDrawingLimits.MaxComponents + 1).ToString("D3")));
+            if (SpiceDrawingSerializer.TryFromDto(acceptedComponents, out _, out var componentOverflowError) ||
+                string.IsNullOrEmpty(componentOverflowError) || !componentOverflowError.Contains("器件数量"))
+                throw new InvalidOperationException("组件数量超过上限时应被拒绝。");
+
+            var acceptedWires = CreateDrawingLimitDtoWithEndpoints();
+            for (var i = 0; i < SpiceDrawingLimits.MaxWires; i++)
+                acceptedWires.wires.Add(CreateLimitWire(SpiceWireRouteMode.Auto, 0));
+            if (!SpiceDrawingSerializer.TryFromDto(acceptedWires, out var acceptedWireModel, out var wireError) ||
+                acceptedWireModel.Wires.Count != SpiceDrawingLimits.MaxWires)
+                throw new InvalidOperationException("导线数量上限应被接受：" + wireError);
+
+            acceptedWires.wires.Add(CreateLimitWire(SpiceWireRouteMode.Auto, 0));
+            if (SpiceDrawingSerializer.TryFromDto(acceptedWires, out _, out var wireOverflowError) ||
+                string.IsNullOrEmpty(wireOverflowError) || !wireOverflowError.Contains("导线数量"))
+                throw new InvalidOperationException("导线数量超过上限时应被拒绝。");
+        }
+
+        private static void ValidateDrawingImportWaypointLimits()
+        {
+            var perWireAccepted = CreateDrawingLimitDtoWithEndpoints();
+            perWireAccepted.wires.Add(CreateLimitWire(SpiceWireRouteMode.Manual, SpiceDrawingLimits.MaxManualRoutePointsPerWire));
+            if (!SpiceDrawingSerializer.TryFromDto(perWireAccepted, out _, out var acceptedError))
+                throw new InvalidOperationException("单条导线折点上限应被接受：" + acceptedError);
+
+            var perWireRejected = CreateDrawingLimitDtoWithEndpoints();
+            perWireRejected.wires.Add(CreateLimitWire(SpiceWireRouteMode.Manual, SpiceDrawingLimits.MaxManualRoutePointsPerWire + 1));
+            if (SpiceDrawingSerializer.TryFromDto(perWireRejected, out _, out var perWireError) ||
+                string.IsNullOrEmpty(perWireError) || !perWireError.Contains("过多手工折点"))
+                throw new InvalidOperationException("单条导线折点超过上限时应被拒绝。");
+
+            var totalAccepted = CreateDrawingLimitDtoWithEndpoints();
+            AddLimitWaypointsAcrossWires(totalAccepted, SpiceDrawingLimits.MaxTotalManualRoutePoints);
+            if (!SpiceDrawingSerializer.TryFromDto(totalAccepted, out _, out var totalAcceptedError))
+                throw new InvalidOperationException("全局折点总数上限应被接受：" + totalAcceptedError);
+
+            var totalRejected = CreateDrawingLimitDtoWithEndpoints();
+            AddLimitWaypointsAcrossWires(totalRejected, SpiceDrawingLimits.MaxTotalManualRoutePoints + 1);
+            if (SpiceDrawingSerializer.TryFromDto(totalRejected, out _, out var totalError) ||
+                string.IsNullOrEmpty(totalError) || !totalError.Contains("折点总数"))
+                throw new InvalidOperationException("全局折点总数超过上限时应被拒绝。");
+        }
+
+        private static void ValidateDrawingImportCoordinateLimits()
+        {
+            var boundary = CreateDrawingLimitDto();
+            boundary.components.Add(CreateLimitComponent("resistor-001",
+                SpiceDrawingLimits.MaxCoordinateMagnitude.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                (-SpiceDrawingLimits.MaxCoordinateMagnitude).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            if (!SpiceDrawingSerializer.TryFromDto(boundary, out _, out var boundaryError))
+                throw new InvalidOperationException("坐标正负边界与零值应被接受：" + boundaryError);
+
+            foreach (var invalidCoordinate in new[]
+            {
+                (SpiceDrawingLimits.MaxCoordinateMagnitude + 1f).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                (-SpiceDrawingLimits.MaxCoordinateMagnitude - 1f).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "NaN",
+                "Infinity",
+                "3e38"
+            })
+            {
+                var rejected = CreateDrawingLimitDto();
+                rejected.components.Add(CreateLimitComponent("resistor-001", invalidCoordinate, "0"));
+                if (SpiceDrawingSerializer.TryFromDto(rejected, out _, out _))
+                    throw new InvalidOperationException("非法或越界组件坐标应被拒绝：" + invalidCoordinate);
+            }
+
+            var waypointBoundary = CreateDrawingLimitDtoWithEndpoints();
+            var boundaryWire = CreateLimitWire(SpiceWireRouteMode.Manual, 1);
+            boundaryWire.manualRoutePoints[0].x = SpiceDrawingLimits.MaxCoordinateMagnitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            boundaryWire.manualRoutePoints[0].y = (-SpiceDrawingLimits.MaxCoordinateMagnitude).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            waypointBoundary.wires.Add(boundaryWire);
+            if (!SpiceDrawingSerializer.TryFromDto(waypointBoundary, out _, out var waypointBoundaryError))
+                throw new InvalidOperationException("折点坐标边界应被接受：" + waypointBoundaryError);
+
+            var waypointRejected = CreateDrawingLimitDtoWithEndpoints();
+            var rejectedWire = CreateLimitWire(SpiceWireRouteMode.Manual, 1);
+            rejectedWire.manualRoutePoints[0].x = "3e38";
+            waypointRejected.wires.Add(rejectedWire);
+            if (SpiceDrawingSerializer.TryFromDto(waypointRejected, out _, out _))
+                throw new InvalidOperationException("极端有限折点坐标应被拒绝。");
+        }
+
+        private static void ValidateDrawingImportStringLimits()
+        {
+            var suffixLength = SpiceDrawingLimits.MaxInstanceIdLength - "resistor-".Length;
+            var maximumInstanceId = "resistor-" + new string('0', suffixLength - 1) + "1";
+            var maximum = CreateDrawingLimitDto();
+            maximum.components.Add(CreateLimitComponent(maximumInstanceId));
+            if (!SpiceDrawingSerializer.TryFromDto(maximum, out _, out var maximumError))
+                throw new InvalidOperationException("最大长度的规范 InstanceId 应被接受：" + maximumError);
+
+            var oversized = CreateDrawingLimitDto();
+            oversized.components.Add(CreateLimitComponent(maximumInstanceId + "0"));
+            if (SpiceDrawingSerializer.TryFromDto(oversized, out _, out var oversizedError) ||
+                string.IsNullOrEmpty(oversizedError) || !oversizedError.Contains("过长"))
+                throw new InvalidOperationException("超长 InstanceId 应被拒绝。");
+
+            var oversizedTerminal = CreateDrawingLimitDtoWithEndpoints();
+            var wire = CreateLimitWire(SpiceWireRouteMode.Auto, 0);
+            wire.startTerminalId = new string('t', SpiceDrawingLimits.MaxTerminalIdLength + 1);
+            oversizedTerminal.wires.Add(wire);
+            if (SpiceDrawingSerializer.TryFromDto(oversizedTerminal, out _, out var terminalError) ||
+                string.IsNullOrEmpty(terminalError) || !terminalError.Contains("过长"))
+                throw new InvalidOperationException("超长 TerminalId 应在端子语义校验前被拒绝。");
+
+            var extremeParameter = CreateDrawingLimitDto();
+            var component = CreateLimitComponent("source-001");
+            component.componentType = SpiceComponentKind.DcVoltageSource.ToString();
+            component.siValueText = "1e30";
+            extremeParameter.components.Add(component);
+            if (SpiceDrawingSerializer.TryFromDto(extremeParameter, out _, out var parameterError) ||
+                string.IsNullOrEmpty(parameterError) || !parameterError.Contains("器件参数"))
+                throw new InvalidOperationException("极端有限参数应被拒绝。");
+        }
+
+        private static void ValidateDrawingFileImportLimitPreservesWorkspace()
+        {
+            var tempDir = CreateUniqueTempDir("D2ImportLimit");
+            var canvasRoot = new GameObject("SpiceD2PathLimitValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var existing = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(25f, -40f));
+                var originalModel = workspace.Model;
+                var originalRevision = workspace.ElectricalRevisionForTesting;
+                var originalPath = Path.Combine(tempDir, "current.spicejson");
+                if (!workspace.TrySaveWorkspaceToPath(originalPath, out var saveError))
+                    throw new InvalidOperationException("D2 路径测试无法建立当前文件路径：" + saveError);
+
+                var oversized = CreateDrawingLimitDto();
+                for (var i = 1; i <= SpiceDrawingLimits.MaxComponents + 1; i++)
+                    oversized.components.Add(CreateLimitComponent("resistor-" + i.ToString("D3")));
+                var importPath = Path.Combine(tempDir, "too-many-components.spicejson");
+                File.WriteAllText(importPath, JsonUtility.ToJson(oversized, true));
+
+                if (workspace.TryImportWorkspaceFromPath(importPath, out var importError))
+                    throw new InvalidOperationException("正式路径级导入不应接受超限图纸。");
+                if (string.IsNullOrEmpty(importError) || !importError.Contains("器件数量"))
+                    throw new InvalidOperationException("路径级超限导入应返回稳定的用户错误。");
+                if (!ReferenceEquals(originalModel, workspace.Model) ||
+                    workspace.Model.Components.Count != 1 ||
+                    workspace.Model.Components[0].InstanceId != existing.InstanceId ||
+                    workspace.Model.Components[0].Position != new Vector2(25f, -40f) ||
+                    workspace.CurrentSpiceFilePath != originalPath ||
+                    workspace.ElectricalRevisionForTesting != originalRevision)
+                    throw new InvalidOperationException("超限导入失败后 Workspace、路径或修订号发生变化。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        private static SpiceDrawingFileDto CreateDrawingLimitDto()
+        {
+            return new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.SchemaVersion
+            };
+        }
+
+        private static SpiceDrawingFileDto CreateDrawingLimitDtoWithEndpoints()
+        {
+            var dto = CreateDrawingLimitDto();
+            var source = CreateLimitComponent("source-001");
+            source.componentType = SpiceComponentKind.DcVoltageSource.ToString();
+            source.siValueText = "10";
+            dto.components.Add(source);
+            var ground = CreateLimitComponent("ground-001");
+            ground.componentType = SpiceComponentKind.Ground.ToString();
+            ground.siValueText = null;
+            dto.components.Add(ground);
+            return dto;
+        }
+
+        private static SpiceComponentDto CreateLimitComponent(string instanceId, string x = "0", string y = "0")
+        {
+            return new SpiceComponentDto
+            {
+                instanceId = instanceId,
+                componentType = SpiceComponentKind.Resistor.ToString(),
+                position = new SpiceVector2Dto { x = x, y = y },
+                rotationQuarterTurns = 0,
+                siValueText = "1000"
+            };
+        }
+
+        private static SpiceWireDto CreateLimitWire(SpiceWireRouteMode routeMode, int waypointCount)
+        {
+            var wire = new SpiceWireDto
+            {
+                startComponentId = "ground-001",
+                startTerminalId = "ground",
+                endComponentId = "source-001",
+                endTerminalId = "negative",
+                routeMode = routeMode.ToString()
+            };
+            for (var i = 0; i < waypointCount; i++)
+                wire.manualRoutePoints.Add(new SpiceVector2Dto { x = (i % 100).ToString(), y = (i / 100).ToString() });
+            return wire;
+        }
+
+        private static void AddLimitWaypointsAcrossWires(SpiceDrawingFileDto dto, int totalWaypointCount)
+        {
+            var remaining = totalWaypointCount;
+            while (remaining > 0)
+            {
+                var count = Math.Min(SpiceDrawingLimits.MaxManualRoutePointsPerWire, remaining);
+                dto.wires.Add(CreateLimitWire(SpiceWireRouteMode.Manual, count));
+                remaining -= count;
             }
         }
 
