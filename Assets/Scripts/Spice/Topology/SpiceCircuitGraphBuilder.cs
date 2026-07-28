@@ -96,6 +96,7 @@ namespace ElectricalSim.Spice.Topology
                 connectionCount[wire.End]++;
             }
 
+            ValidateAnalysisSettings(circuit.AnalysisSettings, components, graph);
             ValidateComponents(components, graph);
             foreach (var terminal in terminals)
             {
@@ -134,19 +135,19 @@ namespace ElectricalSim.Spice.Topology
             {
                 if (component.Kind == SpiceComponentKind.Ground || component.Kind == SpiceComponentKind.VoltageProbe) continue;
                 var prefix = GetPrefix(component.Kind);
-                var number = graph.SpiceNameByComponentId.Count(existing => existing.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) + 1;
+                var number = graph.SpiceNameByComponentId.Count(existing => HasSpicePrefix(existing.Value, prefix)) + 1;
                 var name = prefix + number;
                 graph.SpiceNameByComponentId[component.InstanceId] = name;
                 graph.ComponentIdBySpiceName[name] = component.InstanceId;
 
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
-                if (positive == negative && (component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.CurrentProbe))
+                if (positive == negative && IsIdealVoltageConstraint(component.Kind))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_SHORTED", SpiceDiagnosticSeverity.Error, "An ideal voltage source or current probe cannot have both terminals on the same node.", component.InstanceId));
                 }
 
-                if (positive == negative && component.Kind != SpiceComponentKind.DcVoltageSource && component.Kind != SpiceComponentKind.CurrentProbe)
+                if (positive == negative && !IsIdealVoltageConstraint(component.Kind))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_COMPONENT_SHORTED", SpiceDiagnosticSeverity.Warning, "Both component terminals resolve to the same node.", component.InstanceId));
                 }
@@ -154,7 +155,13 @@ namespace ElectricalSim.Spice.Topology
 
             ValidateCurrentProbeConstraints(components, graph);
 
-            if (!components.Values.Any(component => component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.DcCurrentSource))
+            if (circuit.AnalysisSettings.Mode == SpiceAnalysisMode.AcSingleFrequency &&
+                !components.Values.Any(component => component.Kind == SpiceComponentKind.AcVoltageSource))
+            {
+                graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_AC_SOURCE_MISSING", SpiceDiagnosticSeverity.Error, "Single-frequency AC analysis requires at least one AC voltage source."));
+            }
+            else if (circuit.AnalysisSettings.Mode == SpiceAnalysisMode.DcOperatingPoint &&
+                !components.Values.Any(component => IsIndependentDcSource(component.Kind)))
             {
                 graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SOURCE_MISSING", SpiceDiagnosticSeverity.Error, "The circuit contains no independent DC source."));
             }
@@ -239,18 +246,51 @@ namespace ElectricalSim.Spice.Topology
             foreach (var component in components.Values)
             {
                 SpiceParameterKey? key = component.Kind == SpiceComponentKind.DcVoltageSource ? SpiceParameterKey.DcVoltage :
+                    component.Kind == SpiceComponentKind.AcVoltageSource ? SpiceParameterKey.AcMagnitude :
                     component.Kind == SpiceComponentKind.DcCurrentSource ? SpiceParameterKey.DcCurrent :
                     component.Kind == SpiceComponentKind.IdealSwitch ? SpiceParameterKey.SwitchClosed :
                     component.Kind == SpiceComponentKind.Resistor ? SpiceParameterKey.Resistance :
                     component.Kind == SpiceComponentKind.Capacitor ? SpiceParameterKey.Capacitance :
                     component.Kind == SpiceComponentKind.Inductor ? SpiceParameterKey.Inductance : (SpiceParameterKey?)null;
                 if (!key.HasValue) continue;
-                if (!component.TryGetParameter(key.Value, out var value) || double.IsNaN(value) || double.IsInfinity(value) ||
-                    (key.Value == SpiceParameterKey.SwitchClosed ? value != 0d && value != 1d :
-                     key.Value != SpiceParameterKey.DcVoltage && key.Value != SpiceParameterKey.DcCurrent && value <= 0d))
+                var validValue = component.TryGetParameter(key.Value, out var value) &&
+                    !double.IsNaN(value) && !double.IsInfinity(value) &&
+                    (key.Value == SpiceParameterKey.SwitchClosed ? value == 0d || value == 1d :
+                     key.Value == SpiceParameterKey.DcVoltage || key.Value == SpiceParameterKey.DcCurrent ? true :
+                     key.Value == SpiceParameterKey.AcMagnitude ? SpiceAnalysisLimits.IsValidAcMagnitude(value) : value > 0d);
+                if (!validValue)
                 {
-                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_INVALID_PARAMETER", SpiceDiagnosticSeverity.Error, "Component parameter is missing or outside the supported DC range.", component.InstanceId));
+                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_INVALID_PARAMETER", SpiceDiagnosticSeverity.Error, "Component parameter is missing or outside the supported range.", component.InstanceId));
                 }
+                if (component.Kind == SpiceComponentKind.AcVoltageSource &&
+                    (!SpiceAnalysisLimits.IsFinite(component.AcPhaseDegrees) || component.AcPhaseDegrees < -180d || component.AcPhaseDegrees >= 180d))
+                {
+                    graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_AC_SOURCE_PHASE_INVALID", SpiceDiagnosticSeverity.Error, "AC voltage source phase must be finite and normalized to [-180, 180) degrees.", component.InstanceId));
+                }
+            }
+        }
+
+        private static void ValidateAnalysisSettings(SpiceAnalysisSettings settings, Dictionary<string, SpiceComponentModel> components, SpiceCircuitGraph graph)
+        {
+            if (settings == null || !Enum.IsDefined(typeof(SpiceAnalysisMode), settings.Mode))
+            {
+                graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_ANALYSIS_MODE_INVALID", SpiceDiagnosticSeverity.Error, "The selected analysis mode is invalid."));
+                return;
+            }
+
+            if (settings.Mode == SpiceAnalysisMode.AcSingleFrequency && !SpiceAnalysisLimits.IsValidFrequency(settings.FrequencyHz))
+            {
+                graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_AC_FREQUENCY_INVALID", SpiceDiagnosticSeverity.Error, "Single-frequency AC analysis requires a finite frequency within the supported range."));
+            }
+
+            foreach (var component in components.Values)
+            {
+                if (IsSupportedForAnalysis(component.Kind, settings.Mode)) continue;
+                var code = settings.Mode == SpiceAnalysisMode.AcSingleFrequency
+                    ? "SPICE_AC_COMPONENT_UNSUPPORTED"
+                    : "SPICE_DC_COMPONENT_UNSUPPORTED";
+                graph.Diagnostics.Add(new SpiceDiagnostic(code, SpiceDiagnosticSeverity.Error,
+                    "Component is not supported by the selected analysis mode: " + component.Kind + ".", component.InstanceId));
             }
         }
 
@@ -259,6 +299,7 @@ namespace ElectricalSim.Spice.Topology
             switch (kind)
             {
                 case SpiceComponentKind.DcVoltageSource: return "V";
+                case SpiceComponentKind.AcVoltageSource: return "V";
                 case SpiceComponentKind.DcCurrentSource: return "I";
                 case SpiceComponentKind.IdealSwitch: return "SW";
                 case SpiceComponentKind.SiliconDiode: return "D";
@@ -270,10 +311,17 @@ namespace ElectricalSim.Spice.Topology
             }
         }
 
+        private static bool HasSpicePrefix(string name, string prefix)
+        {
+            return !string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(prefix) &&
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length > prefix.Length &&
+                char.IsDigit(name[prefix.Length]);
+        }
+
         private static void ValidateCurrentProbeConstraints(Dictionary<string, SpiceComponentModel> components, SpiceCircuitGraph graph)
         {
             var constrainedByNodePair = new Dictionary<string, List<SpiceComponentModel>>(StringComparer.Ordinal);
-            foreach (var component in components.Values.Where(component => component.Kind == SpiceComponentKind.DcVoltageSource || component.Kind == SpiceComponentKind.CurrentProbe))
+            foreach (var component in components.Values.Where(component => IsIdealVoltageConstraint(component.Kind)))
             {
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
@@ -293,6 +341,25 @@ namespace ElectricalSim.Spice.Topology
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT", SpiceDiagnosticSeverity.Error, "A current probe cannot be placed in parallel with an ideal voltage constraint.", probe.InstanceId));
                 }
             }
+        }
+
+        private static bool IsIndependentDcSource(SpiceComponentKind kind)
+        {
+            return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource;
+        }
+
+        private static bool IsIdealVoltageConstraint(SpiceComponentKind kind)
+        {
+            return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.AcVoltageSource || kind == SpiceComponentKind.CurrentProbe;
+        }
+
+        private static bool IsSupportedForAnalysis(SpiceComponentKind kind, SpiceAnalysisMode mode)
+        {
+            if (mode == SpiceAnalysisMode.DcOperatingPoint) return kind != SpiceComponentKind.AcVoltageSource;
+            return kind == SpiceComponentKind.AcVoltageSource || kind == SpiceComponentKind.Resistor ||
+                kind == SpiceComponentKind.Capacitor || kind == SpiceComponentKind.Inductor ||
+                kind == SpiceComponentKind.Ground || kind == SpiceComponentKind.IdealSwitch ||
+                kind == SpiceComponentKind.VoltageProbe || kind == SpiceComponentKind.CurrentProbe;
         }
 
         private sealed class NodeGroup

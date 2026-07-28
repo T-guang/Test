@@ -25,6 +25,8 @@ namespace ElectricalSim.Spice.T3
             ValidateElectricalRevisionAndRunningMutationGuards();
             ValidateAcAnalysisSettingsAndSnapshot();
             ValidateAcAnalysisControllerRevisionAndRunningGuard();
+            ValidateAcAnalysisRevisionDiscardsDelayedResult();
+            ValidateAcAnalysisGraphBuilderBoundaries();
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
@@ -1078,6 +1080,170 @@ namespace ElectricalSim.Spice.T3
             finally
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcAnalysisRevisionDiscardsDelayedResult()
+        {
+            var canvasRoot = new GameObject("SpiceAcAnalysisDelayedRevisionValidation", typeof(RectTransform), typeof(Canvas));
+            var originalContext = System.Threading.SynchronizationContext.Current;
+            try
+            {
+                System.Threading.SynchronizationContext.SetSynchronizationContext(new ImmediateSynchronizationContext());
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || !workspace.TrySetAcFrequency(1000d))
+                    throw new InvalidOperationException("Unable to configure delayed AC analysis validation.");
+                var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                var completion = new System.Threading.Tasks.TaskCompletionSource<SpiceSimulationResult>();
+                SpiceCircuitModel capturedCircuit = null;
+                workspace.SetSimulationOverrideForTesting((circuit, _) =>
+                {
+                    capturedCircuit = circuit;
+                    return completion.Task;
+                });
+
+                var calculation = workspace.RunCalculationAsync();
+                if (workspace.ResultState != SpiceWorkspaceResultState.Running || capturedCircuit == null ||
+                    capturedCircuit.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency ||
+                    capturedCircuit.AnalysisSettings.FrequencyHz != 1000d ||
+                    capturedCircuit.Components.Single(component => component.InstanceId == source.InstanceId).AcPhaseDegrees != 0d)
+                    throw new InvalidOperationException("Delayed calculation did not capture an immutable AC analysis snapshot.");
+
+                if (!workspace.Model.TrySetAcFrequency(2000d))
+                    throw new InvalidOperationException("Controlled AC frequency mutation was rejected before D1 stale-result verification.");
+                completion.SetResult(CreateD3SuccessfulResult(source.InstanceId, "* delayed AC result"));
+                if (calculation.GetAwaiter().GetResult() != null || workspace.ResultState != SpiceWorkspaceResultState.Stale)
+                    throw new InvalidOperationException("Delayed result was not discarded after AC frequency changed.");
+            }
+            finally
+            {
+                System.Threading.SynchronizationContext.SetSynchronizationContext(originalContext);
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcAnalysisGraphBuilderBoundaries()
+        {
+            var supported = CreateBasicAcCircuit();
+            var capacitor = SpiceComponentModel.Capacitor("capacitor-001", 1e-6d);
+            var inductor = SpiceComponentModel.Inductor("inductor-001", 0.01d);
+            var switchComponent = SpiceComponentModel.IdealSwitch("switch-001", false);
+            var voltageProbe = SpiceComponentModel.VoltageProbe("voltage-probe-001");
+            var currentProbe = SpiceComponentModel.CurrentProbe("current-probe-001");
+            supported.Components.Add(capacitor);
+            supported.Components.Add(inductor);
+            supported.Components.Add(switchComponent);
+            supported.Components.Add(voltageProbe);
+            supported.Components.Add(currentProbe);
+            supported.Wires.Clear();
+            AddWire(supported, "ac-source-001", "positive", "current-probe-001", "positive");
+            AddWire(supported, "current-probe-001", "negative", "switch-001", "positive");
+            AddWire(supported, "switch-001", "negative", "resistor-001", "positive");
+            AddWire(supported, "resistor-001", "negative", "capacitor-001", "positive");
+            AddWire(supported, "capacitor-001", "negative", "inductor-001", "positive");
+            AddWire(supported, "inductor-001", "negative", "ground-001", "ground");
+            AddWire(supported, "ac-source-001", "negative", "ground-001", "ground");
+            AddWire(supported, "voltage-probe-001", "positive", "resistor-001", "positive");
+            AddWire(supported, "voltage-probe-001", "negative", "ground-001", "ground");
+            var supportedGraph = SpiceCircuitGraphBuilder.Build(supported);
+            if (!supportedGraph.IsValid || supportedGraph.SpiceNameByComponentId["ac-source-001"] != "V1")
+                throw new InvalidOperationException("Supported AC V1 component set was rejected or AC source did not use V prefix: " +
+                    string.Join(",", supportedGraph.Diagnostics.Select(diagnostic => diagnostic.Code)));
+
+            var multipleSources = CreateBasicAcCircuit();
+            multipleSources.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-002", 2d, 30d));
+            AddWire(multipleSources, "ac-source-002", "positive", "resistor-001", "positive");
+            AddWire(multipleSources, "ac-source-002", "negative", "ground-001", "ground");
+            var multipleGraph = SpiceCircuitGraphBuilder.Build(multipleSources);
+            if (!multipleGraph.IsValid || multipleGraph.SpiceNameByComponentId["ac-source-001"] != "V1" || multipleGraph.SpiceNameByComponentId["ac-source-002"] != "V2")
+                throw new InvalidOperationException("Multiple AC voltage sources should be valid and receive stable V names.");
+
+            var dcCircuit = new SpiceCircuitModel();
+            dcCircuit.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 5d));
+            dcCircuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
+            dcCircuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            AddWire(dcCircuit, "source-001", "positive", "resistor-001", "positive");
+            AddWire(dcCircuit, "source-001", "negative", "ground-001", "ground");
+            AddWire(dcCircuit, "resistor-001", "negative", "ground-001", "ground");
+            var dcGraph = SpiceCircuitGraphBuilder.Build(dcCircuit);
+            if (!dcGraph.IsValid || dcGraph.SpiceNameByComponentId["source-001"] != "V1" || dcGraph.SpiceNameByComponentId["resistor-001"] != "R1")
+                throw new InvalidOperationException("Existing DC graph names changed after AC model addition.");
+
+            var missingSource = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, 1000d));
+            missingSource.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
+            missingSource.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            AddWire(missingSource, "resistor-001", "positive", "ground-001", "ground");
+            AddWire(missingSource, "resistor-001", "negative", "ground-001", "ground");
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(missingSource), "SPICE_AC_SOURCE_MISSING");
+
+            var unsupportedAc = CreateBasicAcCircuit();
+            unsupportedAc.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 5d));
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unsupportedAc), "SPICE_AC_COMPONENT_UNSUPPORTED");
+
+            var unsupportedDc = new SpiceCircuitModel();
+            unsupportedDc.Components.AddRange(CreateBasicAcCircuit().Components);
+            unsupportedDc.Wires.AddRange(CreateBasicAcCircuit().Wires);
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unsupportedDc), "SPICE_DC_COMPONENT_UNSUPPORTED");
+
+            var invalidFrequency = CreateBasicAcCircuit(0d);
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(invalidFrequency), "SPICE_AC_FREQUENCY_INVALID");
+
+            var invalidMagnitude = CreateBasicAcCircuit();
+            invalidMagnitude.Components[0] = new SpiceComponentModel("ac-source-001", SpiceComponentKind.AcVoltageSource)
+                .With(SpiceParameterKey.AcMagnitude, 0d);
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(invalidMagnitude), "SPICE_INVALID_PARAMETER");
+
+            var invalidPhase = CreateBasicAcCircuit();
+            invalidPhase.Components[0] = new SpiceComponentModel("ac-source-001", SpiceComponentKind.AcVoltageSource, double.NaN)
+                .With(SpiceParameterKey.AcMagnitude, 1d);
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(invalidPhase), "SPICE_AC_SOURCE_PHASE_INVALID");
+
+            var unnormalizedPhase = CreateBasicAcCircuit();
+            unnormalizedPhase.Components[0] = new SpiceComponentModel("ac-source-001", SpiceComponentKind.AcVoltageSource, 190d)
+                .With(SpiceParameterKey.AcMagnitude, 1d);
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unnormalizedPhase), "SPICE_AC_SOURCE_PHASE_INVALID");
+
+            var sourceShort = CreateBasicAcCircuit();
+            AddWire(sourceShort, "ac-source-001", "positive", "ground-001", "ground");
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(sourceShort), "SPICE_SOURCE_SHORTED");
+
+            var probeConflict = CreateBasicAcCircuit();
+            probeConflict.Components.Add(SpiceComponentModel.CurrentProbe("current-probe-001"));
+            AddWire(probeConflict, "current-probe-001", "positive", "resistor-001", "positive");
+            AddWire(probeConflict, "current-probe-001", "negative", "ground-001", "ground");
+            AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(probeConflict), "SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT");
+        }
+
+        private static SpiceCircuitModel CreateBasicAcCircuit(double frequencyHz = 1000d)
+        {
+            var circuit = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, frequencyHz));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, 0d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            AddWire(circuit, "ac-source-001", "positive", "resistor-001", "positive");
+            AddWire(circuit, "ac-source-001", "negative", "ground-001", "ground");
+            AddWire(circuit, "resistor-001", "negative", "ground-001", "ground");
+            return circuit;
+        }
+
+        private static void AddWire(SpiceCircuitModel circuit, string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        {
+            circuit.Wires.Add(new SpiceWireModel(
+                new SpiceTerminalRef(startComponentId, startTerminalId),
+                new SpiceTerminalRef(endComponentId, endTerminalId)));
+        }
+
+        private static void AssertGraphHasDiagnostic(SpiceCircuitGraph graph, string code)
+        {
+            if (!graph.Diagnostics.Any(diagnostic => diagnostic.Code == code))
+                throw new InvalidOperationException("Expected graph diagnostic was missing: " + code);
+        }
+
+        private sealed class ImmediateSynchronizationContext : System.Threading.SynchronizationContext
+        {
+            public override void Post(System.Threading.SendOrPostCallback callback, object state)
+            {
+                callback(state);
             }
         }
 
