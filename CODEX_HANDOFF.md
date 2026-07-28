@@ -1,3 +1,205 @@
+# Codex Handoff: ElectricalSimulation2D SPICE
+
+## 当前基线
+
+- 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
+- Unity：`2022.3.57f1c1`
+- 分支：`feature/spice-t4a-dc-host-integration`
+- 当前功能/测试基线：`f77493b test(spice): extend stabilization player coverage`
+- 正式场景：`Assets/Scenes/Demo.unity`
+- 本轮未修改 Demo、Build Settings、控制模式、Wire 接线交互或 Windows P/Invoke。
+
+文档提交后的实际 HEAD 以 `git rev-parse HEAD` 为准。
+
+## 关键提交
+
+```text
+f77493b test(spice): extend stabilization player coverage
+7618b25 fix(spice): sanitize unexpected simulation errors
+7e2947c fix(spice): synchronize simulation presentation state
+da15f1e fix(spice): enforce drawing import limits
+6174faa fix(spice): discard stale calculation results
+4413101 fix(spice): 同步理想开关视觉状态
+45214fb fix(spice): 回退不稳定的文件对话框 COM 实现
+71bcae9 feat(spice): 接入图纸保存导入工作流
+c5a4781 feat(spice): 增加图纸文件操作核心
+ecc1ed6 fix(spice): 补强事务导入运行态保护
+bd35644 feat(spice): 增加事务式图纸导入核心
+74dcd1d fix(spice): 补强图纸契约边界校验
+```
+
+## 功能与架构
+
+SPICE DC 已完成 10 类器件、本地 ngspice 求解、现有点击端子接线与多折点、
+删除、缩放和平移、结果与网表滚动/复制、编号重置，以及 `.spicejson`
+保存、另存为和事务式导入。
+
+SPICE 权威数据：
+
+- `SpiceWorkspaceModel.Components`
+- `SpiceWorkspaceModel.Wires`
+
+控制模式与 SPICE 只共享页面外壳，不共享 Model、Wire、DTO、编号器、保存文件或求解器。
+生产宿主是 `SpiceWorkspaceDemoHost`；`SpiceWorkspacePrototypeBootstrap` 只属于测试场景。
+
+## 保存/导入边界
+
+- format：`ElectricalSimulation2D.SpiceDrawing`
+- schemaVersion：`1`
+- 扩展名：`.spicejson`
+- 默认目录：`Application.persistentDataPath/SavedSpiceDrawings`
+
+保存器件身份、类型、位置、旋转、SI 参数、开关状态，以及 Wire 端点、路由模式和折点。
+不保存结果、网表、诊断、选择、pending Wire、缩放、平移或当前文件路径。
+
+导入链：
+
+```text
+WindowsFileDialog
+→ SpiceWorkspaceDemoHost
+→ TryImportWorkspaceFromPath
+→ SpiceDrawingFileService
+→ TryImportDrawingJson
+→ SpiceDrawingSerializer
+→ 临时 SpiceWorkspaceModel
+→ CommitImportedModel
+```
+
+失败导入不替换当前 Model、不更新文件路径、不创建部分视图。
+
+## D1/D2/D3
+
+### D1
+
+- electrical revision、request ID 和 Model 引用共同保护异步结果提交。
+- 运行期间拒绝电气修改；移动、旋转、缩放和平移仍可用。
+- 旧请求的 catch/finally 不能覆盖新请求状态。
+
+### D2
+
+集中限制位于 `SpiceDrawingLimits`：
+
+```text
+文件 1 MB；器件 500；Wire 1000
+单 Wire 折点 128；全图折点 10000
+InstanceId 128；TerminalId 64；通用字符串 256
+坐标绝对值 20000；导入参数绝对值 1e15
+```
+
+数量和折点总量在创建临时 Model 前预检；越界坐标整体拒绝，不 Clamp。
+
+### D3 / D3.1
+
+- `generatedNetlistRevision` 记录网表对应的 electrical revision。
+- 按钮与 handler 共用 `TryGetCopyableNetlistText`。
+- 模型变化后旧网表可显示并标记过期，但不可复制。
+- 清空和成功导入恢复 `NeverRun` 并清除旧结果、诊断和复制资格。
+- 未预期异常只向用户显示 `SPICE_RUNTIME_UNEXPECTED`；完整异常仅进日志。
+
+## 验证结果
+
+Editor batchmode：
+
+- T1 通过，10 V / 1 kOhm 电流 0.01 A
+- T2 通过，`Fixtures=22`
+- T3 通过
+
+Windows x64 Harness：
+
+- 使用现有 `Assets/Tests/SpiceT3/SpiceT3PlayerValidation.unity`
+- 非 Development Build
+- 三次运行退出码 `0 / 0 / 0`
+- 每份 JSON 的 success、D1、D2、D3、网表修订和异常收口字段均为 true
+- 无 Player/ngspice 残留
+- 日志无 MissingReferenceException、CleanupEngine、StackOverflow 或未观察 Task 异常
+
+仓库外构建：
+
+```text
+E:\Builds\ElectricalSimulation2D\SpiceStabilizationD32\20260728-111235\
+```
+
+正式 Demo Windows x64 Player 构建成功：
+
+```text
+E:\Builds\ElectricalSimulation2D\SpiceStabilizationD32\20260728-111235\DemoPlayer\ElectricalSimulation2D-SpiceD3.exe
+```
+
+仍需人工：
+
+- 正式 Player 控制模式/SPICE 冒烟
+- 原生保存/导入窗口各打开和取消 5 次
+- 3840x2160、1920x1080、1366x768 快速布局检查
+- 产品内退出、窗口关闭和三轮 Editor Play/退出
+
+## 验证命令
+
+Editor：
+
+```powershell
+& "C:\Program Files\Unity\Hub\Editor\2022.3.57f1c1\Editor\Unity.exe" `
+  -batchmode -nographics -quit `
+  -projectPath "E:\Projects\Unity\ElectricalSimulation2D_SpiceT2" `
+  -logFile "<log-path>" `
+  -executeMethod ElectricalSim.EditorTools.SpiceT3.SpiceT3PrototypeTools.RunAllFromCommandLine
+```
+
+Harness 构建入口：
+
+```text
+ElectricalSim.EditorTools.SpiceT3.SpiceT3PrototypeTools.BuildPlayerValidationFromCommandLine
+--spice-t3-build=<outside-repo>\SpiceT3-StabilizationHarness.exe
+```
+
+Demo 构建入口：
+
+```text
+ElectricalSim.EditorTools.SpiceT3.SpiceT3PrototypeTools.BuildDemoPlayerFromCommandLine
+--spice-demo-build=<outside-repo>\ElectricalSimulation2D.exe
+```
+
+两个入口都显式指定 Scene，不修改 Build Settings，也不创建或重写 Scene。
+
+## 未跟踪审查材料
+
+保留且不得提交、删除或移动：
+
+```text
+CONTROL_WIRE_MULTIBEND_ARCHITECTURE_REVIEW.md
+MOTOR_DIRECTION_RUNTIME_AUDIT.md
+SourceReviewPackage.zip
+SourceReviewPackage/
+```
+
+准确状态应写为：已跟踪工作区干净；存在上述已确认保留的未跟踪材料。
+
+## 已知限制
+
+V1 保存 Wire 的电气端点和折点数据，但未保存原始第一段方向。端点规范化后，
+导入重建的正交视觉路径可能与保存前不同；电气连接、网表和 DC 求解不受影响。
+不要在稳定性批次中修改现有接线方式。视觉保真应作为独立 V2 契约任务。
+
+## 禁止事项
+
+- 不运行 `Tools/Electrical Demo/Build Demo Scene`
+- 不运行 `DemoSceneBuilder`、`BindDemoScene` 或生产 UI 重建工具
+- 不调用 `SpiceT3PrototypeTools.CreateScene` 重建正式场景
+- 不修改 `Demo.unity` YAML
+- 不把 PrototypeBootstrap 放入 Demo
+- 不混用控制模式与 SPICE 数据/DTO
+- 不自动开始 AC、瞬态、波形或新器件
+
+## 下一步
+
+1. 决定手工 Wire 视觉保真是否进入保存格式 V2。
+2. 若保留 V1 限制，再进入单频 AC V1 的只读契约审计。
+
+完成本 Mega Batch 后暂停。
+
+<!--
+以下内容是 6105399 时期的归档 handoff，已经过时，仅保留历史上下文。
+不要执行其中的旧基线、旧计划或 Scene Builder 指令。
+
 # Codex Handoff: Unity Electrical Simulation SPICE Work
 
 ## 1. Project Goal And Current Stage
@@ -254,3 +456,4 @@ If the working tree is not clean, report the exact files and stop. Do not stash,
 ## Handoff Completion Status
 
 This document was created while the repository was clean at commit `6105399`. Creating this file itself makes the working tree dirty until it is reviewed and committed. The only intended uncommitted file after creation is `CODEX_HANDOFF.md`.
+-->
