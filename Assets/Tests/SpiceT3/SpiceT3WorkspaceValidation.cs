@@ -29,6 +29,7 @@ namespace ElectricalSim.Spice.T3
             ValidateAcAnalysisGraphBuilderBoundaries();
             ValidateAcParameterWriteEncapsulation();
             ValidateDrawingV1AcCompatibilityBoundaries();
+            SpiceAcB2Validation.RunNetlistAndParserChecks();
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
