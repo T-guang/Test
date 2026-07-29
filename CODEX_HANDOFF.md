@@ -1,5 +1,13 @@
 # Codex Handoff: ElectricalSimulation2D SPICE
 
+## AC-C1 update (2026-07-29)
+
+- AC-B2 code baseline: `3405933`; AC-B2 handoff baseline: `fd7ae48`.
+- AC-C1 workspace interaction: `bd598e7 feat(spice): expose single-frequency ac workspace`.
+- AC-C1 phasor presentation validation: `450119b feat(spice): present single-frequency ac results`.
+- Current code HEAD: `450119b`.
+- Next: AC-D — 保存/导入 schemaVersion 2. Player build and manual acceptance remain deferred until AC-D is complete.
+
 ## Current Code Baseline
 
 - Branch: `feature/spice-t4a-dc-host-integration`
@@ -11,7 +19,7 @@
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
 - Unity：`2022.3.57f1c1`
 - 分支：`feature/spice-t4a-dc-host-integration`
-- 当前功能/测试基线：`f77493b test(spice): extend stabilization player coverage`
+- 当前功能/测试基线：`450119b feat(spice): present single-frequency ac results`
 - 正式场景：`Assets/Scenes/Demo.unity`
 - 本轮未修改 Demo、Build Settings、控制模式、Wire 接线交互或 Windows P/Invoke。
 
