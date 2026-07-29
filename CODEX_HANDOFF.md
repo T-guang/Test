@@ -2,6 +2,13 @@
 
 ## AC-C1 update (2026-07-29)
 
+## AC-C1.1 update (2026-07-30)
+
+- Current code baseline: `c5c3ddc fix(spice): close ac workspace presentation gaps`.
+- This handoff documentation commit is the separate documentation HEAD.
+- AC-B1: `c677c97`, AC-B1.1: `515c808`, AC-B2: `b185fa4`, AC-B2.1: `3405933`, AC-C1: `bd598e7` / `450119b`, AC-C1.1: `c5c3ddc`.
+- Next remains AC-D: 保存/导入 schemaVersion 2.
+
 - AC-B2 code baseline: `3405933`; AC-B2 handoff baseline: `fd7ae48`.
 - AC-C1 workspace interaction: `bd598e7 feat(spice): expose single-frequency ac workspace`.
 - AC-C1 phasor presentation validation: `450119b feat(spice): present single-frequency ac results`.
