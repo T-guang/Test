@@ -1460,6 +1460,8 @@ namespace ElectricalSim.Spice.Workspace
             var isAc = Model.AnalysisMode == SpiceAnalysisMode.AcSingleFrequency;
             dcAnalysisModeButton.interactable = !isRunning && isAc;
             acAnalysisModeButton.interactable = !isRunning && !isAc;
+            ApplyAnalysisModeVisual(dcAnalysisModeButton, !isAc);
+            ApplyAnalysisModeVisual(acAnalysisModeButton, isAc);
             acFrequencyInput.interactable = !isRunning && isAc;
             applyAcFrequencyButton.interactable = !isRunning && isAc;
             acFrequencyInput.text = FormatFrequencyInput(Model.AcFrequencyHz);
@@ -1470,6 +1472,15 @@ namespace ElectricalSim.Spice.Workspace
                 pair.Value.blocksRaycasts = enabled;
                 pair.Value.alpha = enabled ? 1f : 0.42f;
             }
+        }
+
+        private static void ApplyAnalysisModeVisual(Button button, bool selected)
+        {
+            if (button == null) return;
+            var image = button.GetComponent<Image>();
+            if (image != null) image.color = selected ? MainUiTheme.PrimaryBlue : MainUiTheme.FilterButton;
+            var text = button.GetComponentInChildren<Text>();
+            if (text != null) text.color = selected ? Color.white : MainUiTheme.NormalText;
         }
 
         private static string FormatFrequencyInput(double frequencyHz) => frequencyHz.ToString("G9", CultureInfo.InvariantCulture);

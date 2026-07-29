@@ -40,7 +40,7 @@ namespace ElectricalSim.Spice.Results
                     text.Append("\n");
                 }
                 text.Append("参考方向：");
-                text.Append(FormatDirection(value.ComponentKind));
+                text.Append(FormatDirection(value));
                 if (!string.IsNullOrEmpty(value.Notes))
                 {
                     text.Append("\n");
@@ -95,12 +95,16 @@ namespace ElectricalSim.Spice.Results
             return value.ToString("G6", CultureInfo.InvariantCulture);
         }
 
-        private static string FormatDirection(string componentKind)
+        private static string FormatDirection(SpiceAcComponentResult value)
         {
+            var componentKind = value.ComponentKind;
+            var direction = string.IsNullOrEmpty(value.CurrentDirection) ? value.VoltageDirection : value.CurrentDirection;
+            var mapped = direction == "A-to-B" ? "A → B" : direction == "V-plus-to-V-minus" ? "V+ → V-" :
+                direction == "IN-to-OUT" ? "IN → OUT" : "positive → negative";
             if (string.Equals(componentKind, "VoltageProbe", StringComparison.Ordinal)) return "V+ → V-";
             if (string.Equals(componentKind, "CurrentProbe", StringComparison.Ordinal)) return "IN → OUT";
-            if (string.Equals(componentKind, "AcVoltageSource", StringComparison.Ordinal)) return "positive → negative（ngspice 支路约定）";
-            return "positive → negative";
+            if (string.Equals(componentKind, "AcVoltageSource", StringComparison.Ordinal)) return mapped + "（ngspice 支路约定）";
+            return mapped;
         }
     }
 }
