@@ -1,5 +1,11 @@
 # Codex Handoff: ElectricalSimulation2D SPICE
 
+## Current Code Baseline
+
+- Branch: `feature/spice-t4a-dc-host-integration`
+- Code baseline: `3405933 test(spice): bind ac fixtures to explicit output nodes`
+- The following documentation-only handoff commit records this exact code baseline.
+
 ## 当前基线
 
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
@@ -14,6 +20,10 @@
 ## 关键提交
 
 ```text
+3405933 test(spice): bind ac fixtures to explicit output nodes (AC-B2.1)
+b185fa4 feat(spice): dispatch single-frequency ac simulation (AC-B2)
+8b936b2 feat(spice): map single-frequency ac results (AC-B1.1)
+90c3602 feat(spice): add single-frequency ac netlist parsing (AC-B1)
 f77493b test(spice): extend stabilization player coverage
 7618b25 fix(spice): sanitize unexpected simulation errors
 7e2947c fix(spice): synchronize simulation presentation state
@@ -96,7 +106,7 @@ InstanceId 128；TerminalId 64；通用字符串 256
 - 清空和成功导入恢复 `NeverRun` 并清除旧结果、诊断和复制资格。
 - 未预期异常只向用户显示 `SPICE_RUNTIME_UNEXPECTED`；完整异常仅进日志。
 
-## Single-frequency AC B2-3
+## Single-frequency AC B1 through B2.1
 
 - `SpiceSimulationService` is the sole workspace simulation dispatcher. It routes
   `DcOperatingPoint` to `SpiceDcSimulationService` and `AcSingleFrequency` to
@@ -104,6 +114,9 @@ InstanceId 128；TerminalId 64；通用字符串 256
 - `SpiceWorkspaceController` uses that dispatcher for both production paths. AC
   successes are presented as magnitude/phase phasors, while DC presentation stays on
   the existing scalar result path.
+- AC-B1/B1.1/B2 add the netlist/parser contract, structured phasor mapping, and
+  unified dispatcher. AC-B2.1 binds RC and dual-source Vout checks to explicit graph
+  terminals rather than dictionary-value ordering.
 - Regression coverage includes dispatcher call counts, controller DC and AC paths,
   D1 delayed-AC stale-result rejection, parser duplicate result-key rejection, and
   14 real-ngspice AC fixtures. Do not replace these with mocked-only coverage.
@@ -199,14 +212,11 @@ V1 保存 Wire 的电气端点和折点数据，但未保存原始第一段方�
 - 不修改 `Demo.unity` YAML
 - 不把 PrototypeBootstrap 放入 Demo
 - 不混用控制模式与 SPICE 数据/DTO
-- 不自动开始 AC、瞬态、波形或新器件
+- 不自动开始瞬态、波形或新器件
 
 ## 下一步
 
-1. 决定手工 Wire 视觉保真是否进入保存格式 V2。
-2. 若保留 V1 限制，再进入单频 AC V1 的只读契约审计。
-
-完成本 Mega Batch 后暂停。
+1. AC-C1.
 
 <!--
 以下内容是 6105399 时期的归档 handoff，已经过时，仅保留历史上下文。
@@ -222,7 +232,7 @@ The current phase is **T4-A3-A: DC workspace central-canvas visual shell alignme
 
 The current T4-A3-A implementation adds a control-style visual grid and matching background color below the SPICE wire/component/overlay layers. It does not change SPICE electrical behavior, coordinate conversion, host geometry, or the existing electrical-control workspace.
 
-Do not start AC, transient analysis, save/load, Undo/Redo, new components, DemoSceneBuilder, or branch merging unless a later explicit task authorizes them.
+Do not start transient analysis, save/load, Undo/Redo, new components, DemoSceneBuilder, or branch merging unless a later explicit task authorizes them.
 
 ## 2. Project Directory And Unity Version
 
@@ -369,7 +379,7 @@ It was caused by creating a UGUI `MaskableGraphic` (`WorkspaceGrid`) without its
 - Do not modify `WorkspaceController`, `WireManager`, `RuntimeStateManager`, control analyzer/validation systems, RuleId, save/load, DrawingDto, templates, snapshots, Runtime Catalog, `VisualPrefabRegistry`, `ComponentVisualRuntimeCatalog`, `DemoSceneBuilder`, `ImportUIAssets`, or formal Build Settings.
 - Do not run `DemoSceneBuilder`, `BindDemoScene`, or `SpiceT3PrototypeTools.CreateScene` while editing the production Demo scene.
 - Do not use `git reset --hard`, `git restore .`, `git checkout .`, `git clean`, automatic stash, or deletion of other worktrees.
-- Do not start T4-B, AC, transient simulation, waveform work, saving, importing, templates, or a broad UI refactor.
+- Do not start T4-B, transient simulation, waveform work, saving, importing, templates, or a broad UI refactor.
 
 ## 8. Important Files And Code Paths
 
