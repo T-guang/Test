@@ -39,8 +39,8 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("AC-C1 copy-result consistency: PASS");
             ValidateAcC1DcPresentationRegression();
             Debug.Log("AC-C1 DC presentation regression: PASS");
-            ValidateAcC1ResponsiveLayout();
-            Debug.Log("AC-C1 responsive layout: PASS");
+            ValidateAcC1LayoutStructureSmoke();
+            Debug.Log("AC-C1 layout structure smoke: PASS");
             ValidateControllerDcAndAcSimulationPaths();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();
@@ -1011,12 +1011,17 @@ namespace ElectricalSim.Spice.T3
                 var ac = workspace.GetAcAnalysisModeButtonForTesting();
                 if (dc == null || ac == null || dc.interactable || !ac.interactable)
                     throw new InvalidOperationException("AC-C1 default DC analysis segmented control state is incorrect.");
+                if (dc.GetComponent<Image>().color != MainUiTheme.PrimaryBlue || dc.GetComponentInChildren<Text>().color != Color.white)
+                    throw new InvalidOperationException("AC-C1 default DC selected visual is missing.");
 
                 var beforeAc = workspace.ElectricalRevisionForTesting;
                 ac.onClick.Invoke();
                 if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.ElectricalRevisionForTesting != beforeAc + 1 ||
                     !dc.interactable || ac.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun)
                     throw new InvalidOperationException("AC-C1 DC to AC mode control did not use the formal controller path.");
+                if (ac.GetComponent<Image>().color != MainUiTheme.PrimaryBlue || ac.GetComponentInChildren<Text>().color != Color.white ||
+                    dc.GetComponent<Image>().color == MainUiTheme.PrimaryBlue)
+                    throw new InvalidOperationException("AC-C1 AC selected visual did not replace DC selected visual.");
 
                 var sameModeRevision = workspace.ElectricalRevisionForTesting;
                 if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.ElectricalRevisionForTesting != sameModeRevision)
@@ -1030,6 +1035,8 @@ namespace ElectricalSim.Spice.T3
                 workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
                 if (dc.interactable || ac.interactable || workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
                     throw new InvalidOperationException("AC-C1 running calculation allowed an analysis-mode change.");
+                if (dc.GetComponent<Image>().color != MainUiTheme.PrimaryBlue)
+                    throw new InvalidOperationException("AC-C1 running state lost the selected DC visual.");
             }
             finally
             {
@@ -1231,7 +1238,7 @@ namespace ElectricalSim.Spice.T3
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
 
-        private static void ValidateAcC1ResponsiveLayout()
+        private static void ValidateAcC1LayoutStructureSmoke()
         {
             foreach (var size in new[] { new Vector2(3840f, 2160f), new Vector2(1920f, 1080f), new Vector2(1366f, 768f) })
             {
@@ -1244,7 +1251,7 @@ namespace ElectricalSim.Spice.T3
                     var bar = bindings.RunButton.transform.parent.Find("AnalysisControls") as RectTransform;
                     if (bar == null || bar.rect.width <= 0f || bar.rect.height <= 0f || bindings.PaletteRoot.Find("AcVoltageSourceCard") == null ||
                         bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null || workspace.GetDcAnalysisModeButtonForTesting() == null)
-                        throw new InvalidOperationException("AC-C1 responsive layout did not create required controls at " + size + ".");
+                        throw new InvalidOperationException("AC-C1 layout structure smoke did not create required controls at " + size + ".");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
             }
