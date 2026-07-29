@@ -5,6 +5,7 @@ using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Netlist;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
+using ElectricalSim.Spice.Infrastructure;
 
 namespace ElectricalSim.Spice.T3
 {
@@ -15,6 +16,7 @@ namespace ElectricalSim.Spice.T3
             ValidatePhasorMath();
             ValidateAcNetlistDeterminism();
             ValidateAcParserContract();
+            ValidateInjectedAcService();
         }
 
         private static void ValidatePhasorMath()
@@ -80,6 +82,45 @@ namespace ElectricalSim.Spice.T3
             AssertParserFails(SpiceAcNetlistBuilder.EndMarker + "\n" + SpiceAcNetlistBuilder.BeginMarker, requests, SpiceAcParseFailure.MarkersOutOfOrder);
             AssertParserFails(SpiceAcNetlistBuilder.BeginMarker + "\nnot-data\n" + SpiceAcNetlistBuilder.EndMarker,
                 requests, SpiceAcParseFailure.MalformedLine);
+        }
+
+        private static void ValidateInjectedAcService()
+        {
+            var circuit = CreateBasicCircuit();
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            var document = SpiceAcNetlistBuilder.Build(circuit, graph);
+            var stdout = SpiceAcNetlistBuilder.BeginMarker + "\n" +
+                string.Join("\n", document.OutputRequests.Select(request => request.Expression + " = " +
+                    (request.Kind == SpiceAcOutputKind.NodeVoltage ? "0.866025403784,0.5" : "-0.000866025403784,-0.0005"))) +
+                "\n" + SpiceAcNetlistBuilder.EndMarker;
+            var service = new SpiceAcSimulationService((_, _, _, _) => System.Threading.Tasks.Task.FromResult(new NgspiceRunResult
+            {
+                Success = true,
+                ExitCode = 0,
+                StandardOutput = stdout,
+                StandardError = "Warning: optional initialization file was not found."
+            }));
+            var result = service.SimulateAsync(circuit).GetAwaiter().GetResult();
+            if (!result.Success || result.NodeVoltages.Count != 0 || result.ComponentResults.Count != 0 ||
+                result.AcNodeVoltages.Count != 2 || result.AcComponentResults.Count != 2 ||
+                result.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency)
+                throw new InvalidOperationException("Injected AC service did not preserve DC/AC result isolation.");
+            AssertClose(result.AcComponentResults["resistor-001"].Current.Real, 0.000866025403784d, 1e-12d, "AC resistor current real");
+            AssertClose(result.AcComponentResults["ac-source-001"].Current.Real, -0.000866025403784d, 1e-12d, "AC source current sign");
+
+            var errorService = new SpiceAcSimulationService((_, _, _, _) => System.Threading.Tasks.Task.FromResult(new NgspiceRunResult
+            {
+                Success = true,
+                ExitCode = 0,
+                StandardOutput = stdout,
+                StandardError = "Error: invalid analysis command"
+            }));
+            var errorResult = errorService.SimulateAsync(circuit).GetAwaiter().GetResult();
+            if (errorResult.Success || !errorResult.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_AC_NGSPICE_ERROR"))
+                throw new InvalidOperationException("AC stderr Error: must reject exit-code-zero output.");
+            if (!SpiceNgspiceErrorClassifier.TryGetSevereErrorLine("Fatal: solver stopped", out _) ||
+                SpiceNgspiceErrorClassifier.TryGetSevereErrorLine("Note: normal diagnostic\nWarning: allowed", out _))
+                throw new InvalidOperationException("AC stderr severity classifier mismatch.");
         }
 
         private static void AssertParserFails(string output, IReadOnlyList<SpiceAcOutputRequest> requests, SpiceAcParseFailure expected)

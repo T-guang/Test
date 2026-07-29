@@ -25,7 +25,18 @@ namespace ElectricalSim.Spice.Core
 
         public async Task<SpiceSimulationResult> SimulateAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var result = new SpiceSimulationResult();
+            var result = new SpiceSimulationResult
+            {
+                AnalysisSettings = circuit == null
+                    ? new SpiceAnalysisSettings(SpiceAnalysisMode.DcOperatingPoint, SpiceAnalysisLimits.DefaultFrequencyHz)
+                    : circuit.AnalysisSettings.Copy()
+            };
+            if (circuit == null || circuit.AnalysisSettings.Mode != SpiceAnalysisMode.DcOperatingPoint)
+            {
+                result.Diagnostics.Add(new SpiceDiagnostic("SPICE_DC_ANALYSIS_UNSUPPORTED", SpiceDiagnosticSeverity.Error,
+                    "DC operating-point simulation requires DC analysis settings."));
+                return result;
+            }
             var graph = SpiceCircuitGraphBuilder.Build(circuit);
             result.Diagnostics.AddRange(graph.Diagnostics);
             if (!graph.IsValid) return result;

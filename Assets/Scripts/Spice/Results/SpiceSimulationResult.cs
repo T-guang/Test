@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Infrastructure;
 using ElectricalSim.Spice.Topology;
 
@@ -29,7 +30,11 @@ namespace ElectricalSim.Spice.Results
     public sealed class SpiceSimulationResult
     {
         public bool Success { get; set; }
-        public string AnalysisType { get; set; } = "DC Operating Point";
+        public SpiceAnalysisSettings AnalysisSettings { get; set; } =
+            new SpiceAnalysisSettings(SpiceAnalysisMode.DcOperatingPoint, SpiceAnalysisLimits.DefaultFrequencyHz);
+        public string AnalysisType => AnalysisSettings.Mode == SpiceAnalysisMode.AcSingleFrequency
+            ? "AC Single Frequency"
+            : "DC Operating Point";
         public TimeSpan Duration { get; set; }
         /// <summary>
         /// 图校验通过后由 SpiceNetlistBuilder 生成、并准备提交给 ngspice 的原始文本。
@@ -46,6 +51,8 @@ namespace ElectricalSim.Spice.Results
         public List<SpiceDiagnostic> Diagnostics { get; } = new List<SpiceDiagnostic>();
         public Dictionary<string, double> NodeVoltages { get; } = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, SpiceComponentResult> ComponentResults { get; } = new Dictionary<string, SpiceComponentResult>(StringComparer.Ordinal);
+        public Dictionary<string, SpicePhasor> AcNodeVoltages { get; } = new Dictionary<string, SpicePhasor>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, SpiceAcComponentResult> AcComponentResults { get; } = new Dictionary<string, SpiceAcComponentResult>(StringComparer.Ordinal);
         public NgspiceRunResult RawNgspiceResult { get; set; }
     }
 }
