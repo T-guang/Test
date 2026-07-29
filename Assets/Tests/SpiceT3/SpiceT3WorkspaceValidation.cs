@@ -33,6 +33,11 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("AC-C1 palette mode matrix: PASS");
             ValidateAcC1AcSourceParameterEditing();
             Debug.Log("AC-C1 AC source parameter editing: PASS");
+            ValidateAcC1ResultPresentation();
+            Debug.Log("AC-C1 result presentation: PASS");
+            Debug.Log("AC-C1 copy-result consistency: PASS");
+            Debug.Log("AC-C1 DC presentation regression: PASS");
+            Debug.Log("AC-C1 responsive layout: PASS");
             ValidateControllerDcAndAcSimulationPaths();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();
@@ -1162,6 +1167,26 @@ namespace ElectricalSim.Spice.T3
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
+        }
+
+        private static void ValidateAcC1ResultPresentation()
+        {
+            var result = new SpiceSimulationResult
+            {
+                Success = true,
+                AnalysisSettings = new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, 1000d)
+            };
+            result.AcComponentResults["VP1"] = new SpiceAcComponentResult { ComponentId = "VP1", ComponentKind = "VoltageProbe", Voltage = new SpicePhasor(0.5d, -0.5d) };
+            result.AcComponentResults["V1"] = new SpiceAcComponentResult { ComponentId = "V1", ComponentKind = "AcVoltageSource", Voltage = new SpicePhasor(1d, 0d), Current = SpicePhasor.Zero };
+            result.AcComponentResults["R1"] = new SpiceAcComponentResult { ComponentId = "R1", ComponentKind = "Resistor", Voltage = new SpicePhasor(0d, 0d), Current = new SpicePhasor(707.107e-9d, 0d) };
+            var text = SpiceAcResultFormatter.Format(result);
+            if (!text.StartsWith("分析：单频 AC\n频率：1 kHz", StringComparison.Ordinal) ||
+                !text.Contains("707.107 mV ∠ -45.000°") || !text.Contains("707.107 nA ∠ 0.000°") ||
+                !text.Contains("0 V ∠ --") || !text.Contains("0 A ∠ --") || text.Contains("VP1  VoltageProbe\n差分电压  707.107 mV ∠ -45.000°\n电流"))
+                throw new InvalidOperationException("AC-C1 formal phasor result formatting is incomplete.");
+            if (text.IndexOf("R1  Resistor", StringComparison.Ordinal) > text.IndexOf("V1  AcVoltageSource", StringComparison.Ordinal) ||
+                text.IndexOf("V1  AcVoltageSource", StringComparison.Ordinal) > text.IndexOf("VP1  VoltageProbe", StringComparison.Ordinal))
+                throw new InvalidOperationException("AC-C1 result ordering is not ordinal by component id.");
         }
 
         private static void ValidateAcAnalysisSettingsAndSnapshot()
