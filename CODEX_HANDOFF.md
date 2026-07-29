@@ -1,19 +1,13 @@
 # Codex Handoff: ElectricalSimulation2D SPICE
 
-## AC-C1 update (2026-07-29)
+## Current AC baseline
 
-## AC-C1.1 update (2026-07-30)
-
-- Current code baseline: `c5c3ddc fix(spice): close ac workspace presentation gaps`.
-- This handoff documentation commit is the separate documentation HEAD.
-- AC-B1: `c677c97`, AC-B1.1: `515c808`, AC-B2: `b185fa4`, AC-B2.1: `3405933`, AC-C1: `bd598e7` / `450119b`, AC-C1.1: `c5c3ddc`.
-- Next remains AC-D: 保存/导入 schemaVersion 2.
-
-- AC-B2 code baseline: `3405933`; AC-B2 handoff baseline: `fd7ae48`.
-- AC-C1 workspace interaction: `bd598e7 feat(spice): expose single-frequency ac workspace`.
-- AC-C1 phasor presentation validation: `450119b feat(spice): present single-frequency ac results`.
-- Current code HEAD: `450119b`.
-- Next: AC-D — 保存/导入 schemaVersion 2. Player build and manual acceptance remain deferred until AC-D is complete.
+- Code baseline: `c5c3ddc fix(spice): close ac workspace presentation gaps`.
+- Docs HEAD: this document's final forward commit.
+- AC-B1: `c677c97`; AC-B1.1: `515c808`; AC-B2: `b185fa4`; AC-B2.1: `3405933`.
+- AC-C1: `bd598e7` and `450119b`; AC-C1.1: `c5c3ddc`.
+- Next: AC-D — 保存/导入 schemaVersion 2.
+- The three-resolution check is only a layout-structure smoke test. Real 3840×2160, 1920×1080, and 1366×768 acceptance remains deferred to formal Player manual acceptance after AC-D.
 
 ## Current Code Baseline
 
@@ -231,7 +225,7 @@ V1 保存 Wire 的电气端点和折点数据，但未保存原始第一段方�
 
 ## 下一步
 
-1. AC-C1.
+1. AC-D：保存/导入 schemaVersion 2。
 
 <!--
 以下内容是 6105399 时期的归档 handoff，已经过时，仅保留历史上下文。
