@@ -25,6 +25,14 @@ namespace ElectricalSim.Spice.T3
             ValidateElectricalRevisionAndRunningMutationGuards();
             ValidateAcAnalysisSettingsAndSnapshot();
             ValidateAcAnalysisControllerRevisionAndRunningGuard();
+            ValidateAcC1AnalysisControls();
+            Debug.Log("AC-C1 analysis controls: PASS");
+            ValidateAcC1FrequencyInput();
+            Debug.Log("AC-C1 frequency input: PASS");
+            ValidateAcC1PaletteModeMatrix();
+            Debug.Log("AC-C1 palette mode matrix: PASS");
+            ValidateAcC1AcSourceParameterEditing();
+            Debug.Log("AC-C1 AC source parameter editing: PASS");
             ValidateControllerDcAndAcSimulationPaths();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();
@@ -978,6 +986,177 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("D1 验证无法执行受控底层参数变更。");
                 if (workspace.ElectricalRevisionForTesting <= revisionBeforeGuardedChanges)
                     throw new InvalidOperationException("绕过 UI 的模型变更仍应递增电气修订号。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcC1AnalysisControls()
+        {
+            var canvasRoot = new GameObject("SpiceAcC1AnalysisControls", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var dc = workspace.GetDcAnalysisModeButtonForTesting();
+                var ac = workspace.GetAcAnalysisModeButtonForTesting();
+                if (dc == null || ac == null || dc.interactable || !ac.interactable)
+                    throw new InvalidOperationException("AC-C1 default DC analysis segmented control state is incorrect.");
+
+                var beforeAc = workspace.ElectricalRevisionForTesting;
+                ac.onClick.Invoke();
+                if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.ElectricalRevisionForTesting != beforeAc + 1 ||
+                    !dc.interactable || ac.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun)
+                    throw new InvalidOperationException("AC-C1 DC to AC mode control did not use the formal controller path.");
+
+                var sameModeRevision = workspace.ElectricalRevisionForTesting;
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.ElectricalRevisionForTesting != sameModeRevision)
+                    throw new InvalidOperationException("AC-C1 same analysis mode advanced the electrical revision.");
+
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                dc.onClick.Invoke();
+                if (workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || workspace.ResultState != SpiceWorkspaceResultState.Stale)
+                    throw new InvalidOperationException("AC-C1 AC to DC did not stale the previous outcome.");
+
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+                if (dc.interactable || ac.interactable || workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
+                    throw new InvalidOperationException("AC-C1 running calculation allowed an analysis-mode change.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcC1FrequencyInput()
+        {
+            var canvasRoot = new GameObject("SpiceAcC1Frequency", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
+                    throw new InvalidOperationException("AC-C1 frequency setup could not enter AC mode.");
+                var input = workspace.GetAcFrequencyInputForTesting();
+                var apply = workspace.GetApplyAcFrequencyButtonForTesting();
+                if (input == null || apply == null || !input.interactable || !apply.interactable)
+                    throw new InvalidOperationException("AC-C1 frequency control was not enabled in AC mode.");
+
+                foreach (var accepted in new[] { "1000", "1e3", SpiceAnalysisLimits.MinFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture), SpiceAnalysisLimits.MaxFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture) })
+                {
+                    input.text = accepted;
+                    apply.onClick.Invoke();
+                }
+                if (Math.Abs(workspace.Model.AcFrequencyHz - SpiceAnalysisLimits.MaxFrequencyHz) > 1e-9d)
+                    throw new InvalidOperationException("AC-C1 frequency input did not accept a valid boundary value.");
+
+                var revision = workspace.ElectricalRevisionForTesting;
+                var frequency = workspace.Model.AcFrequencyHz;
+                foreach (var rejected in new[] { string.Empty, "not-a-number", "0", "-1", "NaN", "Infinity", "0.0001", "10000001" })
+                {
+                    input.text = rejected;
+                    apply.onClick.Invoke();
+                    if (workspace.Model.AcFrequencyHz != frequency || workspace.ElectricalRevisionForTesting != revision)
+                        throw new InvalidOperationException("AC-C1 invalid frequency changed the formal model.");
+                }
+
+                input.text = frequency.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+                apply.onClick.Invoke();
+                if (workspace.ElectricalRevisionForTesting != revision)
+                    throw new InvalidOperationException("AC-C1 equivalent frequency advanced the electrical revision.");
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
+                if (input.interactable || apply.interactable || workspace.TrySetAcFrequency(500d))
+                    throw new InvalidOperationException("AC-C1 running calculation allowed a frequency update.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcC1PaletteModeMatrix()
+        {
+            var canvasRoot = new GameObject("SpiceAcC1Palette", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var dcKinds = new[] { SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.SiliconDiode, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe };
+                foreach (var kind in dcKinds)
+                    if (workspace.GetPaletteCardForTesting(kind) == null || !workspace.GetPaletteCardForTesting(kind).interactable)
+                        throw new InvalidOperationException("AC-C1 DC palette matrix disabled a supported card: " + kind + ".");
+                if (workspace.GetPaletteCardForTesting(SpiceComponentKind.AcVoltageSource).interactable)
+                    throw new InvalidOperationException("AC-C1 DC palette allowed a new AC source.");
+
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.Model.FindComponent(resistor.InstanceId) == null)
+                    throw new InvalidOperationException("AC-C1 mode switch removed an existing component.");
+                var acKinds = new[] { SpiceComponentKind.AcVoltageSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe };
+                foreach (var kind in acKinds)
+                    if (workspace.GetPaletteCardForTesting(kind) == null || !workspace.GetPaletteCardForTesting(kind).interactable)
+                        throw new InvalidOperationException("AC-C1 AC palette matrix disabled a supported card: " + kind + ".");
+                foreach (var kind in new[] { SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource, SpiceComponentKind.SiliconDiode })
+                    if (workspace.GetPaletteCardForTesting(kind).interactable)
+                        throw new InvalidOperationException("AC-C1 AC palette allowed an unsupported card: " + kind + ".");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static void ValidateAcC1AcSourceParameterEditing()
+        {
+            var canvasRoot = new GameObject("SpiceAcC1Parameters", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency);
+                var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                var view = workspace.GetComponentViewForTesting(source.InstanceId);
+                if (source == null || source.SiValue != 1d || source.AcPhaseDegrees != 0d || view == null ||
+                    view.transform.Find("SymbolRoot/Symbol/AcMark") == null || !view.transform.Find("AnnotationRoot/Summary").GetComponent<Text>().text.Contains("∠ 0°"))
+                    throw new InvalidOperationException("AC-C1 AC source default view or core-owned defaults are incorrect.");
+
+                var changes = 0;
+                workspace.Model.Changed += _ => changes++;
+                var revision = workspace.ElectricalRevisionForTesting;
+                workspace.GetAcPhaseInputForTesting().text = "30";
+                var parameterInput = view.transform.parent.GetComponentInChildren<InputField>();
+                var allInputs = workspace.GetAcPhaseInputForTesting().transform.parent.GetComponentsInChildren<InputField>(true);
+                var magnitudeInput = allInputs.First(input => input.name == "ParameterInput");
+                magnitudeInput.text = "2";
+                workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d || changes != 1 || workspace.ElectricalRevisionForTesting != revision + 1)
+                    throw new InvalidOperationException("AC-C1 AC source parameters were not atomically applied once.");
+
+                magnitudeInput.text = "0";
+                workspace.GetAcPhaseInputForTesting().text = "45";
+                workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d)
+                    throw new InvalidOperationException("AC-C1 invalid magnitude partially updated AC source parameters.");
+                magnitudeInput.text = "3";
+                workspace.GetAcPhaseInputForTesting().text = "bad";
+                workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d)
+                    throw new InvalidOperationException("AC-C1 invalid phase partially updated AC source parameters.");
+
+                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 2d, -170d))
+                    throw new InvalidOperationException("AC-C1 phase equivalence setup failed.");
+                revision = workspace.ElectricalRevisionForTesting;
+                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 2d, 190d) || workspace.ElectricalRevisionForTesting != revision)
+                    throw new InvalidOperationException("AC-C1 equivalent normalized phase advanced revision.");
+
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 60f);
+                workspace.SelectComponent(workspace.GetComponentViewForTesting(resistor.InstanceId));
+                if (workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
+                    throw new InvalidOperationException("AC-C1 phase field leaked into a normal parameter editor.");
+                workspace.SelectComponent(view);
+                if (!workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
+                    throw new InvalidOperationException("AC-C1 phase field did not return for an AC source.");
+                var ground = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 60f);
+                workspace.SelectComponent(workspace.GetComponentViewForTesting(ground.InstanceId));
+                if (workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
+                    throw new InvalidOperationException("AC-C1 phase field leaked into ground selection.");
             }
             finally
             {

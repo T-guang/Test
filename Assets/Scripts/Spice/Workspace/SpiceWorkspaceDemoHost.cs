@@ -335,6 +335,7 @@ namespace ElectricalSim.Spice.Workspace
             viewBindings.Validate();
             workspaceController.Initialize(viewBindings);
             SpiceWorkspacePresentationAdapter.Apply(viewBindings);
+            workspaceController.RefreshAnalysisControlsForHost();
             initialized = true;
         }
     }
@@ -347,7 +348,7 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
         private const float AssistantSectionHeaderHeight = 42f;
-        private const float ParameterSectionHeight = 118f;
+        private const float ParameterSectionHeight = 166f;
         private const float NetlistSectionHeight = 180f;
         private const float AssistantSectionGap = 8f;
         private const float ParameterInputWidth = 130f;
@@ -385,6 +386,8 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
+
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
 
             StyleAssistant(bindings);
         }
@@ -553,6 +556,12 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "Source", new Vector2(36f, -15f), new Vector2(66f, 15f), 3f);
                     AddText(symbol, "Plus", "+", new Vector2(44f, 6f), 13);
                     AddText(symbol, "Minus", "-", new Vector2(58f, -7f), 13);
+                    break;
+                case SpiceComponentKind.AcVoltageSource:
+                    AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(34f, 0f));
+                    AddLine(symbol, "Source", new Vector2(34f, -14f), new Vector2(64f, 14f), 3f);
+                    AddText(symbol, "Ac", "~", new Vector2(50f, 0f), 20);
+                    AddLine(symbol, "LeadRight", new Vector2(64f, 0f), new Vector2(94f, 0f));
                     break;
                 case SpiceComponentKind.DcCurrentSource:
                     AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(34f, 0f));
@@ -737,6 +746,9 @@ namespace ElectricalSim.Spice.Workspace
 
             var input = section.Find("ParameterInput") as RectTransform;
             var unit = section.Find("Unit") as RectTransform;
+            var phaseLabel = section.Find("AcPhaseLabel") as RectTransform;
+            var phaseInput = section.Find("AcPhaseInput") as RectTransform;
+            var phaseUnit = section.Find("AcPhaseUnit") as RectTransform;
             var apply = section.Find("Apply") as RectTransform;
             if (input != null)
             {
@@ -749,10 +761,23 @@ namespace ElectricalSim.Spice.Workspace
                 Anchor(unit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(unitLeft, -112f), new Vector2(unitLeft + ParameterUnitWidth, -112f + ParameterControlHeight));
                 StyleSmallButton(unit.GetComponent<Button>(), false);
             }
+            if (phaseLabel != null)
+            {
+                Anchor(phaseLabel, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -152f), new Vector2(70f, -120f));
+            }
+            if (phaseInput != null)
+            {
+                Anchor(phaseInput, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(74f, -152f), new Vector2(14f + ParameterInputWidth, -120f));
+                StyleInput(phaseInput.GetComponent<InputField>());
+            }
+            if (phaseUnit != null)
+            {
+                Anchor(phaseUnit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap, -152f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth, -120f));
+            }
             if (apply != null)
             {
                 var applyLeft = 14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth + AssistantSectionGap;
-                Anchor(apply, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(applyLeft, -112f), new Vector2(applyLeft + ParameterApplyButtonWidth, -112f + ParameterControlHeight));
+                Anchor(apply, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(applyLeft, -152f), new Vector2(applyLeft + ParameterApplyButtonWidth, -120f));
                 StyleSmallButton(apply.GetComponent<Button>(), true, "应用");
             }
 

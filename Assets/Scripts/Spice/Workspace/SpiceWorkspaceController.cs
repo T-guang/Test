@@ -49,8 +49,16 @@ namespace ElectricalSim.Spice.Workspace
         private Text netlistStatusText;
         private Text parameterTitle;
         private InputField parameterInput;
+        private Text acPhaseLabel;
+        private InputField acPhaseInput;
+        private Button parameterApplyButton;
         private Button unitButton;
         private Text unitLabel;
+        private Button dcAnalysisModeButton;
+        private Button acAnalysisModeButton;
+        private InputField acFrequencyInput;
+        private Button applyAcFrequencyButton;
+        private readonly Dictionary<SpiceComponentKind, CanvasGroup> paletteCardGroups = new Dictionary<SpiceComponentKind, CanvasGroup>();
         private Button runButton;
         private Button rotateButton;
         private Button netlistToggleButton;
@@ -214,6 +222,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void SelectPaletteKind(SpiceComponentKind kind)
         {
+            if (!IsPaletteKindAvailable(kind)) return;
             paletteKind = kind;
             statusText.text = "拖动元件到画布以放置";
         }
@@ -221,7 +230,7 @@ namespace ElectricalSim.Spice.Workspace
         public void BeginPaletteDrag(SpiceComponentKind kind, Vector2 screenPosition, Camera eventCamera)
         {
             EnsureInitialized();
-            if (!CanModifyElectricalModel()) return;
+            if (!CanModifyElectricalModel() || !IsPaletteKindAvailable(kind)) return;
             CancelPendingWire();
             CancelPaletteDrag();
             paletteKind = kind;
@@ -360,6 +369,8 @@ namespace ElectricalSim.Spice.Workspace
             RefreshNetlistUi();
             // C2：进入 Running 时禁用保存/另存为/导入按钮（不依赖 Update 轮询）。
             RefreshFileOperationButtonsAvailability();
+            RefreshAnalysisControls();
+            RefreshParameterPanel();
 
             CancellationTokenSource localCancellation = null;
             try
@@ -446,6 +457,8 @@ namespace ElectricalSim.Spice.Workspace
                         RefreshCopyResultButton();
                         // C2：离开 Running 时恢复保存/另存为/导入按钮。
                         RefreshFileOperationButtonsAvailability();
+                        RefreshAnalysisControls();
+                        RefreshParameterPanel();
                     }
                 }
 
@@ -524,8 +537,17 @@ namespace ElectricalSim.Spice.Workspace
 
         // 仅供 T3 测试验证按钮存在与可交互状态。不在生产路径调用。
         internal Button GetSaveFileButtonForTesting() => saveFileButton;
+        internal void RefreshAnalysisControlsForHost() => RefreshAnalysisControls();
         internal Button GetSaveAsFileButtonForTesting() => saveAsFileButton;
         internal Button GetImportFileButtonForTesting() => importFileButton;
+        internal Button GetDcAnalysisModeButtonForTesting() => dcAnalysisModeButton;
+        internal Button GetAcAnalysisModeButtonForTesting() => acAnalysisModeButton;
+        internal InputField GetAcFrequencyInputForTesting() => acFrequencyInput;
+        internal Button GetApplyAcFrequencyButtonForTesting() => applyAcFrequencyButton;
+        internal CanvasGroup GetPaletteCardForTesting(SpiceComponentKind kind) => paletteCardGroups.TryGetValue(kind, out var group) ? group : null;
+        internal InputField GetAcPhaseInputForTesting() => acPhaseInput;
+        internal Button GetParameterApplyButtonForTesting() => parameterApplyButton;
+        internal string GetVisibleResultTextForTesting() => resultText != null ? resultText.text : null;
 
         // 仅供 T3 测试直接触发按钮回调，验证 Running 二次保护与事件路由。
         internal void InvokeSaveButtonForTesting() => HandleSaveButtonClicked();
@@ -751,6 +773,7 @@ namespace ElectricalSim.Spice.Workspace
             SetDiagnosticText(string.Empty);
             if (statusText != null) statusText.text = StateMessage();
             ClearParameterPanel();
+            RefreshAnalysisControls();
             UpdateRotateAvailability();
             RefreshNetlistUi();
             RefreshCopyResultButton();
@@ -848,6 +871,8 @@ namespace ElectricalSim.Spice.Workspace
         {
             ResultState = state;
             RefreshFileOperationButtonsAvailability();
+            RefreshAnalysisControls();
+            RefreshParameterPanel();
         }
 
         /// <summary>
@@ -1120,6 +1145,7 @@ namespace ElectricalSim.Spice.Workspace
         private void BuildUi()
         {
             var toolbar = bindings.RunButton.transform.parent;
+            CreateAnalysisControls(toolbar as RectTransform);
             runButton = bindings.RunButton;
             rotateButton = bindings.RotateButton;
             runButton.onClick.AddListener(RunFromButton);
@@ -1156,6 +1182,8 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
             CreatePaletteCard(palette.transform, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
             CreatePaletteCard(palette.transform, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
+
+            CreatePaletteCard(palette.transform, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
 
             var workspace = bindings.WorkspaceViewport;
             viewportRect = workspace;
@@ -1214,11 +1242,18 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -38f), new Vector2(-14f, -8f));
             parameterInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "ParameterInput");
             SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -82f), new Vector2(-4f, -44f));
+            acPhaseLabel = SpiceWorkspaceUi.CreateText(parameterRoot, "AcPhaseLabel", "相位", 13, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(acPhaseLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -120f), new Vector2(70f, -90f));
+            acPhaseInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "AcPhaseInput");
+            SpiceWorkspaceUi.Anchor(acPhaseInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(74f, -122f), new Vector2(-4f, -88f));
+            var phaseUnit = SpiceWorkspaceUi.CreateText(parameterRoot, "AcPhaseUnit", "°", 14, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(phaseUnit.rectTransform, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -120f), new Vector2(-14f, -90f));
             unitButton = SpiceWorkspaceUi.CreateButton(parameterRoot, "Unit", "V", MainUiTheme.FilterButton, CycleUnit);
             SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -82f), new Vector2(-14f, -44f));
             unitLabel = unitButton.GetComponentInChildren<Text>();
             var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
+            parameterApplyButton = apply;
 
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
             var resultHeader = resultRoot.Find("ResultHeader") as RectTransform;
@@ -1251,6 +1286,7 @@ namespace ElectricalSim.Spice.Workspace
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             RefreshCopyResultButton();
+            RefreshAnalysisControls();
             ValidateAssistantScrollStructure();
 
             // 视图控制器初始化（Content 已装配，zoomLabel 已创建）
@@ -1313,6 +1349,7 @@ namespace ElectricalSim.Spice.Workspace
             outline.effectColor = MainUiTheme.Divider;
             outline.effectDistance = new Vector2(1f, -1f);
             card.gameObject.AddComponent<SpiceWorkspacePaletteDragItem>().Initialize(this, kind);
+            paletteCardGroups[kind] = card.gameObject.AddComponent<CanvasGroup>();
             var label = SpiceWorkspaceUi.CreateText(card.transform, "Title", title, 14, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(label.rectTransform, new Vector2(0f, 0.45f), new Vector2(1f, 1f), new Vector2(6f, 0f), new Vector2(-6f, -8f));
             var meta = SpiceWorkspaceUi.CreateText(card.transform, "Summary", summary, 12, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.MutedText);
@@ -1347,6 +1384,103 @@ namespace ElectricalSim.Spice.Workspace
             if (ResultState != SpiceWorkspaceResultState.Running) statusText.text = StateMessage();
             RefreshNetlistUi();
             RefreshCopyResultButton();
+            RefreshAnalysisControls();
+            RefreshParameterPanel();
+        }
+
+        private void CreateAnalysisControls(RectTransform toolbar)
+        {
+            var root = toolbar != null ? toolbar.parent as RectTransform : null;
+            if (root == null) root = toolbar;
+            if (root == null) return;
+
+            if (root.rect.height >= 500f)
+            {
+                ReserveTopSpace(bindings.PaletteRoot, -102f);
+                ReserveTopSpace(bindings.AssistantRoot, -102f);
+                ReserveTopSpace(bindings.WorkspaceViewport, -118f);
+            }
+
+            var bar = SpiceWorkspaceUi.CreateImage(root, "AnalysisControls", new Color(0.96f, 0.98f, 1f));
+            SpiceWorkspaceUi.Anchor(bar.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -102f), new Vector2(0f, -66f));
+            bar.raycastTarget = true;
+
+            var title = SpiceWorkspaceUi.CreateText(bar.transform, "AnalysisLabel", "分析", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(18f, 0f), new Vector2(54f, 0f));
+            dcAnalysisModeButton = SpiceWorkspaceUi.CreateButton(bar.transform, "DcAnalysisMode", "直流工作点", MainUiTheme.FilterButton, () => SetAnalysisModeFromUi(SpiceAnalysisMode.DcOperatingPoint));
+            SpiceWorkspaceUi.Anchor(dcAnalysisModeButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(58f, 4f), new Vector2(146f, -4f));
+            acAnalysisModeButton = SpiceWorkspaceUi.CreateButton(bar.transform, "AcAnalysisMode", "单频 AC", MainUiTheme.FilterButton, () => SetAnalysisModeFromUi(SpiceAnalysisMode.AcSingleFrequency));
+            SpiceWorkspaceUi.Anchor(acAnalysisModeButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(150f, 4f), new Vector2(224f, -4f));
+
+            var frequencyLabel = SpiceWorkspaceUi.CreateText(bar.transform, "FrequencyLabel", "频率", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(frequencyLabel.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(246f, 0f), new Vector2(286f, 0f));
+            acFrequencyInput = SpiceWorkspaceUi.CreateInput(bar.transform, "AcFrequencyInput");
+            SpiceWorkspaceUi.Anchor(acFrequencyInput.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(290f, 4f), new Vector2(386f, -4f));
+            var frequencyUnit = SpiceWorkspaceUi.CreateText(bar.transform, "FrequencyUnit", "Hz", 13, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(frequencyUnit.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(390f, 0f), new Vector2(414f, 0f));
+            applyAcFrequencyButton = SpiceWorkspaceUi.CreateButton(bar.transform, "ApplyAcFrequency", "应用", MainUiTheme.PrimaryBlue, ApplyAcFrequency);
+            SpiceWorkspaceUi.Anchor(applyAcFrequencyButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(420f, 4f), new Vector2(480f, -4f));
+        }
+
+        private static void ReserveTopSpace(RectTransform rect, float topOffset)
+        {
+            if (rect == null) return;
+            var offsetMax = rect.offsetMax;
+            offsetMax.y = topOffset;
+            rect.offsetMax = offsetMax;
+        }
+
+        private void SetAnalysisModeFromUi(SpiceAnalysisMode mode)
+        {
+            if (!TrySetAnalysisMode(mode) && ResultState != SpiceWorkspaceResultState.Running && statusText != null)
+                statusText.text = "分析模式未改变。";
+            RefreshAnalysisControls();
+        }
+
+        private void ApplyAcFrequency()
+        {
+            if (ResultState == SpiceWorkspaceResultState.Running || Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency) return;
+            if (!double.TryParse(acFrequencyInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out var frequencyHz) ||
+                !SpiceAnalysisLimits.IsValidFrequency(frequencyHz))
+            {
+                acFrequencyInput.text = FormatFrequencyInput(Model.AcFrequencyHz);
+                if (statusText != null) statusText.text = "频率必须是 0.001 Hz～10000000 Hz 范围内的有限数值。";
+                return;
+            }
+
+            if (!TrySetAcFrequency(frequencyHz) && statusText != null)
+                statusText.text = "频率未改变。";
+            RefreshAnalysisControls();
+        }
+
+        private void RefreshAnalysisControls()
+        {
+            if (dcAnalysisModeButton == null || acAnalysisModeButton == null || acFrequencyInput == null || applyAcFrequencyButton == null) return;
+            var isRunning = ResultState == SpiceWorkspaceResultState.Running;
+            var isAc = Model.AnalysisMode == SpiceAnalysisMode.AcSingleFrequency;
+            dcAnalysisModeButton.interactable = !isRunning && isAc;
+            acAnalysisModeButton.interactable = !isRunning && !isAc;
+            acFrequencyInput.interactable = !isRunning && isAc;
+            applyAcFrequencyButton.interactable = !isRunning && isAc;
+            acFrequencyInput.text = FormatFrequencyInput(Model.AcFrequencyHz);
+            foreach (var pair in paletteCardGroups)
+            {
+                var enabled = !isRunning && IsPaletteKindAvailable(pair.Key);
+                pair.Value.interactable = enabled;
+                pair.Value.blocksRaycasts = enabled;
+                pair.Value.alpha = enabled ? 1f : 0.42f;
+            }
+        }
+
+        private static string FormatFrequencyInput(double frequencyHz) => frequencyHz.ToString("G9", CultureInfo.InvariantCulture);
+
+        private bool IsPaletteKindAvailable(SpiceComponentKind kind)
+        {
+            if (Model.AnalysisMode == SpiceAnalysisMode.DcOperatingPoint)
+                return kind != SpiceComponentKind.AcVoltageSource;
+            return kind != SpiceComponentKind.DcVoltageSource &&
+                kind != SpiceComponentKind.DcCurrentSource &&
+                kind != SpiceComponentKind.SiliconDiode;
         }
 
         private bool CanModifyElectricalModel()
@@ -1386,6 +1520,8 @@ namespace ElectricalSim.Spice.Workspace
             if (statusText != null) statusText.text = StateMessage();
             RefreshNetlistUi();
             RefreshCopyResultButton();
+            RefreshAnalysisControls();
+            RefreshParameterPanel();
         }
 
         private Task<SpiceSimulationResult> SimulateCircuitAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken)
@@ -1587,12 +1723,28 @@ namespace ElectricalSim.Spice.Workspace
 
         private void RefreshParameterPanel()
         {
+            SetAcPhaseControlsVisible(false);
+            if (parameterApplyButton != null) parameterApplyButton.interactable = false;
             if (selectedComponent == null || selectedComponent.Kind == SpiceComponentKind.Ground)
             {
                 ClearParameterPanel();
                 return;
             }
             currentUnits = SpiceParameterUnits.UnitsFor(selectedComponent.Kind);
+            if (selectedComponent.Kind == SpiceComponentKind.AcVoltageSource)
+            {
+                var isRunning = ResultState == SpiceWorkspaceResultState.Running;
+                parameterTitle.text = selectedComponent.InstanceId + " AC 参数设置";
+                parameterInput.text = selectedComponent.Data.SiValue.ToString("G6", CultureInfo.InvariantCulture);
+                parameterInput.interactable = !isRunning;
+                unitButton.interactable = false;
+                unitLabel.text = "V";
+                acPhaseInput.text = selectedComponent.Data.AcPhaseDegrees.ToString("G6", CultureInfo.InvariantCulture);
+                SetAcPhaseControlsVisible(true);
+                acPhaseInput.interactable = !isRunning;
+                if (parameterApplyButton != null) parameterApplyButton.interactable = !isRunning;
+                return;
+            }
             if (selectedComponent.Kind == SpiceComponentKind.SiliconDiode)
             {
                 parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
@@ -1625,12 +1777,13 @@ namespace ElectricalSim.Spice.Workspace
                 unitButton.interactable = false;
                 return;
             }
-            parameterInput.interactable = true;
-            unitButton.interactable = true;
+            parameterInput.interactable = ResultState != SpiceWorkspaceResultState.Running;
+            unitButton.interactable = ResultState != SpiceWorkspaceResultState.Running;
+            if (parameterApplyButton != null) parameterApplyButton.interactable = ResultState != SpiceWorkspaceResultState.Running;
             unitIndex = 0;
             parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
-            parameterInput.interactable = true;
-            unitButton.interactable = true;
+            parameterInput.interactable = ResultState != SpiceWorkspaceResultState.Running;
+            unitButton.interactable = ResultState != SpiceWorkspaceResultState.Running;
             parameterInput.text = SpiceParameterUnits.FromSi(selectedComponent.Kind, selectedComponent.Data.SiValue, currentUnits[unitIndex]).ToString("G6", CultureInfo.InvariantCulture);
             unitLabel.text = currentUnits[unitIndex];
         }
@@ -1642,6 +1795,16 @@ namespace ElectricalSim.Spice.Workspace
             parameterInput.interactable = false;
             unitButton.interactable = false;
             unitLabel.text = "-";
+            SetAcPhaseControlsVisible(false);
+            if (parameterApplyButton != null) parameterApplyButton.interactable = false;
+        }
+
+        private void SetAcPhaseControlsVisible(bool visible)
+        {
+            if (acPhaseLabel != null) acPhaseLabel.gameObject.SetActive(visible);
+            if (acPhaseInput != null) acPhaseInput.gameObject.SetActive(visible);
+            var phaseUnit = acPhaseLabel != null ? acPhaseLabel.transform.parent.Find("AcPhaseUnit") : null;
+            if (phaseUnit != null) phaseUnit.gameObject.SetActive(visible);
         }
 
         private void CycleUnit()
@@ -1654,6 +1817,19 @@ namespace ElectricalSim.Spice.Workspace
 
         private void ApplyParameter()
         {
+            if (selectedComponent != null && selectedComponent.Kind == SpiceComponentKind.AcVoltageSource)
+            {
+                if (!double.TryParse(parameterInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out var magnitudeVolts) ||
+                    !double.TryParse(acPhaseInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out var phaseDegrees) ||
+                    !TrySetAcVoltageSourceParameters(selectedComponent.InstanceId, magnitudeVolts, phaseDegrees))
+                {
+                    statusText.text = "AC 小信号幅值或相位无效。";
+                    RefreshParameterPanel();
+                    return;
+                }
+                RefreshParameterPanel();
+                return;
+            }
             if (selectedComponent == null || currentUnits.Length == 0 || !TryApplyParameterText(selectedComponent.InstanceId, parameterInput.text, currentUnits[unitIndex], out _))
             {
                 statusText.text = "参数无效";
@@ -1726,6 +1902,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string PaletteLabel(SpiceComponentKind kind)
         {
+            if (kind == SpiceComponentKind.AcVoltageSource) return "交流电压源";
             return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : kind == SpiceComponentKind.VoltageProbe ? "电压探针" : kind == SpiceComponentKind.CurrentProbe ? "电流探针" : "接地";
         }
 
@@ -1733,10 +1910,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (result.AnalysisSettings.Mode == SpiceAnalysisMode.AcSingleFrequency)
             {
-                return string.Join("\n\n", result.AcComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
-                    value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + FormatPhasor(value.Voltage, "V") + "\n" +
-                    FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
-                    (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
+                return SpiceAcResultFormatter.Format(result);
             }
 
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
@@ -1750,28 +1924,11 @@ namespace ElectricalSim.Spice.Workspace
             return value.ComponentKind == "SiliconDiode" ? "VAK" : value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
         }
 
-        private static string VoltageLabel(SpiceAcComponentResult value)
-        {
-            return value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
-        }
-
-        private static string FormatPhasor(SpicePhasor value, string unit)
-        {
-            return value.Magnitude.ToString("G6", CultureInfo.InvariantCulture) + " " + unit + " ∠ " +
-                value.PhaseDegrees.ToString("G6", CultureInfo.InvariantCulture) + "°";
-        }
-
         private static string FormatCurrentLine(SpiceComponentResult value)
         {
             // 电压探针不注入电流，内部 Current=0 仅为占位值，不得作为测量值展示，故整行省略。
             if (value.ComponentKind == "VoltageProbe") return string.Empty;
             return "电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n";
-        }
-
-        private static string FormatCurrentLine(SpiceAcComponentResult value)
-        {
-            if (value.ComponentKind == "VoltageProbe") return string.Empty;
-            return "电流  " + FormatPhasor(value.Current, "A") + "\n";
         }
 
         private static string DirectionLabel(string direction)

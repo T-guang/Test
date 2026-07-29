@@ -83,7 +83,10 @@ namespace ElectricalSim.Spice.Workspace
 
         public void RefreshAnnotation()
         {
-            if (summaryText != null) summaryText.text = SpiceWorkspaceDisplay.FormatParameter(data.Kind, data.SiValue);
+            if (summaryText != null)
+                summaryText.text = data.Kind == SpiceComponentKind.AcVoltageSource
+                    ? SpiceWorkspaceDisplay.FormatAcVoltageSource(data.SiValue, data.AcPhaseDegrees)
+                    : SpiceWorkspaceDisplay.FormatParameter(data.Kind, data.SiValue);
         }
 
         public void RefreshVisualState()
@@ -242,10 +245,16 @@ namespace ElectricalSim.Spice.Workspace
             switch (data.Kind)
             {
                 case SpiceComponentKind.DcVoltageSource:
-                case SpiceComponentKind.AcVoltageSource:
                     CreateCircle(symbol.transform, 21f, Vector2.zero);
                     CreateLine(symbol.transform, new Vector2(-13f, 0f), new Vector2(13f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(0f, -13f), new Vector2(0f, 13f), 3f);
+                    break;
+                case SpiceComponentKind.AcVoltageSource:
+                    CreateCircle(symbol.transform, 21f, Vector2.zero);
+                    var acMark = SpiceWorkspaceUi.CreateText(symbol.transform, "AcMark", "~", 26, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.PrimaryBlue);
+                    acMark.rectTransform.sizeDelta = new Vector2(28f, 28f);
+                    acMark.rectTransform.anchoredPosition = Vector2.zero;
+                    acMark.raycastTarget = false;
                     break;
                 case SpiceComponentKind.DcCurrentSource:
                     CreateCircle(symbol.transform, 21f, Vector2.zero);
@@ -373,6 +382,15 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
             if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";
             return "GND";
+        }
+
+        public static string FormatAcVoltageSource(double magnitudeVolts, double phaseDegrees)
+        {
+            var normalized = phaseDegrees % 360d;
+            if (normalized >= 180d) normalized -= 360d;
+            if (normalized < -180d) normalized += 360d;
+            if (Math.Abs(normalized) < 0.0005d) normalized = 0d;
+            return Format(magnitudeVolts) + " V ∠ " + normalized.ToString("0.###", CultureInfo.InvariantCulture) + "°";
         }
 
         private static string Format(double value) => value.ToString("G4", CultureInfo.InvariantCulture);
