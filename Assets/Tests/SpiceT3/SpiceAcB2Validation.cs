@@ -17,6 +17,8 @@ namespace ElectricalSim.Spice.T3
             ValidateAcNetlistDeterminism();
             ValidateAcParserContract();
             ValidateInjectedAcService();
+            ValidateUnifiedSimulationServiceDispatch();
+            RunRealAcFixtures();
         }
 
         private static void ValidatePhasorMath()
@@ -82,6 +84,15 @@ namespace ElectricalSim.Spice.T3
             AssertParserFails(SpiceAcNetlistBuilder.EndMarker + "\n" + SpiceAcNetlistBuilder.BeginMarker, requests, SpiceAcParseFailure.MarkersOutOfOrder);
             AssertParserFails(SpiceAcNetlistBuilder.BeginMarker + "\nnot-data\n" + SpiceAcNetlistBuilder.EndMarker,
                 requests, SpiceAcParseFailure.MalformedLine);
+            AssertParserFails(SpiceAcNetlistBuilder.BeginMarker + "\nv(n001)=1,0\n" + SpiceAcNetlistBuilder.EndMarker + "\n" + SpiceAcNetlistBuilder.BeginMarker + "\ni(v1)=1,0\n" + SpiceAcNetlistBuilder.EndMarker,
+                requests, SpiceAcParseFailure.MarkersDuplicate);
+            try
+            {
+                SpiceAcOutputParser.TryParse(SpiceAcNetlistBuilder.BeginMarker + "\n" + SpiceAcNetlistBuilder.EndMarker,
+                    new List<SpiceAcOutputRequest> { new SpiceAcOutputRequest(SpiceAcOutputKind.NodeVoltage, "v(a)", "same"), new SpiceAcOutputRequest(SpiceAcOutputKind.BranchCurrent, "i(v1)", "same") }, out _, out _, out _);
+                throw new InvalidOperationException("Duplicate AC result keys must be rejected.");
+            }
+            catch (ArgumentException) { }
         }
 
         private static void ValidateInjectedAcService()
@@ -123,6 +134,156 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException("AC stderr severity classifier mismatch.");
         }
 
+        private static void ValidateUnifiedSimulationServiceDispatch()
+        {
+            var dcCalls = 0;
+            var acCalls = 0;
+            var service = new SpiceSimulationService(
+                (circuit, _) =>
+                {
+                    dcCalls++;
+                    if (circuit.AnalysisSettings.Mode != SpiceAnalysisMode.DcOperatingPoint)
+                        throw new InvalidOperationException("Unified service sent a non-DC circuit to the DC service.");
+                    return System.Threading.Tasks.Task.FromResult(new SpiceSimulationResult { Success = true, AnalysisSettings = circuit.AnalysisSettings.Copy() });
+                },
+                (circuit, _) =>
+                {
+                    acCalls++;
+                    if (circuit.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency)
+                        throw new InvalidOperationException("Unified service sent a non-AC circuit to the AC service.");
+                    return System.Threading.Tasks.Task.FromResult(new SpiceSimulationResult { Success = true, AnalysisSettings = circuit.AnalysisSettings.Copy() });
+                });
+
+            var dcResult = service.SimulateAsync(new SpiceCircuitModel()).GetAwaiter().GetResult();
+            var acResult = service.SimulateAsync(new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, 1000d))).GetAwaiter().GetResult();
+            if (!dcResult.Success || !acResult.Success || dcCalls != 1 || acCalls != 1)
+                throw new InvalidOperationException("Unified simulation service did not dispatch exactly once to each analysis-specific service.");
+
+            var unsupportedCircuit = new SpiceCircuitModel(new SpiceAnalysisSettings((SpiceAnalysisMode)999, 1000d));
+            var unsupportedResult = service.SimulateAsync(unsupportedCircuit).GetAwaiter().GetResult();
+            if (unsupportedResult.Success || dcCalls != 1 || acCalls != 1 ||
+                !unsupportedResult.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_ANALYSIS_MODE_UNSUPPORTED"))
+                throw new InvalidOperationException("Unified simulation service did not reject an unsupported analysis mode without dispatching it.");
+        }
+
+        private static void RunRealAcFixtures()
+        {
+            ValidateRealResistorFixture();
+            ValidateRealSourcePhaseFixture();
+            ValidateRealRcLowPassFixture();
+            ValidateRealRcHighPassFixture();
+            ValidateRealRlFixture();
+            ValidateRealRlcResonanceFixture();
+            ValidateRealClosedSwitchFixture();
+            ValidateRealOpenSwitchFixture();
+            ValidateRealVoltageProbeFixtures();
+            ValidateRealCurrentProbeFixtures();
+            ValidateRealDualSourceFixtures();
+            UnityEngine.Debug.Log("AC-B2 real ngspice fixtures: 14/14 PASS");
+        }
+
+        private static SpiceSimulationResult RunRealAcFixture(string name, SpiceCircuitModel circuit)
+        {
+            var result = new SpiceSimulationService().SimulateAsync(circuit).GetAwaiter().GetResult();
+            if (!result.Success)
+                throw new InvalidOperationException(name + " failed: " + string.Join(" | ", result.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+            if (result.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency || result.NodeVoltages.Count != 0 ||
+                result.ComponentResults.Count != 0 || result.AcNodeVoltages.Count == 0 || result.AcComponentResults.Count == 0 ||
+                result.RawNgspiceResult == null || !result.RawNgspiceResult.Success ||
+                string.IsNullOrEmpty(result.GeneratedNetlistContent) || !result.GeneratedNetlistContent.Contains("ac lin 1"))
+                throw new InvalidOperationException(name + " did not complete the real AC service contract.");
+            return result;
+        }
+
+        private static void ValidateRealResistorFixture()
+        {
+            var result = RunRealAcFixture("resistor", CreateResistorCircuit(0d, 1000d, 1000d));
+            AssertPhasorClose(result.AcNodeVoltages.Values.First(value => value.Magnitude > 0.5d), 1d, 0d, "resistor node");
+            AssertPhasorClose(result.AcComponentResults["resistor-001"].Current, .001d, 0d, "resistor current");
+            AssertPhasorClose(result.AcComponentResults["ac-source-001"].Current, -.001d, 0d, "source current");
+        }
+
+        private static void ValidateRealSourcePhaseFixture()
+        {
+            var result = RunRealAcFixture("source phase", CreateResistorCircuit(30d, 1000d, 1000d));
+            var c = Math.Sqrt(3d) / 2d;
+            AssertPhasorClose(result.AcComponentResults["resistor-001"].Current, .001d * c, .0005d, "30 degree resistor current");
+            AssertPhasorClose(result.AcComponentResults["ac-source-001"].Current, -.001d * c, -.0005d, "30 degree source current");
+        }
+
+        private static void ValidateRealRcLowPassFixture() => ValidateFilterFixture("RC low pass", SpiceComponentModel.Resistor("resistor-001", 1000d), SpiceComponentModel.Capacitor("capacitor-001", 1e-6d), .5d, -.5d);
+        private static void ValidateRealRcHighPassFixture() => ValidateFilterFixture("RC high pass", SpiceComponentModel.Capacitor("capacitor-001", 1e-6d), SpiceComponentModel.Resistor("resistor-001", 1000d), .5d, .5d);
+
+        private static void ValidateFilterFixture(string name, SpiceComponentModel first, SpiceComponentModel second, double expectedReal, double expectedImaginary)
+        {
+            var result = RunRealAcFixture(name, CreateSeriesCircuit(first, second, 1d / (2d * Math.PI * 1000d * 1e-6d)));
+            var output = result.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude > .1d);
+            AssertPhasorClose(output, expectedReal, expectedImaginary, name + " output");
+        }
+
+        private static void ValidateRealRlFixture()
+        {
+            var result = RunRealAcFixture("RL", CreateSeriesCircuit(SpiceComponentModel.Resistor("resistor-001", 1000d), SpiceComponentModel.Inductor("inductor-001", 1d), 1000d / (2d * Math.PI)));
+            AssertPhasorClose(result.AcComponentResults["resistor-001"].Current, .0005d, -.0005d, "RL current");
+        }
+
+        private static void ValidateRealRlcResonanceFixture()
+        {
+            var frequency = 1d / (2d * Math.PI * Math.Sqrt(.01d * 1e-6d));
+            var circuit = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, frequency));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, 0d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 100d));
+            circuit.Components.Add(SpiceComponentModel.Inductor("inductor-001", .01d));
+            circuit.Components.Add(SpiceComponentModel.Capacitor("capacitor-001", 1e-6d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "positive"), new SpiceTerminalRef("resistor-001", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("resistor-001", "negative"), new SpiceTerminalRef("inductor-001", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("inductor-001", "negative"), new SpiceTerminalRef("capacitor-001", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("capacitor-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            var result = RunRealAcFixture("RLC resonance", circuit);
+            AssertClose(result.AcComponentResults["resistor-001"].Current.Magnitude, .01d, 1e-8d, "RLC current magnitude");
+        }
+
+        private static void ValidateRealClosedSwitchFixture() => ValidateSwitchFixture(true);
+        private static void ValidateRealOpenSwitchFixture() => ValidateSwitchFixture(false);
+        private static void ValidateSwitchFixture(bool closed)
+        {
+            var circuit = CreateSeriesCircuit(SpiceComponentModel.IdealSwitch("switch-001", closed), SpiceComponentModel.Resistor("resistor-001", 1000d), 1000d);
+            var result = RunRealAcFixture(closed ? "closed switch" : "open switch", circuit);
+            if (!result.AcComponentResults["switch-001"].Notes.Contains("static-resistance")) throw new InvalidOperationException("Switch result must state its static resistance model.");
+            if (closed) AssertClose(result.AcComponentResults["switch-001"].Current.Magnitude, .001d, 1e-8d, "closed switch current");
+            else if (result.AcComponentResults["switch-001"].Current.Magnitude > 1e-9d) throw new InvalidOperationException("Open switch current is too large.");
+        }
+
+        private static void ValidateRealVoltageProbeFixtures()
+        {
+            var forward = RunRealAcFixture("voltage probe forward", CreateVoltageProbeCircuit(false));
+            var reverse = RunRealAcFixture("voltage probe reverse", CreateVoltageProbeCircuit(true));
+            var a = forward.AcComponentResults["voltage-probe-001"].Voltage;
+            var b = reverse.AcComponentResults["voltage-probe-001"].Voltage;
+            AssertPhasorClose(a, 1d, 0d, "voltage probe forward");
+            AssertPhasorClose(b, -1d, 0d, "voltage probe reverse");
+        }
+
+        private static void ValidateRealCurrentProbeFixtures()
+        {
+            var forward = RunRealAcFixture("current probe forward", CreateCurrentProbeCircuit(false));
+            var reverse = RunRealAcFixture("current probe reverse", CreateCurrentProbeCircuit(true));
+            AssertPhasorClose(forward.AcComponentResults["current-probe-001"].Current, .001d, 0d, "current probe forward");
+            AssertPhasorClose(reverse.AcComponentResults["current-probe-001"].Current, -.001d, 0d, "current probe reverse");
+        }
+
+        private static void ValidateRealDualSourceFixtures()
+        {
+            var orthogonal = RunRealAcFixture("orthogonal sources", CreateDualSourceCircuit(90d));
+            var cancelling = RunRealAcFixture("cancelling sources", CreateDualSourceCircuit(180d));
+            var orthogonalOutput = orthogonal.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude > .1d);
+            AssertPhasorClose(orthogonalOutput, 1d / 3d, 1d / 3d, "orthogonal source output");
+            var zero = cancelling.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude < 1e-6d);
+            if (double.IsNaN(zero.Magnitude) || double.IsInfinity(zero.Magnitude)) throw new InvalidOperationException("Cancelling sources produced a non-finite phasor.");
+        }
+
         private static void AssertParserFails(string output, IReadOnlyList<SpiceAcOutputRequest> requests, SpiceAcParseFailure expected)
         {
             if (SpiceAcOutputParser.TryParse(output, requests, out _, out var failure, out _) || failure != expected)
@@ -131,14 +292,93 @@ namespace ElectricalSim.Spice.T3
 
         private static SpiceCircuitModel CreateBasicCircuit()
         {
+            return CreateResistorCircuit(30d, 1000d, 1000d);
+        }
+
+        private static SpiceCircuitModel CreateResistorCircuit(double phase, double resistance, double frequency)
+        {
+            return CreateSeriesCircuit(SpiceComponentModel.Resistor("resistor-001", resistance), null, frequency, phase);
+        }
+
+        private static SpiceCircuitModel CreateVoltageProbeCircuit(bool reverse)
+        {
+            var circuit = CreateResistorCircuit(0d, 1000d, 1000d);
+            circuit.Components.Add(SpiceComponentModel.VoltageProbe("voltage-probe-001"));
+            var positive = reverse ? "ground-001" : "ac-source-001";
+            var negative = reverse ? "ac-source-001" : "ground-001";
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("voltage-probe-001", "positive"), new SpiceTerminalRef(positive, reverse ? "ground" : "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("voltage-probe-001", "negative"), new SpiceTerminalRef(negative, reverse ? "positive" : "ground")));
+            return circuit;
+        }
+
+        private static SpiceCircuitModel CreateCurrentProbeCircuit(bool reverse)
+        {
             var circuit = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, 1000d));
-            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, 30d));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, 0d));
+            circuit.Components.Add(SpiceComponentModel.CurrentProbe("current-probe-001"));
             circuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
             circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
-            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "positive"), new SpiceTerminalRef("resistor-001", "positive")));
+            var sourceToProbe = reverse ? "negative" : "positive";
+            var probeFromSource = reverse ? "negative" : "positive";
+            var probeToResistor = reverse ? "positive" : "negative";
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "positive"), new SpiceTerminalRef("current-probe-001", probeFromSource)));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("current-probe-001", probeToResistor), new SpiceTerminalRef("resistor-001", "positive")));
             circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("resistor-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
             circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
             return circuit;
+        }
+
+        private static SpiceCircuitModel CreateDualSourceCircuit(double secondPhase)
+        {
+            var circuit = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, 1000d));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, 0d));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-002", 1d, secondPhase));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-002", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-003", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-002", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "positive"), new SpiceTerminalRef("resistor-001", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-002", "positive"), new SpiceTerminalRef("resistor-002", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("resistor-001", "negative"), new SpiceTerminalRef("resistor-003", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("resistor-002", "negative"), new SpiceTerminalRef("resistor-003", "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("resistor-003", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            return circuit;
+        }
+
+        private static SpiceCircuitModel CreateSeriesCircuit(SpiceComponentModel first, SpiceComponentModel second, double frequency, double phase = 0d)
+        {
+            var circuit = new SpiceCircuitModel(new SpiceAnalysisSettings(SpiceAnalysisMode.AcSingleFrequency, frequency));
+            circuit.Components.Add(SpiceComponentModel.AcVoltageSource("ac-source-001", 1d, phase));
+            circuit.Components.Add(first);
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "positive"), new SpiceTerminalRef(first.InstanceId, "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef("ac-source-001", "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            if (second == null)
+            {
+                circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef(first.InstanceId, "negative"), new SpiceTerminalRef("ground-001", "ground")));
+                return circuit;
+            }
+            circuit.Components.Add(second);
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef(first.InstanceId, "negative"), new SpiceTerminalRef(second.InstanceId, "positive")));
+            circuit.Wires.Add(new SpiceWireModel(new SpiceTerminalRef(second.InstanceId, "negative"), new SpiceTerminalRef("ground-001", "ground")));
+            return circuit;
+        }
+
+        private static void AssertPhasorClose(SpicePhasor actual, double real, double imaginary, string label)
+        {
+            AssertRealFixtureClose(actual.Real, real, label + " real");
+            AssertRealFixtureClose(actual.Imaginary, imaginary, label + " imaginary");
+        }
+
+        private static void AssertRealFixtureClose(double actual, double expected, string label)
+        {
+            const double absoluteTolerance = 1e-8d;
+            const double relativeTolerance = 1e-6d;
+            var allowed = absoluteTolerance + relativeTolerance * Math.Abs(expected);
+            if (Math.Abs(actual - expected) > allowed)
+                throw new InvalidOperationException(label + " mismatch. Expected " + expected + ", actual " + actual + ", allowed " + allowed + ".");
         }
 
         private static void AssertClose(double actual, double expected, double tolerance, string label)

@@ -29,7 +29,7 @@ namespace ElectricalSim.Spice.Workspace
         private readonly Dictionary<string, SpiceWorkspaceComponentView> componentViews = new Dictionary<string, SpiceWorkspaceComponentView>(StringComparer.Ordinal);
         private readonly List<SpiceWorkspaceWireView> wireViews = new List<SpiceWorkspaceWireView>();
         private SpiceWorkspaceViewBindings bindings;
-        private SpiceDcSimulationService simulationService;
+        private SpiceSimulationService simulationService;
         private SpiceWorkspaceComponentView selectedComponent;
         private SpiceWorkspaceWireView selectedWire;
         private SpiceWorkspaceComponentView pendingComponent;
@@ -119,7 +119,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (initialized) return;
             if (bindings == null) throw new InvalidOperationException("SpiceWorkspaceController requires explicit host bindings.");
-            simulationService = new SpiceDcSimulationService();
+            simulationService = new SpiceSimulationService();
             BuildUi();
             Model.Changed += HandleModelChanged;
             initialized = true;
@@ -817,6 +817,11 @@ namespace ElectricalSim.Spice.Workspace
         internal void SetSimulationOverrideForTesting(Func<SpiceCircuitModel, CancellationToken, Task<SpiceSimulationResult>> simulationOverride)
         {
             simulationOverrideForTesting = simulationOverride;
+        }
+
+        internal void SetSimulationServiceForTesting(SpiceSimulationService service)
+        {
+            simulationService = service ?? throw new ArgumentNullException(nameof(service));
         }
 
         /// <summary>
@@ -1726,6 +1731,14 @@ namespace ElectricalSim.Spice.Workspace
 
         private static string FormatResult(SpiceSimulationResult result)
         {
+            if (result.AnalysisSettings.Mode == SpiceAnalysisMode.AcSingleFrequency)
+            {
+                return string.Join("\n\n", result.AcComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
+                    value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + FormatPhasor(value.Voltage, "V") + "\n" +
+                    FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
+                    (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
+            }
+
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
                 value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n" + FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
                 (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
@@ -1737,11 +1750,28 @@ namespace ElectricalSim.Spice.Workspace
             return value.ComponentKind == "SiliconDiode" ? "VAK" : value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
         }
 
+        private static string VoltageLabel(SpiceAcComponentResult value)
+        {
+            return value.ComponentKind == "VoltageProbe" ? "差分电压" : "电压";
+        }
+
+        private static string FormatPhasor(SpicePhasor value, string unit)
+        {
+            return value.Magnitude.ToString("G6", CultureInfo.InvariantCulture) + " " + unit + " ∠ " +
+                value.PhaseDegrees.ToString("G6", CultureInfo.InvariantCulture) + "°";
+        }
+
         private static string FormatCurrentLine(SpiceComponentResult value)
         {
             // 电压探针不注入电流，内部 Current=0 仅为占位值，不得作为测量值展示，故整行省略。
             if (value.ComponentKind == "VoltageProbe") return string.Empty;
             return "电流  " + value.Current.ToString("G6", CultureInfo.InvariantCulture) + " A\n";
+        }
+
+        private static string FormatCurrentLine(SpiceAcComponentResult value)
+        {
+            if (value.ComponentKind == "VoltageProbe") return string.Empty;
+            return "电流  " + FormatPhasor(value.Current, "A") + "\n";
         }
 
         private static string DirectionLabel(string direction)

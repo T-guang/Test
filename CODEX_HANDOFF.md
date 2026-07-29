@@ -96,6 +96,18 @@ InstanceId 128；TerminalId 64；通用字符串 256
 - 清空和成功导入恢复 `NeverRun` 并清除旧结果、诊断和复制资格。
 - 未预期异常只向用户显示 `SPICE_RUNTIME_UNEXPECTED`；完整异常仅进日志。
 
+## Single-frequency AC B2-3
+
+- `SpiceSimulationService` is the sole workspace simulation dispatcher. It routes
+  `DcOperatingPoint` to `SpiceDcSimulationService` and `AcSingleFrequency` to
+  `SpiceAcSimulationService`; unsupported modes return a diagnostic without invoking either service.
+- `SpiceWorkspaceController` uses that dispatcher for both production paths. AC
+  successes are presented as magnitude/phase phasors, while DC presentation stays on
+  the existing scalar result path.
+- Regression coverage includes dispatcher call counts, controller DC and AC paths,
+  D1 delayed-AC stale-result rejection, parser duplicate result-key rejection, and
+  14 real-ngspice AC fixtures. Do not replace these with mocked-only coverage.
+
 ## 验证结果
 
 Editor batchmode：

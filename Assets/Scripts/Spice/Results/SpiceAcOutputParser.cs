@@ -51,6 +51,7 @@ namespace ElectricalSim.Spice.Results
                 return Fail(SpiceAcParseFailure.MarkersOutOfOrder, "AC output end marker appears before the begin marker.", out failure, out failureMessage);
 
             var expectedByExpression = new Dictionary<string, SpiceAcOutputRequest>(StringComparer.OrdinalIgnoreCase);
+            var expectedResultKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var request in expectedRequests)
             {
                 if (request == null || string.IsNullOrWhiteSpace(request.Expression) || string.IsNullOrWhiteSpace(request.ResultKey))
@@ -58,6 +59,8 @@ namespace ElectricalSim.Spice.Results
                 var expression = NormalizeExpression(request.Expression);
                 if (expectedByExpression.ContainsKey(expression))
                     throw new ArgumentException("AC output request expressions must be unique.", nameof(expectedRequests));
+                if (!expectedResultKeys.Add(request.ResultKey))
+                    throw new ArgumentException("AC output request result keys must be unique.", nameof(expectedRequests));
                 expectedByExpression.Add(expression, request);
             }
 

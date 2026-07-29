@@ -25,6 +25,7 @@ namespace ElectricalSim.Spice.T3
             ValidateElectricalRevisionAndRunningMutationGuards();
             ValidateAcAnalysisSettingsAndSnapshot();
             ValidateAcAnalysisControllerRevisionAndRunningGuard();
+            ValidateControllerDcAndAcSimulationPaths();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();
             ValidateAcParameterWriteEncapsulation();
@@ -1084,6 +1085,79 @@ namespace ElectricalSim.Spice.T3
             {
                 UnityEngine.Object.DestroyImmediate(canvasRoot);
             }
+        }
+
+        private static void ValidateControllerDcAndAcSimulationPaths()
+        {
+            var canvasRoot = new GameObject("SpiceControllerAnalysisDispatchValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var dcCalls = 0;
+                var acCalls = 0;
+                workspace.SetSimulationServiceForTesting(new SpiceSimulationService(
+                    (circuit, _) =>
+                    {
+                        dcCalls++;
+                        return System.Threading.Tasks.Task.FromResult(CreateControllerDcResult(circuit));
+                    },
+                    (circuit, _) =>
+                    {
+                        acCalls++;
+                        return System.Threading.Tasks.Task.FromResult(CreateControllerAcResult(circuit));
+                    }));
+
+                var dcSource = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                var dcResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var dcGround = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 80f);
+                ConnectSingleResistor(workspace, dcSource.InstanceId, dcResistor.InstanceId, dcGround.InstanceId);
+                var dcResult = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (dcResult == null || !dcResult.Success || workspace.ResultState != SpiceWorkspaceResultState.Current || dcCalls != 1 || acCalls != 0 ||
+                    !workspace.TryGetCopyableOutcomeText(out var dcText) || !dcText.Contains("DC_CONTROLLER_MARKER"))
+                    throw new InvalidOperationException("Controller DC calculation did not use the unified simulation-service path.");
+
+                workspace.ClearWorkspace();
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || !workspace.TrySetAcFrequency(1000d))
+                    throw new InvalidOperationException("Unable to configure the controller AC calculation path.");
+                var acSource = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.left * 80f);
+                var acResistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var acGround = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 80f);
+                ConnectSingleResistor(workspace, acSource.InstanceId, acResistor.InstanceId, acGround.InstanceId);
+                var acResult = workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                if (acResult == null || !acResult.Success || workspace.ResultState != SpiceWorkspaceResultState.Current || dcCalls != 1 || acCalls != 1 ||
+                    !workspace.TryGetCopyableOutcomeText(out var acText) || !acText.Contains("AC_CONTROLLER_MARKER") || !acText.Contains("∠"))
+                    throw new InvalidOperationException("Controller AC calculation did not use the unified simulation-service path or present phasor results.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
+        private static SpiceSimulationResult CreateControllerDcResult(SpiceCircuitModel circuit)
+        {
+            if (circuit.AnalysisSettings.Mode != SpiceAnalysisMode.DcOperatingPoint)
+                throw new InvalidOperationException("Controller dispatched a non-DC circuit to the DC simulation service.");
+            var result = new SpiceSimulationResult { Success = true, AnalysisSettings = circuit.AnalysisSettings.Copy(), GeneratedNetlistContent = "* controller DC" };
+            result.ComponentResults["resistor-001"] = new SpiceComponentResult
+            {
+                ComponentId = "resistor-001", ComponentKind = "Resistor", Voltage = 1d, Current = .001d,
+                VoltageDirection = "positive-to-negative", CurrentDirection = "positive-to-negative", Notes = "DC_CONTROLLER_MARKER"
+            };
+            return result;
+        }
+
+        private static SpiceSimulationResult CreateControllerAcResult(SpiceCircuitModel circuit)
+        {
+            if (circuit.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency)
+                throw new InvalidOperationException("Controller dispatched a non-AC circuit to the AC simulation service.");
+            var result = new SpiceSimulationResult { Success = true, AnalysisSettings = circuit.AnalysisSettings.Copy(), GeneratedNetlistContent = "* controller AC" };
+            result.AcComponentResults["resistor-001"] = new SpiceAcComponentResult
+            {
+                ComponentId = "resistor-001", ComponentKind = "Resistor", Voltage = new SpicePhasor(1d, 0d), Current = new SpicePhasor(.001d, 0d),
+                VoltageDirection = "positive-to-negative", CurrentDirection = "positive-to-negative", Notes = "AC_CONTROLLER_MARKER"
+            };
+            return result;
         }
 
         private static void ValidateAcAnalysisRevisionDiscardsDelayedResult()
