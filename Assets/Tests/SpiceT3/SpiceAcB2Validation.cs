@@ -216,8 +216,9 @@ namespace ElectricalSim.Spice.T3
 
         private static void ValidateFilterFixture(string name, SpiceComponentModel first, SpiceComponentModel second, double expectedReal, double expectedImaginary)
         {
-            var result = RunRealAcFixture(name, CreateSeriesCircuit(first, second, 1d / (2d * Math.PI * 1000d * 1e-6d)));
-            var output = result.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude > .1d);
+            var circuit = CreateSeriesCircuit(first, second, 1d / (2d * Math.PI * 1000d * 1e-6d));
+            var result = RunRealAcFixture(name, circuit);
+            var output = GetNodeVoltage(result, circuit, second.InstanceId, SpiceComponentModel.PositiveTerminalId, name + " Vout");
             AssertPhasorClose(output, expectedReal, expectedImaginary, name + " output");
         }
 
@@ -276,12 +277,37 @@ namespace ElectricalSim.Spice.T3
 
         private static void ValidateRealDualSourceFixtures()
         {
-            var orthogonal = RunRealAcFixture("orthogonal sources", CreateDualSourceCircuit(90d));
-            var cancelling = RunRealAcFixture("cancelling sources", CreateDualSourceCircuit(180d));
-            var orthogonalOutput = orthogonal.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude > .1d);
-            AssertPhasorClose(orthogonalOutput, 1d / 3d, 1d / 3d, "orthogonal source output");
-            var zero = cancelling.AcNodeVoltages.Values.OrderBy(value => value.Magnitude).First(value => value.Magnitude < 1e-6d);
-            if (double.IsNaN(zero.Magnitude) || double.IsInfinity(zero.Magnitude)) throw new InvalidOperationException("Cancelling sources produced a non-finite phasor.");
+            var orthogonalCircuit = CreateDualSourceCircuit(90d);
+            var cancellingCircuit = CreateDualSourceCircuit(180d);
+            var orthogonal = RunRealAcFixture("orthogonal sources", orthogonalCircuit);
+            var cancelling = RunRealAcFixture("cancelling sources", cancellingCircuit);
+            var orthogonalOutput = GetNodeVoltage(orthogonal, orthogonalCircuit, "resistor-003", SpiceComponentModel.PositiveTerminalId, "orthogonal Vout");
+            AssertPhasorClose(orthogonalOutput, 1d / 3d, 1d / 3d, "orthogonal Vout");
+
+            var cancellingOutput = GetNodeVoltage(cancelling, cancellingCircuit, "resistor-003", SpiceComponentModel.PositiveTerminalId, "cancelling Vout");
+            AssertFinite(cancellingOutput.Real, "cancelling Vout real");
+            AssertFinite(cancellingOutput.Imaginary, "cancelling Vout imaginary");
+            AssertFinite(cancellingOutput.Magnitude, "cancelling Vout magnitude");
+            AssertRealFixtureClose(cancellingOutput.Real, 0d, "cancelling Vout real");
+            AssertRealFixtureClose(cancellingOutput.Imaginary, 0d, "cancelling Vout imaginary");
+            AssertRealFixtureClose(cancellingOutput.Magnitude, 0d, "cancelling Vout magnitude");
+        }
+
+        private static SpicePhasor GetNodeVoltage(SpiceSimulationResult result, SpiceCircuitModel circuit, string componentId, string terminalId, string label)
+        {
+            var graph = SpiceCircuitGraphBuilder.Build(circuit);
+            if (!graph.IsValid)
+                throw new InvalidOperationException(label + " fixture topology was unexpectedly invalid.");
+            var terminal = new SpiceTerminalRef(componentId, terminalId);
+            if (!graph.NodeByTerminal.TryGetValue(terminal, out var node) || !result.AcNodeVoltages.TryGetValue(node, out var voltage))
+                throw new InvalidOperationException(label + " node was missing from the AC result.");
+            return voltage;
+        }
+
+        private static void AssertFinite(double value, string label)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                throw new InvalidOperationException(label + " must be finite.");
         }
 
         private static void AssertParserFails(string output, IReadOnlyList<SpiceAcOutputRequest> requests, SpiceAcParseFailure expected)
