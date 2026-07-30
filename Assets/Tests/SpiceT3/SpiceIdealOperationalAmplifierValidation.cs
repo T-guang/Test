@@ -21,17 +21,12 @@ namespace ElectricalSim.Spice.T3
         {
             ValidateCoreAndNetlist();
             ValidateTopologyDiagnostics();
-            Debug.Log("[Spice][OpAmp] floating-input diagnostics: PASS");
-            Debug.Log("[Spice][OpAmp] output-short diagnostics: PASS");
             ValidateV1SaveBoundary();
             ValidateDcVoltageFollower();
             ValidateDcInvertingAmplifier();
             ValidateAcVoltageFollower();
             ValidateAcInvertingAmplifier();
-            Debug.Log("[Spice][OpAmp] real ngspice fixtures: 4/4 PASS");
             Debug.Log("[Spice][OpAmp] 真实 ngspice 回路：4/4 通过");
-            Debug.Log("[Spice][OpAmp] Core：PASS");
-            Debug.Log("[Spice][OpAmp] V1 保存边界：PASS");
         }
 
         private static void ValidateCoreAndNetlist()
@@ -95,8 +90,6 @@ namespace ElectricalSim.Spice.T3
                 if (shortedGraph.IsValid || !shortedGraph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED"))
                     throw new InvalidOperationException("Op-amp output-to-ground short must be rejected in both wire directions.");
             }
-            Debug.Log("[Spice][OpAmp] 浮空输入诊断：PASS");
-            Debug.Log("[Spice][OpAmp] 输出短接诊断：PASS");
         }
 
         private static void ValidateDcVoltageFollower()

@@ -102,7 +102,7 @@ namespace ElectricalSim.Spice.T3
 
             var path = ResolveResultPath();
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
-            Debug.Log("[SpiceT3] Player validation report: " + path);
+            Debug.Log("[Spice][T3] Player 验证报告：" + path);
             Application.Quit(report.success ? 0 : 1);
         }
 

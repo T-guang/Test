@@ -142,7 +142,7 @@ namespace ElectricalSim.Spice.Workspace
         // ============ C2 文件工作流：保存 / 另存为 / 导入 ============
         // Host 负责 Windows 文件对话框、替换确认和用户反馈。
         // 所有文件读写均复用 C1 的 TrySaveWorkspaceToPath / TrySaveCurrentWorkspace / TryImportWorkspaceFromPath，
-        // 不重写或绕过 C1/Batch B 的原子写入、UTF-8 严格读取、事务导入与路径会话状态。
+        // 不重写或绕过 C1/事务式导入 的原子写入、UTF-8 严格读取、事务导入与路径会话状态。
 
         private void HandleSaveRequested()
         {
@@ -163,7 +163,7 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
             var defaultFileName = BuildDefaultSaveFileName();
-            // C2.4：使用带 out error 的重载，区分失败与取消。
+            // ：使用带 out error 的重载，区分失败与取消。
             // 失败：dialogError 非空 → 显示简洁中文提示（技术详情已由 WindowsFileDialog 写入日志）。
             // 取消：dialogError 为空且 path 为空 → 不显示错误、不写文件、不改路径。
             var path = WindowsFileDialog.SaveFile(SaveDialogTitle, FileDialogFilter, FileDialogExtension, SpiceDrawingFileService.DefaultDirectory, defaultFileName, out var dialogError);
@@ -192,7 +192,7 @@ namespace ElectricalSim.Spice.Workspace
                 workspaceController.ShowFileOperationStatus("导入失败，无法创建默认目录。");
                 return;
             }
-            // C2.4：使用带 out error 的重载，区分失败与取消。
+            // ：使用带 out error 的重载，区分失败与取消。
             var path = WindowsFileDialog.OpenFile(ImportDialogTitle, FileDialogFilter, FileDialogExtension, SpiceDrawingFileService.DefaultDirectory, out var dialogError);
             if (!string.IsNullOrEmpty(dialogError))
             {

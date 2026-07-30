@@ -24,7 +24,7 @@ namespace ElectricalSim.EditorTools.SpiceT2
         {
             SpiceT2Validation.RunPureCoreChecks();
             var results = SpiceT2Validation.RunIntegrationChecksAsync().GetAwaiter().GetResult();
-            UnityEngine.Debug.Log("[SpiceT2] Editor validation passed. Fixtures=" + results.Count);
+            UnityEngine.Debug.Log("[Spice][T2] Editor 校验：通过，Fixtures=" + results.Count);
         }
 
         public static void RunAllFromCommandLine()
@@ -83,7 +83,7 @@ namespace ElectricalSim.EditorTools.SpiceT2
                 var log = File.ReadAllText(logPath);
                 if (log.IndexOf("NullReferenceException", StringComparison.OrdinalIgnoreCase) >= 0 || log.IndexOf("Fatal Error", StringComparison.OrdinalIgnoreCase) >= 0) throw new InvalidOperationException("The player log contains a blocking error. Log: " + logPath);
             }
-            UnityEngine.Debug.Log("[SpiceT2] Player validation passed. Build: " + executablePath + " Result: " + resultPath + " Log: " + logPath);
+            UnityEngine.Debug.Log("[Spice][T2] Player 验证：通过，Build=" + executablePath + " Result=" + resultPath + " Log=" + logPath);
         }
     }
 }

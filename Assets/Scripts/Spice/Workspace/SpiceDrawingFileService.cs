@@ -8,7 +8,7 @@ namespace ElectricalSim.Spice.Workspace
     /// <summary>
     /// SPICE 图纸文件操作核心服务。本类不接触 UI、文件对话框、控制模式 SaveLoadService 或 WindowsFileDialog。
     /// 职责仅限：当前会话路径、默认目录、.spicejson 扩展名规范化、UTF-8 原子写入、UTF-8 严格读取。
-    /// 保存只调用 Batch A 的 SpiceDrawingSerializer.ToJson；导入只把原始 JSON 交给调用方的 Batch B 入口。
+    /// 保存只调用 SpiceDrawingSerializer.ToJson；导入只把原始 JSON 交给调用方的事务式导入入口。
     /// 本类不解析器件、坐标、端子或 Wire；不在文件层做任何电路级校验。
     /// </summary>
     public sealed class SpiceDrawingFileService

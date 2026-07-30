@@ -36,9 +36,8 @@ namespace ElectricalSim.EditorTools.SpiceT3
         public static void RunEditorValidation()
         {
             SpiceT3WorkspaceValidation.RunPureChecks();
-            // The Player harness owns asynchronous UI lifecycle coverage; blocking an Editor menu
-            // on a Unity-context continuation would deadlock the same UI path it is meant to test.
-            UnityEngine.Debug.Log("[SpiceT3] Editor workspace mapping and invalidation validation passed.");
+            // 异步 UI 生命周期由 Player Harness 覆盖；Editor 菜单同步等待 Unity 上下文续体会阻塞同一条待验证路径。
+            UnityEngine.Debug.Log("[Spice][T3] Editor 工作区映射与失效校验：通过");
         }
 
         public static void RunAllFromCommandLine()
@@ -46,7 +45,7 @@ namespace ElectricalSim.EditorTools.SpiceT3
             SpiceT2ValidationTools.RunAllFromCommandLine();
             RunEditorValidation();
             // 能进入此入口表示本批 C# 已由 Unity 编译；显式记录零错误证据，便于批处理日志审查。
-            UnityEngine.Debug.Log("[Spice][OpAmp] C#：0 error");
+            UnityEngine.Debug.Log("[Spice][Quality-Q1] C#：0 error");
         }
 
         [MenuItem("Tools/Spice/T3/Build and Run Player Validation")]
@@ -64,14 +63,14 @@ namespace ElectricalSim.EditorTools.SpiceT3
         {
             var executable = ReadCommandLinePath("--spice-t3-build=");
             BuildExistingScenePlayer(ValidationScenePath, executable);
-            UnityEngine.Debug.Log("[SpiceT3] Player validation build passed: " + executable);
+            UnityEngine.Debug.Log("[Spice][T3] Player 验证构建：通过，Build=" + executable);
         }
 
         public static void BuildDemoPlayerFromCommandLine()
         {
             var executable = ReadCommandLinePath("--spice-demo-build=");
             BuildExistingScenePlayer("Assets/Scenes/Demo.unity", executable);
-            UnityEngine.Debug.Log("[SpiceT3] Demo Player build passed: " + executable);
+            UnityEngine.Debug.Log("[Spice][T3] Demo Player 构建：通过，Build=" + executable);
         }
 
         private static void EnsurePrototypeScene()
@@ -190,7 +189,7 @@ namespace ElectricalSim.EditorTools.SpiceT3
                 !result.d3NetlistRevisionPassed ||
                 !result.unexpectedErrorSanitizationPassed)
                 throw new InvalidOperationException("Spice T3 Player result did not satisfy the D1/D2/D3 stabilization expectations.");
-            UnityEngine.Debug.Log("[SpiceT3] Player validation passed. Build: " + executable + " Result: " + resultPath + " Log: " + logPath);
+            UnityEngine.Debug.Log("[Spice][T3] Player 验证：通过，Build=" + executable + " Result=" + resultPath + " Log=" + logPath);
         }
     }
 }

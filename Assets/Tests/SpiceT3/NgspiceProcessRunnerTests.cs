@@ -16,7 +16,7 @@ namespace ElectricalSim.Tests.SpiceT3
                 await RunAsync_WhenCancelled_ThrowsOperationCanceledExceptionAndClosesPipes();
                 await RunAsync_WhenTimedOut_ReturnsTimeoutResultAndClosesPipes();
                 await RunAsync_DeletesTemporaryDirectory_OnCompletion();
-                Debug.Log("[NgspiceProcessRunnerTests] All tests passed.");
+                Debug.Log("[Spice][ngspice] 进程运行器测试：通过");
             }
             catch (Exception ex)
             {

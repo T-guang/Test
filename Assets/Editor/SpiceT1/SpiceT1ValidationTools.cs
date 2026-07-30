@@ -178,14 +178,15 @@ namespace ElectricalSim.EditorTools.SpiceT1
                 }
             }
 
-            UnityEngine.Debug.Log("[SpiceT1] Player validation passed. Build: " + executablePath + " Result: " + resultPath + " Log: " + logPath);
+            UnityEngine.Debug.Log("[Spice][T1] Player 验证：通过，Build=" + executablePath + " Result=" + resultPath + " Log=" + logPath);
         }
 
         private static string FormatResult(NgspiceRunResult result, string failure)
         {
             result.NodeVoltages.TryGetValue("input", out var inputVoltage);
             result.BranchCurrents.TryGetValue("V1", out var v1Current);
-            return "[SpiceT1] success=" + result.Success +
+            return (failure == null ? "[Spice][T1] 固定 DC 网表：通过" : "[Spice][T1] 固定 DC 网表：失败") +
+                   " success=" + result.Success +
                    " exitCode=" + result.ExitCode +
                    " timedOut=" + result.TimedOut +
                    " v(input)=" + inputVoltage.ToString("R") +

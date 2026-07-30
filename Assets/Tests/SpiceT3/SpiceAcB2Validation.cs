@@ -179,7 +179,7 @@ namespace ElectricalSim.Spice.T3
             ValidateRealVoltageProbeFixtures();
             ValidateRealCurrentProbeFixtures();
             ValidateRealDualSourceFixtures();
-            UnityEngine.Debug.Log("AC-B2 real ngspice fixtures: 14/14 PASS");
+            UnityEngine.Debug.Log("[Spice][AC-B2] 真实 ngspice Fixtures=14/14：通过");
         }
 
         private static SpiceSimulationResult RunRealAcFixture(string name, SpiceCircuitModel circuit)
