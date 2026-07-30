@@ -48,7 +48,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void Destroy()
         {
-            foreach (var segment in segments) UnityEngine.Object.Destroy(segment.gameObject);
+            foreach (var segment in segments) SpiceUnityObjectLifetime.Destroy(segment.gameObject);
             segments.Clear();
         }
 
@@ -60,7 +60,7 @@ namespace ElectricalSim.Spice.Workspace
             {
                 var last = segments[segments.Count - 1];
                 segments.RemoveAt(segments.Count - 1);
-                UnityEngine.Object.Destroy(last.gameObject);
+                SpiceUnityObjectLifetime.Destroy(last.gameObject);
             }
             for (var index = 0; index < requiredCount; index++)
             {
@@ -107,14 +107,14 @@ namespace ElectricalSim.Spice.Workspace
             {
                 var last = segments[segments.Count - 1];
                 segments.RemoveAt(segments.Count - 1);
-                UnityEngine.Object.Destroy(last.gameObject);
+                SpiceUnityObjectLifetime.Destroy(last.gameObject);
             }
             for (var index = 0; index < requiredCount; index++) SpiceWorkspaceWireView.SetSegment(segments[index].rectTransform, path[index], path[index + 1]);
         }
 
         public void Destroy()
         {
-            foreach (var segment in segments) UnityEngine.Object.Destroy(segment.gameObject);
+            foreach (var segment in segments) SpiceUnityObjectLifetime.Destroy(segment.gameObject);
             segments.Clear();
         }
 

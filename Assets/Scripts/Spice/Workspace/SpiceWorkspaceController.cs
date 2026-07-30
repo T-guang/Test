@@ -515,7 +515,7 @@ namespace ElectricalSim.Spice.Workspace
 
         /// <summary>
         /// C2 专属：显示文件操作的成功/失败/提示消息。仅由 Host 在文件工作流完成后调用。
-        /// 不覆盖运行计算、参数更新、接线提示、Batch B 导入成功后的“未计算”等已有状态时机
+        /// 不覆盖运行计算、参数更新、接线提示或事务式导入成功后的“未计算”等已有状态时机
         /// （Host 负责仅在合适时机调用本方法）。
         /// </summary>
         public void ShowFileOperationStatus(string message)
@@ -745,7 +745,7 @@ namespace ElectricalSim.Spice.Workspace
             {
                 var id = selectedComponent.InstanceId;
                 if (pendingComponent == selectedComponent) CancelPendingWire();
-                Destroy(selectedComponent.gameObject);
+                SpiceUnityObjectLifetime.Destroy(selectedComponent.gameObject);
                 componentViews.Remove(id);
                 wireViews.Where(wire => wire.Data.StartComponentId == id || wire.Data.EndComponentId == id).ToList().ForEach(RemoveWireView);
                 Model.RemoveComponent(id);
@@ -769,7 +769,7 @@ namespace ElectricalSim.Spice.Workspace
             CancelPendingWire();
             foreach (var wire in wireViews.ToList()) wire.Destroy();
             wireViews.Clear();
-            foreach (var view in componentViews.Values) Destroy(view.gameObject);
+            foreach (var view in componentViews.Values) SpiceUnityObjectLifetime.Destroy(view.gameObject);
             componentViews.Clear();
             selectedComponent = null;
             selectedWire = null;
@@ -912,7 +912,7 @@ namespace ElectricalSim.Spice.Workspace
 
         /// <summary>
         /// 将当前 Workspace 保存到指定路径（原子写入 UTF-8）。
-        /// 复用 Batch A 的 SpiceDrawingSerializer.ToJson；不保存结果、网表、诊断、选择、pending Wire、缩放或平移。
+        /// 复用 SpiceDrawingSerializer.ToJson；不保存结果、网表、诊断、选择、pending Wire、缩放或平移。
         /// 保存成功后 CurrentSpiceFilePath 更新为规范化路径；失败时保持旧值。
         /// 仿真计算进行中拒绝保存。
         /// </summary>
@@ -966,16 +966,16 @@ namespace ElectricalSim.Spice.Workspace
 
         /// <summary>
         /// 从指定路径导入图纸：先进行文件级检查和 UTF-8 读取，
-        /// 再将原始 JSON 原封不动交给 Batch B 的 TryImportDrawingJson。
+        /// 再将原始 JSON 原封不动交给事务式导入入口 TryImportDrawingJson。
         /// 不在文件层解析器件、坐标、端子或 Wire；不调用 ClearWorkspace；不提前清空当前画布。
-        /// Batch B 失败时原样保留当前 Workspace 和当前路径。
+        /// 事务式导入失败时原样保留当前 Workspace 和当前路径。
         /// 导入成功后 CurrentSpiceFilePath 更新为导入路径。
         /// </summary>
         public bool TryImportWorkspaceFromPath(string path, out string error)
         {
             EnsureInitialized();
             // 第一道防线：运行中拒绝导入（在读取文件之前）。
-            // 保持 Batch B 的运行中导入保护作为第二道防线。
+            // 保持事务式导入的运行中导入保护作为第二道防线。
             if (!CanImportDrawing(out error))
             {
                 error = "仿真计算进行中，请稍后导入图纸。";
@@ -986,11 +986,11 @@ namespace ElectricalSim.Spice.Workspace
                 // 读取失败：CurrentSpiceFilePath 保持旧值。
                 return false;
             }
-            // 保存旧路径，便于 Batch B 失败时恢复。
+            // 保存旧路径，便于事务式导入失败时恢复。
             var previousPath = fileService.CurrentSpiceFilePath;
             if (!TryImportDrawingJson(json, out error))
             {
-                // Batch B 失败：当前 Workspace 和当前路径均不变。
+                // 事务式导入失败：当前 Workspace 和当前路径均不变。
                 fileService.SetCurrentSpiceFilePath(previousPath);
                 return false;
             }
@@ -1027,7 +1027,7 @@ namespace ElectricalSim.Spice.Workspace
             // 3. 销毁旧视图
             foreach (var wire in wireViews.ToList()) wire.Destroy();
             wireViews.Clear();
-            foreach (var view in componentViews.Values) Destroy(view.gameObject);
+            foreach (var view in componentViews.Values) SpiceUnityObjectLifetime.Destroy(view.gameObject);
             componentViews.Clear();
 
             // 4. 替换模型：解除旧订阅 → 替换引用 → 订阅新模型（只订阅一次）
