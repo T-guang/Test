@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Topology;
@@ -47,6 +48,14 @@ namespace ElectricalSim.Spice.T3
             ValidateAcAnalysisGraphBuilderBoundaries();
             ValidateAcParameterWriteEncapsulation();
             ValidateDrawingV1AcCompatibilityBoundaries();
+            ValidateAcDDrawingSchemaV2();
+            Debug.Log("[Spice][AC-D] V2 序列化：通过");
+            Debug.Log("[Spice][AC-D] V1 向后兼容：通过");
+            Debug.Log("[Spice][AC-D] AC 图纸往返：通过");
+            Debug.Log("[Spice][AC-D] 运放反馈图纸往返：通过");
+            Debug.Log("[Spice][AC-D] 导入事务：通过");
+            Debug.Log("[Spice][AC-D] 文件原子写入：通过");
+            Debug.Log("[Spice][AC-D] D2 限制回归：通过");
             SpiceAcB2Validation.RunNetlistAndParserChecks();
             SpiceIdealOperationalAmplifierValidation.RunAll();
             ValidateIdealOperationalAmplifierWorkspace();
@@ -312,20 +321,20 @@ namespace ElectricalSim.Spice.T3
                 workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
                 var normalPath = Path.Combine(tempDirectory, "normal.spicejson");
                 if (!workspace.TrySaveWorkspaceToPath(normalPath, out var normalError) || !File.Exists(normalPath))
-                    throw new InvalidOperationException("Ordinary DC V1 drawing could not save: " + normalError);
+                    throw new InvalidOperationException("Ordinary DC V2 drawing could not save: " + normalError);
                 var originalPath = workspace.CurrentSpiceFilePath;
                 workspace.CreateComponent(SpiceComponentKind.IdealOperationalAmplifier, Vector2.right);
-                var missingTarget = Path.Combine(tempDirectory, "must-not-create.spicejson");
-                if (workspace.TrySaveWorkspaceToPath(missingTarget, out var missingError) || File.Exists(missingTarget) ||
-                    workspace.CurrentSpiceFilePath != originalPath || string.IsNullOrEmpty(missingError) || !missingError.Contains("理想运算放大器"))
-                    throw new InvalidOperationException("Op-amp V1 save rejection did not preserve a nonexistent target and current path.");
+                var missingTarget = Path.Combine(tempDirectory, "opamp-v2.spicejson");
+                if (!workspace.TrySaveWorkspaceToPath(missingTarget, out var missingError) || !File.Exists(missingTarget) ||
+                    workspace.CurrentSpiceFilePath != missingTarget || missingError != null)
+                    throw new InvalidOperationException("Op-amp V2 save did not create the requested target or update the current path.");
                 var sentinelPath = Path.Combine(tempDirectory, "sentinel.spicejson");
-                const string sentinel = "OPAMP-V1-SENTINEL";
+                const string sentinel = "OPAMP-V2-SENTINEL";
                 File.WriteAllText(sentinelPath, sentinel);
-                if (workspace.TrySaveWorkspaceToPath(sentinelPath, out var sentinelError) || File.ReadAllText(sentinelPath) != sentinel ||
-                    workspace.CurrentSpiceFilePath != originalPath || string.IsNullOrEmpty(sentinelError) || !sentinelError.Contains("理想运算放大器") ||
+                if (!workspace.TrySaveWorkspaceToPath(sentinelPath, out var sentinelError) || File.ReadAllText(sentinelPath) == sentinel ||
+                    workspace.CurrentSpiceFilePath != sentinelPath || sentinelError != null ||
                     Directory.GetFiles(tempDirectory, "*.tmp").Length != 0 || Directory.GetFiles(tempDirectory, "*.backup").Length != 0)
-                    throw new InvalidOperationException("Op-amp V1 save rejection modified an existing file, path, or temporary artifacts.");
+                    throw new InvalidOperationException("Op-amp V2 save did not replace the target atomically.");
             }
             finally
             {
@@ -1660,10 +1669,10 @@ namespace ElectricalSim.Spice.T3
             dcModel.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var dcJson = SpiceDrawingSerializer.ToJson(dcModel);
             string dcError = null;
-            if (dcJson.IndexOf("analysis", StringComparison.OrdinalIgnoreCase) >= 0 || dcJson.IndexOf("AcPhaseDegrees", StringComparison.Ordinal) >= 0 ||
+            if (dcJson.IndexOf("\"schemaVersion\": 2", StringComparison.Ordinal) < 0 || dcJson.IndexOf("analysis", StringComparison.OrdinalIgnoreCase) < 0 ||
                 !SpiceDrawingSerializer.TryFromJson(dcJson, out var restoredDcModel, out dcError) ||
                 restoredDcModel.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || restoredDcModel.AcFrequencyHz != SpiceAnalysisLimits.DefaultFrequencyHz)
-                throw new InvalidOperationException("Existing V1 DC drawing contract changed: " + dcError);
+                throw new InvalidOperationException("V2 DC drawing contract changed: " + dcError);
 
             var acModel = new SpiceWorkspaceModel();
             var acSource = acModel.AddComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
@@ -1671,17 +1680,12 @@ namespace ElectricalSim.Spice.T3
             if (SpiceDrawingSerializer.TryValidateSchemaV1SaveCompatibility(acModel, out var compatibilityError) ||
                 compatibilityError.IndexOf("V1", StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException("Schema V1 save compatibility preflight accepted an AC source.");
-            var directSerializerRejected = false;
-            try
-            {
-                SpiceDrawingSerializer.ToJson(acModel);
-            }
-            catch (InvalidOperationException)
-            {
-                directSerializerRejected = true;
-            }
-            if (!directSerializerRejected)
-                throw new InvalidOperationException("Direct V1 serializer use silently accepted an AC source.");
+            var acJson = SpiceDrawingSerializer.ToJson(acModel);
+            SpiceWorkspaceModel restoredAcModel = null;
+            string restoredAcError = null;
+            if (!acJson.Contains("\"schemaVersion\": 2") || !SpiceDrawingSerializer.TryFromJson(acJson, out restoredAcModel, out restoredAcError) ||
+                restoredAcModel.FindComponent(acSource.InstanceId).AcPhaseDegrees != 60d)
+                throw new InvalidOperationException("V2 writer did not preserve AC source phase: " + restoredAcError);
 
             var tempDir = CreateUniqueTempDir("AcV1Compatibility");
             try
@@ -1712,29 +1716,26 @@ namespace ElectricalSim.Spice.T3
                     var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.right);
                     if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 1d, 60d))
                         throw new InvalidOperationException("V1 save compatibility test could not configure AC source phase.");
-                    var rejectedSavePath = Path.Combine(tempDir, "must-not-exist.spicejson");
-                    if (workspace.TrySaveWorkspaceToPath(rejectedSavePath, out var sourceSaveError) || File.Exists(rejectedSavePath) ||
-                        workspace.CurrentSpiceFilePath != originalPathState || source.AcPhaseDegrees != 60d ||
-                        sourceSaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
-                        throw new InvalidOperationException("V1 AC source save rejection wrote a file, changed path, or lost phase.");
+                    var savedAcPath = Path.Combine(tempDir, "ac-source.spicejson");
+                    if (!workspace.TrySaveWorkspaceToPath(savedAcPath, out var sourceSaveError) || !File.Exists(savedAcPath) ||
+                        workspace.CurrentSpiceFilePath != savedAcPath || source.AcPhaseDegrees != 60d || sourceSaveError != null)
+                        throw new InvalidOperationException("V2 AC source save did not preserve phase or current path.");
 
                     var sentinelPath = Path.Combine(tempDir, "sentinel.spicejson");
                     const string sentinel = "DO_NOT_OVERWRITE";
                     File.WriteAllText(sentinelPath, sentinel, System.Text.Encoding.UTF8);
-                    if (workspace.TrySaveWorkspaceToPath(sentinelPath, out _) || File.ReadAllText(sentinelPath, System.Text.Encoding.UTF8) != sentinel ||
+                    if (!workspace.TrySaveWorkspaceToPath(sentinelPath, out _) || File.ReadAllText(sentinelPath, System.Text.Encoding.UTF8) == sentinel ||
                         Directory.GetFiles(tempDir, "*.tmp*", SearchOption.TopDirectoryOnly).Length != 0 ||
                         Directory.GetFiles(tempDir, "*.backup*", SearchOption.TopDirectoryOnly).Length != 0)
-                        throw new InvalidOperationException("V1 compatibility rejection overwrote a file or left atomic-write artifacts.");
+                        throw new InvalidOperationException("V2 atomic save did not replace the target safely.");
 
                     workspace.ClearWorkspace();
                     if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) ||
-                        workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "ac-mode.spicejson"), out var acModeSaveError) ||
-                        acModeSaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
-                        throw new InvalidOperationException("AC analysis mode must be rejected by the V1 writer.");
+                        !workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "ac-mode.spicejson"), out var acModeSaveError) || acModeSaveError != null)
+                        throw new InvalidOperationException("V2 writer must preserve AC analysis mode.");
                     if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.DcOperatingPoint) || !workspace.TrySetAcFrequency(2000d) ||
-                        workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "nondefault-frequency.spicejson"), out var frequencySaveError) ||
-                        frequencySaveError.IndexOf("V1", StringComparison.Ordinal) < 0)
-                        throw new InvalidOperationException("Non-default AC frequency must not be silently lost in a V1 save.");
+                        !workspace.TrySaveWorkspaceToPath(Path.Combine(tempDir, "nondefault-frequency.spicejson"), out var frequencySaveError) || frequencySaveError != null)
+                        throw new InvalidOperationException("V2 writer must preserve a non-default stored frequency.");
                 }
                 finally
                 {
@@ -1745,6 +1746,137 @@ namespace ElectricalSim.Spice.T3
             {
                 CleanupTempDir(tempDir);
             }
+        }
+
+        private static void ValidateAcDDrawingSchemaV2()
+        {
+            var dc = new SpiceWorkspaceModel();
+            var source = dc.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-120f, 0f));
+            var resistor = dc.AddComponent(SpiceComponentKind.Resistor, Vector2.zero);
+            var ground = dc.AddComponent(SpiceComponentKind.Ground, new Vector2(120f, -60f));
+            if (!dc.AddWire(source.InstanceId, SpiceComponentModel.PositiveTerminalId, resistor.InstanceId, SpiceComponentModel.PositiveTerminalId) ||
+                !dc.AddWire(resistor.InstanceId, SpiceComponentModel.NegativeTerminalId, ground.InstanceId, SpiceComponentModel.GroundTerminalId) ||
+                !dc.AddWire(source.InstanceId, SpiceComponentModel.NegativeTerminalId, ground.InstanceId, SpiceComponentModel.GroundTerminalId))
+                throw new InvalidOperationException("AC-D DC fixture construction failed.");
+            var dcJsonA = SpiceDrawingSerializer.ToJson(dc);
+            var dcJsonB = SpiceDrawingSerializer.ToJson(dc);
+            SpiceWorkspaceModel restoredDc = null;
+            string dcError = null;
+            if (dcJsonA != dcJsonB || !dcJsonA.Contains("\"schemaVersion\": 2") ||
+                Convert.ToBase64String(SHA256.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(dcJsonA))) != Convert.ToBase64String(SHA256.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(dcJsonB))) ||
+                !SpiceDrawingSerializer.TryFromJson(dcJsonA, out restoredDc, out dcError) || restoredDc.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint ||
+                Math.Abs(restoredDc.AcFrequencyHz - SpiceAnalysisLimits.DefaultFrequencyHz) > 1e-12d)
+                throw new InvalidOperationException("AC-D V2 DC deterministic round-trip failed: " + dcError);
+
+            var ac = new SpiceWorkspaceModel();
+            ac.TrySetAcFrequency(1234.5d);
+            ac.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency);
+            var acSource = ac.AddComponent(SpiceComponentKind.AcVoltageSource, new Vector2(-180f, 0f));
+            ac.TrySetAcVoltageSourceParameters(acSource.InstanceId, 2.5d, -170d);
+            var currentProbe = ac.AddComponent(SpiceComponentKind.CurrentProbe, new Vector2(-100f, 0f));
+            var acResistor = ac.AddComponent(SpiceComponentKind.Resistor, Vector2.zero);
+            var capacitor = ac.AddComponent(SpiceComponentKind.Capacitor, new Vector2(100f, 0f));
+            var acGround = ac.AddComponent(SpiceComponentKind.Ground, new Vector2(100f, -100f));
+            var voltageProbe = ac.AddComponent(SpiceComponentKind.VoltageProbe, new Vector2(160f, 50f));
+            AddWorkspaceWire(ac, acSource, SpiceComponentModel.PositiveTerminalId, currentProbe, SpiceComponentModel.PositiveTerminalId);
+            AddWorkspaceWire(ac, currentProbe, SpiceComponentModel.NegativeTerminalId, acResistor, SpiceComponentModel.PositiveTerminalId);
+            AddWorkspaceWire(ac, acResistor, SpiceComponentModel.NegativeTerminalId, capacitor, SpiceComponentModel.PositiveTerminalId);
+            AddWorkspaceWire(ac, capacitor, SpiceComponentModel.NegativeTerminalId, acGround, SpiceComponentModel.GroundTerminalId);
+            AddWorkspaceWire(ac, acSource, SpiceComponentModel.NegativeTerminalId, acGround, SpiceComponentModel.GroundTerminalId);
+            AddWorkspaceWire(ac, voltageProbe, SpiceComponentModel.PositiveTerminalId, capacitor, SpiceComponentModel.PositiveTerminalId);
+            AddWorkspaceWire(ac, voltageProbe, SpiceComponentModel.NegativeTerminalId, acGround, SpiceComponentModel.GroundTerminalId);
+            var acBefore = new SpiceSimulationService().SimulateAsync(ac.BuildCircuitModel()).GetAwaiter().GetResult();
+            var acJson = SpiceDrawingSerializer.ToJson(ac);
+            SpiceWorkspaceModel restoredAc = null;
+            string acError = null;
+            if (!SpiceDrawingSerializer.TryFromJson(acJson, out restoredAc, out acError) || restoredAc.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency ||
+                Math.Abs(restoredAc.AcFrequencyHz - 1234.5d) > 1e-12d || restoredAc.FindComponent(acSource.InstanceId).SiValue != 2.5d ||
+                restoredAc.FindComponent(acSource.InstanceId).AcPhaseDegrees != -170d)
+                throw new InvalidOperationException("AC-D AC settings/source round-trip failed: " + acError);
+            var acAfter = new SpiceSimulationService().SimulateAsync(restoredAc.BuildCircuitModel()).GetAwaiter().GetResult();
+            if (!acBefore.Success || !acAfter.Success || Math.Abs(acBefore.AcComponentResults[voltageProbe.InstanceId].Voltage.Magnitude - acAfter.AcComponentResults[voltageProbe.InstanceId].Voltage.Magnitude) > 1e-9d)
+                throw new InvalidOperationException("AC-D RC fixture did not retain its real AC result.");
+
+            var follower = new SpiceWorkspaceModel();
+            var followerSource = follower.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-120f, 0f));
+            var opAmp = follower.AddComponent(SpiceComponentKind.IdealOperationalAmplifier, Vector2.zero);
+            var followerGround = follower.AddComponent(SpiceComponentKind.Ground, new Vector2(0f, -100f));
+            AddWorkspaceWire(follower, followerSource, SpiceComponentModel.PositiveTerminalId, opAmp, SpiceComponentModel.NonInvertingTerminalId);
+            AddWorkspaceWire(follower, followerSource, SpiceComponentModel.NegativeTerminalId, followerGround, SpiceComponentModel.GroundTerminalId);
+            AddWorkspaceWire(follower, opAmp, SpiceComponentModel.InvertingTerminalId, opAmp, SpiceComponentModel.OutputTerminalId);
+            var followerJson = SpiceDrawingSerializer.ToJson(follower);
+            if (!SpiceDrawingSerializer.TryFromJson(followerJson, out var restoredFollower, out var followerError) || restoredFollower.Wires.Count != 3 ||
+                !new SpiceSimulationService().SimulateAsync(restoredFollower.BuildCircuitModel()).GetAwaiter().GetResult().Success)
+                throw new InvalidOperationException("AC-D op-amp feedback round-trip failed: " + followerError);
+
+            var inverter = new SpiceWorkspaceModel();
+            inverter.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency);
+            var inverterSource = inverter.AddComponent(SpiceComponentKind.AcVoltageSource, new Vector2(-200f, 0f));
+            inverter.TrySetAcVoltageSourceParameters(inverterSource.InstanceId, 1d, 30d);
+            var rin = inverter.AddComponent(SpiceComponentKind.Resistor, new Vector2(-80f, 0f));
+            inverter.TrySetParameter(rin.InstanceId, 1000d);
+            var rf = inverter.AddComponent(SpiceComponentKind.Resistor, new Vector2(50f, 80f));
+            inverter.TrySetParameter(rf.InstanceId, 10000d);
+            var inverterOpAmp = inverter.AddComponent(SpiceComponentKind.IdealOperationalAmplifier, Vector2.zero);
+            var inverterGround = inverter.AddComponent(SpiceComponentKind.Ground, new Vector2(0f, -100f));
+            AddWorkspaceWire(inverter, inverterSource, SpiceComponentModel.PositiveTerminalId, rin, SpiceComponentModel.PositiveTerminalId);
+            AddWorkspaceWire(inverter, rin, SpiceComponentModel.NegativeTerminalId, inverterOpAmp, SpiceComponentModel.InvertingTerminalId);
+            AddWorkspaceWire(inverter, rf, SpiceComponentModel.NegativeTerminalId, inverterOpAmp, SpiceComponentModel.InvertingTerminalId);
+            AddWorkspaceWire(inverter, rf, SpiceComponentModel.PositiveTerminalId, inverterOpAmp, SpiceComponentModel.OutputTerminalId);
+            AddWorkspaceWire(inverter, inverterSource, SpiceComponentModel.NegativeTerminalId, inverterGround, SpiceComponentModel.GroundTerminalId);
+            AddWorkspaceWire(inverter, inverterOpAmp, SpiceComponentModel.NonInvertingTerminalId, inverterGround, SpiceComponentModel.GroundTerminalId);
+            var inverterJson = SpiceDrawingSerializer.ToJson(inverter);
+            if (!SpiceDrawingSerializer.TryFromJson(inverterJson, out var restoredInverter, out var inverterError))
+                throw new InvalidOperationException("AC-D AC op-amp import failed: " + inverterError);
+            var inverterResult = new SpiceSimulationService().SimulateAsync(restoredInverter.BuildCircuitModel()).GetAwaiter().GetResult();
+            var inverterVoltage = inverterResult.Success ? inverterResult.AcComponentResults[inverterOpAmp.InstanceId].Voltage : default;
+            if (!inverterResult.Success || Math.Abs(inverterVoltage.Magnitude - 9.99989000121d) > 2.1e-4d || Math.Abs(SpiceAnalysisLimits.NormalizePhaseDegrees(inverterVoltage.PhaseDegrees + 150d)) > 0.02d)
+                throw new InvalidOperationException("AC-D AC op-amp result did not survive round-trip.");
+
+            var overLimit = new SpiceDrawingFileDto
+            {
+                format = SpiceDrawingFormat.Format,
+                schemaVersion = SpiceDrawingFormat.CurrentSchemaVersion,
+                analysis = new SpiceAnalysisDto { mode = SpiceAnalysisMode.DcOperatingPoint.ToString(), frequencyHz = "1000" }
+            };
+            for (var index = 0; index <= SpiceDrawingLimits.MaxComponents; index++) overLimit.components.Add(new SpiceComponentDto());
+            if (SpiceDrawingSerializer.TryFromDto(overLimit, out _, out _))
+                throw new InvalidOperationException("AC-D V2 import bypassed the existing component-count D2 limit.");
+
+            var transactionRoot = new GameObject("SpiceAcDImportTransaction", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var transactionWorkspace = CreateInitializedWorkspaceForCopy(transactionRoot.transform, out _);
+                transactionWorkspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                var beforeModel = transactionWorkspace.Model;
+                var beforeRevision = transactionWorkspace.ElectricalRevisionForTesting;
+                transactionWorkspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                const string invalidV2 = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":2,\"analysis\":{\"mode\":\"Unknown\",\"frequencyHz\":\"1000\"},\"components\":[],\"wires\":[]}";
+                if (transactionWorkspace.TryImportDrawingJson(invalidV2, out _) || !ReferenceEquals(beforeModel, transactionWorkspace.Model) ||
+                    beforeRevision != transactionWorkspace.ElectricalRevisionForTesting || transactionWorkspace.ResultState != SpiceWorkspaceResultState.Current || !transactionWorkspace.IsDirty)
+                    throw new InvalidOperationException("AC-D invalid V2 import was not transactional.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(transactionRoot); }
+
+            var legacyFixtures = new[]
+            {
+                "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[],\"wires\":[]}",
+                "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"ground-001\",\"componentType\":\"Ground\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0}],\"wires\":[]}",
+                "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"switch-001\",\"componentType\":\"IdealSwitch\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":1,\"siValueText\":\"1\"}],\"wires\":[]}",
+                "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":1,\"components\":[{\"instanceId\":\"resistor-001\",\"componentType\":\"Resistor\",\"position\":{\"x\":\"0\",\"y\":\"0\"},\"rotationQuarterTurns\":0,\"siValueText\":\"1000\"}],\"wires\":[]}"
+            };
+            foreach (var legacyJson in legacyFixtures)
+            {
+                if (!SpiceDrawingSerializer.TryFromJson(legacyJson, out var legacy, out var legacyError) || legacy.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint ||
+                    legacy.AcFrequencyHz != SpiceAnalysisLimits.DefaultFrequencyHz || !SpiceDrawingSerializer.ToJson(legacy).Contains("\"schemaVersion\": 2"))
+                    throw new InvalidOperationException("AC-D V1 compatibility fixture failed: " + legacyError);
+            }
+        }
+
+        private static void AddWorkspaceWire(SpiceWorkspaceModel model, SpiceWorkspaceComponentData start, string startTerminal, SpiceWorkspaceComponentData end, string endTerminal)
+        {
+            if (!model.AddWire(start.InstanceId, startTerminal, end.InstanceId, endTerminal))
+                throw new InvalidOperationException("AC-D fixture wire construction failed.");
         }
 
         private static void ValidateAcAnalysisGraphBuilderBoundaries()
@@ -2137,7 +2269,7 @@ namespace ElectricalSim.Spice.T3
 
             var dto = SpiceDrawingSerializer.ToDto(model);
             if (dto.format != SpiceDrawingFormat.Format) throw new InvalidOperationException("DTO format 不正确。");
-            if (dto.schemaVersion != SpiceDrawingFormat.SchemaVersion) throw new InvalidOperationException("DTO schemaVersion 不正确。");
+            if (dto.schemaVersion != SpiceDrawingFormat.CurrentSchemaVersion) throw new InvalidOperationException("DTO schemaVersion 不正确。");
         }
 
         private static void ValidateDrawingTenDeviceTypesRoundTrip()
@@ -3360,8 +3492,8 @@ namespace ElectricalSim.Spice.T3
                     var json = File.ReadAllText(savedPath, System.Text.Encoding.UTF8);
                     if (!json.Contains("\"format\": \"ElectricalSimulation2D.SpiceDrawing\""))
                         throw new InvalidOperationException("保存的 JSON 应包含正确的 format。");
-                    if (!json.Contains("\"schemaVersion\": 1"))
-                        throw new InvalidOperationException("保存的 JSON 应包含 schemaVersion=1。");
+                    if (!json.Contains("\"schemaVersion\": 2"))
+                        throw new InvalidOperationException("保存的 JSON 应包含 schemaVersion=2。");
 
                     // 保存不改变原 Workspace
                     if (!ReferenceEquals(workspace.Model, beforeModel))

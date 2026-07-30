@@ -96,6 +96,7 @@ namespace ElectricalSim.Spice.Workspace
         private Button saveFileButton;
         private Button saveAsFileButton;
         private Button importFileButton;
+        private bool isDirty;
 
         public SpiceWorkspaceModel Model { get; private set; } = new SpiceWorkspaceModel();
         public SpiceWorkspaceResultState ResultState { get; private set; } = SpiceWorkspaceResultState.NeverRun;
@@ -106,6 +107,8 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform WireLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
         public bool HasPendingWire => pendingComponent != null;
+        /// <summary>仅表示尚未写入当前图纸文件的电气编辑；结果和临时 UI 状态不参与保存契约。</summary>
+        public bool IsDirty => isDirty;
         internal long ElectricalRevisionForTesting => electricalRevision;
         public event Action<SpiceWorkspaceComponentData> ParameterDialogRequested;
 
@@ -786,6 +789,7 @@ namespace ElectricalSim.Spice.Workspace
             // 清空画布成功后清除当前会话文件路径（仅在 ClearWorkspace 末尾调用一次，
             // 不在清空按钮 UI 回调中复制清除路径逻辑）。
             ClearCurrentSpiceFilePath();
+            isDirty = false;
         }
 
         /// <summary>
@@ -918,11 +922,6 @@ namespace ElectricalSim.Spice.Workspace
                 error = "仿真计算进行中，请稍后保存图纸。";
                 return false;
             }
-            if (!SpiceDrawingSerializer.TryValidateSchemaV1SaveCompatibility(Model, out error))
-            {
-                return false;
-            }
-
             string json;
             try
             {
@@ -941,6 +940,8 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
             fileService.SetCurrentSpiceFilePath(normalizedPath);
+            // 保存是现有 Model 的持久化快照，不是电气修改；成功后只清除 dirty，不推进 revision 或使结果过期。
+            isDirty = false;
             // C1 不写成功 UI 文案；C2 将根据 CurrentSpiceFilePath 显示“已保存：<文件名>”。
             return true;
         }
@@ -1031,6 +1032,7 @@ namespace ElectricalSim.Spice.Workspace
             Model = tempModel;
             Model.Changed += HandleModelChanged;
             AdvanceElectricalRevision();
+            isDirty = false;
 
             // 5. 按新模型重建所有元件视图（CreateComponentView 保留 InstanceId、Position、Rotation、SiValue）
             foreach (var component in Model.Components)
@@ -1054,6 +1056,8 @@ namespace ElectricalSim.Spice.Workspace
             SetResultText(string.Empty);
             SetDiagnosticText(string.Empty);
             ClearParameterPanel();
+            // 导入提交后从 Model 快照刷新模式和频率控件，不能依赖导入前 UI 文本。
+            RefreshAnalysisControls();
             UpdateRotateAvailability();
             RefreshNetlistUi();
             RefreshCopyResultButton();
@@ -1387,6 +1391,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void HandleModelChanged(SpiceWorkspaceChange change)
         {
+            isDirty = true;
             AdvanceElectricalRevision();
             if (ResultState != SpiceWorkspaceResultState.Running && ResultState != SpiceWorkspaceResultState.NeverRun)
             {
