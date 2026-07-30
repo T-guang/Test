@@ -5,7 +5,7 @@
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
 - Unity：`2022.3.57f1c1`
 - 分支：`feature/spice-t4a-dc-host-integration`
-- Q2 代码基线：`4d1391a chore(spice): finish workspace comments and quality evidence`
+- Q2 代码基线：`6492559 chore(spice): complete workspace comment cleanup`
 - 文档 HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`。Q2 未修改场景、ProjectSettings、控制模式、数值语义、图纸格式、接线/路由或 Player Harness。
 
@@ -36,7 +36,7 @@
 ## Q1 与 Q2 质量收口
 
 - Q1：`645c109`（T3 partial 测试拆分）、`46ca7a6`（中文日志和注释）、`eb20f67`（Edit Mode 生命周期）。
-- Q2：`6da3295`（DemoHost 支持类型移出）、`4944dc1`（Controller partial 整理）、`9641cb0`（动态组件符号生命周期）、`4d1391a`（中文注释与 Q2 质量证据）。
+- Q2：`6da3295`（DemoHost 支持类型移出）、`4944dc1`（Controller partial 整理）、`9641cb0`（动态组件符号生命周期）、`4d1391a`（中文注释与 Q2 质量证据）、`6492559`（剩余注释与参数弹窗生命周期）。
 - Q2 保持完整类型名、访问修饰符、字段、UI GameObject 名称、`AddComponent<T>` 目标和 ViewBindings 序列化字段不变。初始 Scene/Prefab/Asset 引用扫描未发现被移动类型的序列化脚本引用。
 - Q2 的定向去重仅包含左右锚点工具栏按钮的共同样式，以及 ResultState 改变时原本完全相同的三个控件刷新；未将网表、结果或其他 Refresh 收进万能入口。
 - `SpiceT3WorkspaceValidation` 保持原有 104 个活动 Validate 检查，并新增 5 个 Q2 完整性检查；RunPureChecks 既有调用顺序不变。
@@ -45,7 +45,7 @@
 
 最终 Q2 原始 batch 日志：
 
-`E:\Builds\ElectricalSimulation2D\SpiceFinalQualityQ2\20260730-202941\unity-q2-regression.log`
+`E:\Builds\ElectricalSimulation2D\SpiceFinalQualityQ2\20260730-205049\unity-q2-final.log`
 
 - C#：0 error；T1：PASS；T2：`Fixtures=22`；T3：PASS。
 - AC：`14/14`；AC-C1、OpAmp `4/4`、AC-D 全部专项：PASS。
