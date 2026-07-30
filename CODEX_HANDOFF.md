@@ -1,9 +1,34 @@
 # Codex Handoff: ElectricalSimulation2D SPICE
 
+## 当前基线（唯一）
+
+- 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`；Unity：`2022.3.57f1c1`；分支：`feature/spice-t4a-dc-host-integration`。
+- Code baseline：`7a10aff feat(spice): expose ideal operational amplifier workspace`。
+- Docs HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。后续历史章节仅供追溯，不构成当前基线。
+- AC-B1：`c677c97`；AC-B1.1：`515c808`；AC-B2：`b185fa4`；AC-B2.1：`3405933`；AC-C1：`bd598e7`、`450119b`；AC-C1.1：`c5c3ddc`。
+- 理想运算放大器 V1：`e04089b`（Core/求解）和 `7a10aff`（工作区）。
+- 正式场景仍为 `Assets/Scenes/Demo.unity`，本批未修改场景、ProjectSettings、控制模式、Wire 交互或 schemaVersion。
+
+## SPICE Workspace 状态与刷新所有权
+
+- `SpiceWorkspaceModel` 与 `SpiceCircuitModel` 是唯一电气状态权威来源。新增、删除、接线和参数修改只经正式 Model API；View 与 DemoHost 只绑定、展示并转发事件。
+- 每次有效 Model 变更由 Controller 的单一 `HandleModelChanged` 推进一次 electrical revision，并按既有规则将已有结果标为 Stale；等价值写入不产生变更。
+- Controller 集中负责 Running 防线、异步 revision/request 提交保护，以及元件池、参数区、画布与结果状态刷新。运放复用这条链路，不存在 `RefreshOpAmp`、`InvalidateOpAmp` 或 `MarkOpAmp` 分支。
+- View 和 DemoHost 不推进 revision、不修改结果状态，也不直接运行求解器。
+
+## 理想运算放大器（线性）V1
+
+- 枚举：`IdealOperationalAmplifier`；稳定端子顺序为 `nonInverting`（IN+）、`inverting`（IN-）、`output`（OUT）。
+- 固定模型是 `EOP out 0 in_plus in_minus 1e6`。有限 1e6 增益保留可验证的反馈误差并避免无穷增益数值约束；DC 与单频 AC 复用同一 VCVS，没有隐藏电源。
+- V1 输出只定义为 OUT 相对 GND；不提供电源引脚、饱和、限流、增益带宽、压摆率、失调、真实型号、瞬态或扫频。
+- 项目 ngspice 45.2 的最小验证和 4 个真实 fixture 均可读取 `i(EOP...)`，因此结果显示 VCVS 输出支路电流并标注 ngspice 支路约定；不会伪造输入端电流。
+- V1 保存遇到该器件必须在创建/覆盖文件前拒绝：`当前图纸包含 V1 格式不支持的器件：理想运算放大器。` AC-D 才引入 V2 保存/恢复。
+- 下一步唯一为 AC-D：保存/导入 schemaVersion 2（必须覆盖运放端子与恢复）。三分辨率真实验收仍延期到 AC-D 完成后的正式 Player 人工验收。
+
 ## Current AC baseline
 
-- Code baseline: `c5c3ddc fix(spice): close ac workspace presentation gaps`.
-- Docs HEAD: this document's final forward commit.
+- Historical AC-C1.1 code baseline: `c5c3ddc fix(spice): close ac workspace presentation gaps`; current baseline is the authoritative section above.
+- Historical docs entry; current Docs HEAD is declared in the authoritative section above.
 - AC-B1: `c677c97`; AC-B1.1: `515c808`; AC-B2: `b185fa4`; AC-B2.1: `3405933`.
 - AC-C1: `bd598e7` and `450119b`; AC-C1.1: `c5c3ddc`.
 - Next: AC-D — 保存/导入 schemaVersion 2.
@@ -12,8 +37,8 @@
 ## Current Code Baseline
 
 - Branch: `feature/spice-t4a-dc-host-integration`
-- Code baseline: `3405933 test(spice): bind ac fixtures to explicit output nodes`
-- The following documentation-only handoff commit records this exact code baseline.
+- Historical AC-B2.1 baseline: `3405933 test(spice): bind ac fixtures to explicit output nodes`.
+- It is retained only to identify the AC-B2.1 milestone, not as the current code baseline.
 
 ## 当前基线
 
