@@ -117,9 +117,12 @@ namespace ElectricalSim.Spice.Workspace
             {
                 if (!SpiceDrawingFormat.IsSupportedComponentKindInSchemaV1(component.Kind))
                 {
+                    // V1 DTO 没有三端子定义；若继续写入会在恢复时丢失运放拓扑，因此必须在创建文件前拒绝。
                     error = component.Kind == SpiceComponentKind.AcVoltageSource
                         ? "图纸格式 V1 不支持交流电压源。"
-                        : "当前保存格式 V1 不支持此器件类型，未执行保存。";
+                        : component.Kind == SpiceComponentKind.IdealOperationalAmplifier
+                            ? "当前图纸包含 V1 格式不支持的器件：理想运算放大器。"
+                            : "当前保存格式 V1 不支持此器件类型，未执行保存。";
                     return false;
                 }
             }
@@ -412,7 +415,9 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     error = kind == SpiceComponentKind.AcVoltageSource
                         ? "图纸格式 V1 不支持交流电压源。"
-                        : "图纸格式 V1 不支持该器件类型。";
+                        : kind == SpiceComponentKind.IdealOperationalAmplifier
+                            ? "当前图纸包含 V1 格式不支持的器件：理想运算放大器。"
+                            : "图纸格式 V1 不支持该器件类型。";
                     return false;
                 }
 

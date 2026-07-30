@@ -37,6 +37,16 @@ namespace ElectricalSim.Spice.Netlist
             foreach (var pair in ordered)
             {
                 var component = componentById[pair.Key];
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    // V1 只建模 OUT 相对 SPICE 节点 0 的受控源；没有隐藏电源、饱和或限流元件，DC 与 AC 使用同一端子顺序。
+                    var output = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)];
+                    var nonInverting = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NonInvertingTerminalId)];
+                    var inverting = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.InvertingTerminalId)];
+                    builder.Append(pair.Value).Append(' ').Append(output).Append(" 0 ").Append(nonInverting).Append(' ').Append(inverting).Append(' ')
+                        .Append(SpiceComponentDefaults.IdealOperationalAmplifierOpenLoopGain.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
+                    continue;
+                }
                 var a = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var b = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 if (component.Kind == SpiceComponentKind.SiliconDiode)
@@ -54,7 +64,7 @@ namespace ElectricalSim.Spice.Netlist
             }
 
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();
-            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode)
+            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode || componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier)
                 .Select(pair => pair.Value).ToList();
             // 只打印后续结果层需要的向量，并用唯一标记隔离 ngspice 自身日志。
             builder.AppendLine().AppendLine(".control").AppendLine("set noaskquit").AppendLine("op").AppendLine("echo " + BeginMarker);

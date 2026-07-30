@@ -47,6 +47,7 @@ namespace ElectricalSim.Spice.T3
             ValidateAcParameterWriteEncapsulation();
             ValidateDrawingV1AcCompatibilityBoundaries();
             SpiceAcB2Validation.RunNetlistAndParserChecks();
+            SpiceIdealOperationalAmplifierValidation.RunAll();
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
@@ -211,6 +212,7 @@ namespace ElectricalSim.Spice.T3
                 resetCurrentProbe.InstanceId != "current-probe-001" || resetSwitch.InstanceId != "switch-001")
                 throw new InvalidOperationException("Clearing the SPICE workspace did not reset per-kind instance naming.");
         }
+
 
         private static void ValidateHostBindings()
         {

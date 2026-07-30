@@ -74,6 +74,24 @@ namespace ElectricalSim.Spice.Core
         {
             foreach (var component in circuit.Components.Where(component => component.Kind != SpiceComponentKind.Ground).OrderBy(component => component.InstanceId, StringComparer.Ordinal))
             {
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    // V1 的输出定义固定为 OUT 相对 GND；输入端为高阻控制端，不伪造两个输入支路电流。
+                    var outputNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)];
+                    var opAmpResult = new SpiceComponentResult
+                    {
+                        ComponentId = component.InstanceId,
+                        ComponentKind = component.Kind.ToString(),
+                        Voltage = GetNodeVoltage(result.NodeVoltages, outputNode),
+                        Current = currents[graph.SpiceNameByComponentId[component.InstanceId]],
+                        VoltageDirection = "OUT-to-GND",
+                        CurrentDirection = "OUT-to-GND (ngspice branch convention)",
+                        ResultStatus = SpiceResultStatus.Available,
+                        Notes = "线性 VCVS；固定开环增益 1e6"
+                    };
+                    result.ComponentResults[component.InstanceId] = opAmpResult;
+                    continue;
+                }
                 var positiveNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negativeNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 var voltage = GetNodeVoltage(result.NodeVoltages, positiveNode) - GetNodeVoltage(result.NodeVoltages, negativeNode);

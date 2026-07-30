@@ -18,7 +18,8 @@ namespace ElectricalSim.Spice.Core
         Ground,
         VoltageProbe,
         CurrentProbe,
-        AcVoltageSource
+        AcVoltageSource,
+        IdealOperationalAmplifier
     }
 
     public enum SpiceParameterKey
@@ -33,6 +34,15 @@ namespace ElectricalSim.Spice.Core
     }
 
     /// <summary>
+    /// 固定器件常量只在 Core 中定义，避免网表、工作区和测试各自复制模型参数。
+    /// </summary>
+    public static class SpiceComponentDefaults
+    {
+        // 以有限 1e6 增益近似理想运放，既保留负反馈误差的可验证数值，也避免无穷增益在数值求解中形成不可定义的约束。
+        public const double IdealOperationalAmplifierOpenLoopGain = 1e6d;
+    }
+
+    /// <summary>
     /// 与 Unity 场景无关的元件实例。T2 所有数值均使用 SI 基础单位：V、Ohm、F、H。
     /// </summary>
     public sealed class SpiceComponentModel
@@ -41,6 +51,9 @@ namespace ElectricalSim.Spice.Core
         public const string PositiveTerminalId = "positive";
         public const string NegativeTerminalId = "negative";
         public const string GroundTerminalId = "ground";
+        public const string NonInvertingTerminalId = "nonInverting";
+        public const string InvertingTerminalId = "inverting";
+        public const string OutputTerminalId = "output";
 
         private readonly Dictionary<SpiceParameterKey, double> parameters = new Dictionary<SpiceParameterKey, double>();
 
@@ -102,6 +115,11 @@ namespace ElectricalSim.Spice.Core
             return new SpiceComponentModel(instanceId, SpiceComponentKind.Ground);
         }
 
+        public static SpiceComponentModel IdealOperationalAmplifier(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.IdealOperationalAmplifier);
+        }
+
         /// <summary>
         /// 两端差分电压探针。positive=V+、negative=V-；测量定义为 Vprobe = V(V+) - V(V-)。
         /// 探针不产生 SPICE 元件行，不注入电流，不参与 component-graph 连通性判断。
@@ -132,8 +150,24 @@ namespace ElectricalSim.Spice.Core
                 return string.Equals(terminalId, GroundTerminalId, StringComparison.Ordinal);
             }
 
+            if (Kind == SpiceComponentKind.IdealOperationalAmplifier)
+            {
+                return string.Equals(terminalId, NonInvertingTerminalId, StringComparison.Ordinal) ||
+                       string.Equals(terminalId, InvertingTerminalId, StringComparison.Ordinal) ||
+                       string.Equals(terminalId, OutputTerminalId, StringComparison.Ordinal);
+            }
+
             return string.Equals(terminalId, PositiveTerminalId, StringComparison.Ordinal) ||
                    string.Equals(terminalId, NegativeTerminalId, StringComparison.Ordinal);
+        }
+
+        public static IReadOnlyList<string> TerminalIdsFor(SpiceComponentKind kind)
+        {
+            if (kind == SpiceComponentKind.Ground) return new[] { GroundTerminalId };
+            // 三端子顺序是稳定拓扑契约：IN+、IN-、OUT；网表 VCVS 也按该语义读取，不能按 UI 排列推断。
+            if (kind == SpiceComponentKind.IdealOperationalAmplifier)
+                return new[] { NonInvertingTerminalId, InvertingTerminalId, OutputTerminalId };
+            return new[] { PositiveTerminalId, NegativeTerminalId };
         }
 
         public bool TryGetParameter(SpiceParameterKey key, out double value)

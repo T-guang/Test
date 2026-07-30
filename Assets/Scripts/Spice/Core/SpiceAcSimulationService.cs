@@ -87,6 +87,23 @@ namespace ElectricalSim.Spice.Core
             var omega = 2d * Math.PI * circuit.AnalysisSettings.FrequencyHz;
             foreach (var component in circuit.Components.Where(component => component.Kind != SpiceComponentKind.Ground).OrderBy(component => component.InstanceId, StringComparer.Ordinal))
             {
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    // ngspice 已通过真实 DC/AC fixture 验证 i(E...) 可读取，因此只报告 VCVS 输出支路，不把高阻输入端误报为普通元件电流。
+                    var outputNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)];
+                    result.AcComponentResults[component.InstanceId] = new SpiceAcComponentResult
+                    {
+                        ComponentId = component.InstanceId,
+                        ComponentKind = component.Kind.ToString(),
+                        Voltage = GetNodeVoltage(result.AcNodeVoltages, outputNode),
+                        Current = branchValues[graph.SpiceNameByComponentId[component.InstanceId]],
+                        VoltageDirection = "OUT-to-GND",
+                        CurrentDirection = "OUT-to-GND (ngspice branch convention)",
+                        ResultStatus = SpiceResultStatus.Available,
+                        Notes = "线性 VCVS；固定开环增益 1e6"
+                    };
+                    continue;
+                }
                 var positiveNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negativeNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 var voltage = GetNodeVoltage(result.AcNodeVoltages, positiveNode).Subtract(GetNodeVoltage(result.AcNodeVoltages, negativeNode));

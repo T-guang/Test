@@ -100,10 +100,12 @@ namespace ElectricalSim.Spice.Results
             var componentKind = value.ComponentKind;
             var direction = string.IsNullOrEmpty(value.CurrentDirection) ? value.VoltageDirection : value.CurrentDirection;
             var mapped = direction == "A-to-B" ? "A → B" : direction == "V-plus-to-V-minus" ? "V+ → V-" :
-                direction == "IN-to-OUT" ? "IN → OUT" : "positive → negative";
+                direction == "IN-to-OUT" ? "IN → OUT" : !string.IsNullOrEmpty(direction) && direction.StartsWith("OUT-to-GND", StringComparison.Ordinal) ? "OUT → GND" : "positive → negative";
             if (string.Equals(componentKind, "VoltageProbe", StringComparison.Ordinal)) return "V+ → V-";
             if (string.Equals(componentKind, "CurrentProbe", StringComparison.Ordinal)) return "IN → OUT";
             if (string.Equals(componentKind, "AcVoltageSource", StringComparison.Ordinal)) return mapped + "（ngspice 支路约定）";
+            if (string.Equals(componentKind, "IdealOperationalAmplifier", StringComparison.Ordinal) && direction.Contains("ngspice branch convention"))
+                return mapped + "（ngspice 支路约定）";
             return mapped;
         }
     }

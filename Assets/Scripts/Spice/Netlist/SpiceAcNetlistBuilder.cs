@@ -52,6 +52,11 @@ namespace ElectricalSim.Spice.Netlist
             foreach (var pair in ordered)
             {
                 var component = componentById[pair.Key];
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    AppendIdealOperationalAmplifierLine(builder, component, pair.Value, graph);
+                    continue;
+                }
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 AppendComponentLine(builder, component, pair.Value, positive, negative);
@@ -68,7 +73,8 @@ namespace ElectricalSim.Spice.Netlist
 
             var branchNames = ordered
                 .Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.AcVoltageSource ||
-                               componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe)
+                               componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe ||
+                               componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier)
                 .Select(pair => pair.Value)
                 .ToList();
             foreach (var branch in branchNames)
@@ -112,6 +118,16 @@ namespace ElectricalSim.Spice.Netlist
                 default:
                     throw new InvalidOperationException("Unsupported component reached the AC netlist builder: " + component.Kind + ".");
             }
+        }
+
+        private static void AppendIdealOperationalAmplifierLine(StringBuilder builder, SpiceComponentModel component, string graphName, SpiceCircuitGraph graph)
+        {
+            // DC 和单频 AC 共用同一线性 VCVS：频率响应完全由外部 R/C/L 决定，固定增益模型不暗含带宽、饱和或电源轨。
+            var output = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)];
+            var nonInverting = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NonInvertingTerminalId)];
+            var inverting = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.InvertingTerminalId)];
+            builder.Append(graphName).Append(' ').Append(output).Append(" 0 ").Append(nonInverting).Append(' ').Append(inverting).Append(' ')
+                .Append(SpiceComponentDefaults.IdealOperationalAmplifierOpenLoopGain.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
         }
 
         private static void AppendValueLine(StringBuilder builder, string name, string positive, string negative, double value)

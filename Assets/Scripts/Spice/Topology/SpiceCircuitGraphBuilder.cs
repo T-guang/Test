@@ -42,15 +42,8 @@ namespace ElectricalSim.Spice.Topology
             var terminals = new List<SpiceTerminalRef>();
             foreach (var component in components.Values.OrderBy(component => component.InstanceId, StringComparer.Ordinal))
             {
-                if (component.Kind == SpiceComponentKind.Ground)
-                {
-                    terminals.Add(new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.GroundTerminalId));
-                }
-                else
-                {
-                    terminals.Add(new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId));
-                    terminals.Add(new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId));
-                }
+                foreach (var terminalId in SpiceComponentModel.TerminalIdsFor(component.Kind))
+                    terminals.Add(new SpiceTerminalRef(component.InstanceId, terminalId));
             }
 
             var indexByTerminal = new Dictionary<SpiceTerminalRef, int>();
@@ -84,7 +77,8 @@ namespace ElectricalSim.Spice.Topology
                     continue;
                 }
 
-                if (string.Equals(wire.Start.ComponentInstanceId, wire.End.ComponentInstanceId, StringComparison.Ordinal))
+                if (string.Equals(wire.Start.ComponentInstanceId, wire.End.ComponentInstanceId, StringComparison.Ordinal) &&
+                    !IsAllowedIdealOperationalAmplifierFeedbackWire(components, wire))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SAME_COMPONENT_CONNECTION", SpiceDiagnosticSeverity.Error, "A wire cannot directly connect two terminals of the same component.", wire.Start.ComponentInstanceId, wire.Start.TerminalId));
                     continue;
@@ -140,6 +134,7 @@ namespace ElectricalSim.Spice.Topology
                 graph.SpiceNameByComponentId[component.InstanceId] = name;
                 graph.ComponentIdBySpiceName[name] = component.InstanceId;
 
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier) continue;
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 if (positive == negative && IsIdealVoltageConstraint(component.Kind))
@@ -183,6 +178,20 @@ namespace ElectricalSim.Spice.Topology
             var componentIdsByRoot = roots.ToDictionary(group => group.Root, group => new HashSet<string>(StringComparer.Ordinal));
             foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground && component.Kind != SpiceComponentKind.VoltageProbe))
             {
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    var opAmpTerminals = SpiceComponentModel.TerminalIdsFor(component.Kind);
+                    var firstRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, opAmpTerminals[0])]);
+                    foreach (var terminalId in opAmpTerminals.Skip(1))
+                    {
+                        var terminalRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, terminalId)]);
+                        neighbors[firstRoot].Add(terminalRoot);
+                        neighbors[terminalRoot].Add(firstRoot);
+                        componentIdsByRoot[firstRoot].Add(component.InstanceId);
+                        componentIdsByRoot[terminalRoot].Add(component.InstanceId);
+                    }
+                    continue;
+                }
                 var positiveRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)]);
                 var negativeRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)]);
                 neighbors[positiveRoot].Add(negativeRoot);
@@ -239,6 +248,16 @@ namespace ElectricalSim.Spice.Topology
                 return false;
             }
             return true;
+        }
+
+        private static bool IsAllowedIdealOperationalAmplifierFeedbackWire(Dictionary<string, SpiceComponentModel> components, SpiceWireModel wire)
+        {
+            if (!components.TryGetValue(wire.Start.ComponentInstanceId ?? string.Empty, out var component) ||
+                component.Kind != SpiceComponentKind.IdealOperationalAmplifier)
+                return false;
+            // 电压跟随器需要把 IN- 与 OUT 直接并为同一节点；这是三端 VCVS 唯一允许的同器件接线，不放宽其他器件的自短接诊断。
+            return (wire.Start.TerminalId == SpiceComponentModel.InvertingTerminalId && wire.End.TerminalId == SpiceComponentModel.OutputTerminalId) ||
+                   (wire.Start.TerminalId == SpiceComponentModel.OutputTerminalId && wire.End.TerminalId == SpiceComponentModel.InvertingTerminalId);
         }
 
         private static void ValidateComponents(Dictionary<string, SpiceComponentModel> components, SpiceCircuitGraph graph)
@@ -307,6 +326,7 @@ namespace ElectricalSim.Spice.Topology
                 case SpiceComponentKind.Capacitor: return "C";
                 case SpiceComponentKind.Inductor: return "L";
                 case SpiceComponentKind.CurrentProbe: return "VPROBE";
+                case SpiceComponentKind.IdealOperationalAmplifier: return "EOP";
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
         }
@@ -359,7 +379,8 @@ namespace ElectricalSim.Spice.Topology
             return kind == SpiceComponentKind.AcVoltageSource || kind == SpiceComponentKind.Resistor ||
                 kind == SpiceComponentKind.Capacitor || kind == SpiceComponentKind.Inductor ||
                 kind == SpiceComponentKind.Ground || kind == SpiceComponentKind.IdealSwitch ||
-                kind == SpiceComponentKind.VoltageProbe || kind == SpiceComponentKind.CurrentProbe;
+                kind == SpiceComponentKind.VoltageProbe || kind == SpiceComponentKind.CurrentProbe ||
+                kind == SpiceComponentKind.IdealOperationalAmplifier;
         }
 
         private sealed class NodeGroup

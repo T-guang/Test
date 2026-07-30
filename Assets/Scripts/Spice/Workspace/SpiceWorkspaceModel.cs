@@ -204,7 +204,7 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.AcVoltageSource) return SpiceAnalysisLimits.IsValidAcMagnitude(value);
             // 二极管使用固定 D_GENERIC 模型，GND 与两类探针无参数；均不允许通过参数区写入内部值。
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
-                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && value > 0d);
+                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && kind != SpiceComponentKind.IdealOperationalAmplifier && value > 0d);
         }
 
         /// <summary>
@@ -235,6 +235,7 @@ namespace ElectricalSim.Spice.Workspace
                 case SpiceComponentKind.Inductor: return "inductor";
                 case SpiceComponentKind.VoltageProbe: return "voltage-probe";
                 case SpiceComponentKind.CurrentProbe: return "current-probe";
+                case SpiceComponentKind.IdealOperationalAmplifier: return "opamp";
                 default: return "ground";
             }
         }
@@ -322,9 +323,10 @@ namespace ElectricalSim.Spice.Workspace
         /// 旋转只影响视觉布局，不写入 SpiceCircuitModel，也不使 DC 结果过期。
         /// </summary>
         public int RotationQuarterTurns { get; set; }
-        public bool HasTerminal(string terminalId) => Kind == SpiceComponentKind.Ground
-            ? string.Equals(terminalId, SpiceComponentModel.GroundTerminalId, StringComparison.Ordinal)
-            : string.Equals(terminalId, SpiceComponentModel.PositiveTerminalId, StringComparison.Ordinal) || string.Equals(terminalId, SpiceComponentModel.NegativeTerminalId, StringComparison.Ordinal);
+        public bool HasTerminal(string terminalId)
+        {
+            return SpiceComponentModel.TerminalIdsFor(Kind).Contains(terminalId);
+        }
 
         public SpiceComponentModel ToSpiceComponentModel()
         {
@@ -341,6 +343,7 @@ namespace ElectricalSim.Spice.Workspace
                 case SpiceComponentKind.Ground: return SpiceComponentModel.Ground(InstanceId);
                 case SpiceComponentKind.VoltageProbe: return SpiceComponentModel.VoltageProbe(InstanceId);
                 case SpiceComponentKind.CurrentProbe: return SpiceComponentModel.CurrentProbe(InstanceId);
+                case SpiceComponentKind.IdealOperationalAmplifier: return SpiceComponentModel.IdealOperationalAmplifier(InstanceId);
                 default: throw new ArgumentOutOfRangeException();
             }
         }
