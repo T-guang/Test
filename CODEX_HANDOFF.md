@@ -3,10 +3,10 @@
 ## 当前基线（唯一）
 
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`；Unity：`2022.3.57f1c1`；分支：`feature/spice-t4a-dc-host-integration`。
-- Code baseline：`7a10aff feat(spice): expose ideal operational amplifier workspace`。
+- Code baseline：`5e00991 fix(spice): complete opamp feedback topology`。
 - Docs HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。后续历史章节仅供追溯，不构成当前基线。
 - AC-B1：`c677c97`；AC-B1.1：`515c808`；AC-B2：`b185fa4`；AC-B2.1：`3405933`；AC-C1：`bd598e7`、`450119b`；AC-C1.1：`c5c3ddc`。
-- 理想运算放大器 V1：`e04089b`（Core/求解）和 `7a10aff`（工作区）。
+- 理想运算放大器 V1：`e04089b`（Core/求解）和 `7a10aff`（工作区）；V1.1 反馈拓扑：`5e00991`。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`，本批未修改场景、ProjectSettings、控制模式、Wire 交互或 schemaVersion。
 
 ## SPICE Workspace 状态与刷新所有权
@@ -24,6 +24,13 @@
 - 项目 ngspice 45.2 的最小验证和 4 个真实 fixture 均可读取 `i(EOP...)`，因此结果显示 VCVS 输出支路电流并标注 ngspice 支路约定；不会伪造输入端电流。
 - V1 保存遇到该器件必须在创建/覆盖文件前拒绝：`当前图纸包含 V1 格式不支持的器件：理想运算放大器。` AC-D 才引入 V2 保存/恢复。
 - 下一步唯一为 AC-D：保存/导入 schemaVersion 2（必须覆盖运放端子与恢复）。三分辨率真实验收仍延期到 AC-D 完成后的正式 Player 人工验收。
+
+### V1.1 反馈拓扑边界
+
+- `SpiceConnectionRules.IsConnectionAllowed` 是同器件接线的唯一纯规则来源，供 `SpiceWorkspaceModel.AddWire`、Controller 悬停目标判定和 `SpiceCircuitGraphBuilder` 共用。仅允许同一 `IdealOperationalAmplifier` 的 `inverting ↔ output`；其余同器件端子组合仍拒绝。
+- GraphBuilder 不再把 IN+、IN-、OUT 视为拓扑星形。VCVS 只让 OUT 在连通性检查中通向 GND；IN+、IN- 保持高阻控制端。用户实际画出的 IN-↔OUT 反馈 Wire 仍由 Union-Find 合并，因此跟随器和反相负反馈均有效，而独立浮空输入源会在调用 ngspice 前稳定报告 `SPICE_FLOATING_SUBCIRCUIT`。
+- OUT 被直接并到节点 0 时，GraphBuilder 在生成 EOP 网表前报告 `SPICE_OPAMP_OUTPUT_SHORTED`。UI 中文提示说明 OUT 不能直接接 GND，因为 V1 EOP 输出本身就是相对于 GND 的理想受控电压源。
+- 正式 Workspace 覆盖 IN-→OUT 与 OUT→IN-、WireView 创建、单次 revision/Stale、旋转和删除后的 Wire 完整性，并通过 `SpiceSimulationService` 求解实际跟随器。V1 文件保存覆盖不存在目标、已有哨兵文件、临时/备份文件和当前路径均不被拒绝操作改变；普通 DC V1 文件仍可保存。
 
 ## Current AC baseline
 
