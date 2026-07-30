@@ -555,6 +555,9 @@ namespace ElectricalSim.Spice.Workspace
         internal Text GetOpAmpInfoForTesting() => opAmpInfoText;
         internal Button GetParameterApplyButtonForTesting() => parameterApplyButton;
         internal string GetVisibleResultTextForTesting() => resultText != null ? resultText.text : null;
+        internal string GetSelectedComponentIdForTesting() => selectedComponent != null ? selectedComponent.InstanceId : null;
+        internal int GetComponentViewCountForTesting() => componentViews.Count;
+        internal int GetWireViewCountForTesting() => wireViews.Count;
 
         // 仅供 T3 测试直接触发按钮回调，验证 Running 二次保护与事件路由。
         internal void InvokeSaveButtonForTesting() => HandleSaveButtonClicked();
@@ -815,8 +818,8 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// Changes analysis semantics through the workspace model so D1 revision protection
-        /// invalidates any in-flight calculation. Formal AC UI is intentionally deferred.
+        /// 分析设置必须通过 Model 变更，以便 D1 revision 保护使在途计算结果失效。
+        /// 工作区 UI 只转发此正式入口，不能直接修改模型字段或重复推进 revision。
         /// </summary>
         public bool TrySetAnalysisMode(SpiceAnalysisMode mode)
         {

@@ -48,13 +48,19 @@ namespace ElectricalSim.Spice.T3
             ValidateAcAnalysisGraphBuilderBoundaries();
             ValidateAcParameterWriteEncapsulation();
             ValidateDrawingV1AcCompatibilityBoundaries();
-            ValidateAcDDrawingSchemaV2();
+            ValidateAcDV2Serialization();
             Debug.Log("[Spice][AC-D] V2 序列化：通过");
+            ValidateAcDV1Compatibility();
             Debug.Log("[Spice][AC-D] V1 向后兼容：通过");
+            ValidateAcDAcDrawingRoundTrip();
             Debug.Log("[Spice][AC-D] AC 图纸往返：通过");
+            ValidateAcDOpAmpFeedbackRoundTrip();
             Debug.Log("[Spice][AC-D] 运放反馈图纸往返：通过");
+            ValidateAcDImportTransaction();
             Debug.Log("[Spice][AC-D] 导入事务：通过");
+            ValidateAcDAtomicFileWrite();
             Debug.Log("[Spice][AC-D] 文件原子写入：通过");
+            ValidateAcDD2LimitRegression();
             Debug.Log("[Spice][AC-D] D2 限制回归：通过");
             SpiceAcB2Validation.RunNetlistAndParserChecks();
             SpiceIdealOperationalAmplifierValidation.RunAll();
@@ -1748,7 +1754,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        private static void ValidateAcDDrawingSchemaV2()
+        private static void ValidateAcDV2Serialization()
         {
             var dc = new SpiceWorkspaceModel();
             var source = dc.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-120f, 0f));
@@ -1767,6 +1773,10 @@ namespace ElectricalSim.Spice.T3
                 !SpiceDrawingSerializer.TryFromJson(dcJsonA, out restoredDc, out dcError) || restoredDc.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint ||
                 Math.Abs(restoredDc.AcFrequencyHz - SpiceAnalysisLimits.DefaultFrequencyHz) > 1e-12d)
                 throw new InvalidOperationException("AC-D V2 DC deterministic round-trip failed: " + dcError);
+        }
+
+        private static void ValidateAcDAcDrawingRoundTrip()
+        {
 
             var ac = new SpiceWorkspaceModel();
             ac.TrySetAcFrequency(1234.5d);
@@ -1796,6 +1806,10 @@ namespace ElectricalSim.Spice.T3
             var acAfter = new SpiceSimulationService().SimulateAsync(restoredAc.BuildCircuitModel()).GetAwaiter().GetResult();
             if (!acBefore.Success || !acAfter.Success || Math.Abs(acBefore.AcComponentResults[voltageProbe.InstanceId].Voltage.Magnitude - acAfter.AcComponentResults[voltageProbe.InstanceId].Voltage.Magnitude) > 1e-9d)
                 throw new InvalidOperationException("AC-D RC fixture did not retain its real AC result.");
+        }
+
+        private static void ValidateAcDOpAmpFeedbackRoundTrip()
+        {
 
             var follower = new SpiceWorkspaceModel();
             var followerSource = follower.AddComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-120f, 0f));
@@ -1832,6 +1846,15 @@ namespace ElectricalSim.Spice.T3
             var inverterVoltage = inverterResult.Success ? inverterResult.AcComponentResults[inverterOpAmp.InstanceId].Voltage : default;
             if (!inverterResult.Success || Math.Abs(inverterVoltage.Magnitude - 9.99989000121d) > 2.1e-4d || Math.Abs(SpiceAnalysisLimits.NormalizePhaseDegrees(inverterVoltage.PhaseDegrees + 150d)) > 0.02d)
                 throw new InvalidOperationException("AC-D AC op-amp result did not survive round-trip.");
+        }
+
+        private static void ValidateAcDD2LimitRegression()
+        {
+            // 所有 D2 边界均从 V2 DTO 进入反序列化器，防止版本分发绕过旧有资源限制。
+            ValidateDrawingImportCountLimits();
+            ValidateDrawingImportWaypointLimits();
+            ValidateDrawingImportCoordinateLimits();
+            ValidateDrawingImportStringLimits();
 
             var overLimit = new SpiceDrawingFileDto
             {
@@ -1842,21 +1865,114 @@ namespace ElectricalSim.Spice.T3
             for (var index = 0; index <= SpiceDrawingLimits.MaxComponents; index++) overLimit.components.Add(new SpiceComponentDto());
             if (SpiceDrawingSerializer.TryFromDto(overLimit, out _, out _))
                 throw new InvalidOperationException("AC-D V2 import bypassed the existing component-count D2 limit.");
+            var invalidFrequency = CreateDrawingLimitDto();
+            invalidFrequency.analysis.frequencyHz = "0";
+            if (SpiceDrawingSerializer.TryFromDto(invalidFrequency, out _, out _))
+                throw new InvalidOperationException("AC-D V2 import accepted an invalid analysis frequency.");
+            var invalidPhase = CreateDrawingLimitDto();
+            var acSource = CreateLimitComponent("ac-source-001");
+            acSource.componentType = SpiceComponentKind.AcVoltageSource.ToString();
+            acSource.siValueText = "1";
+            acSource.phaseDegrees = "NaN";
+            invalidPhase.components.Add(acSource);
+            if (SpiceDrawingSerializer.TryFromDto(invalidPhase, out _, out _))
+                throw new InvalidOperationException("AC-D V2 import accepted a non-finite AC phase.");
+            var oversizedJson = new string(' ', (int)SpiceDrawingLimits.MaxFileBytes + 1);
+            if (SpiceDrawingSerializer.TryFromJson(oversizedJson, out _, out _))
+                throw new InvalidOperationException("AC-D V2 import bypassed the 1 MB file limit.");
+        }
+
+        private static void ValidateAcDImportTransaction()
+        {
 
             var transactionRoot = new GameObject("SpiceAcDImportTransaction", typeof(RectTransform), typeof(Canvas));
+            var tempDir = CreateUniqueTempDir("AcDImportTransaction");
             try
             {
                 var transactionWorkspace = CreateInitializedWorkspaceForCopy(transactionRoot.transform, out _);
-                transactionWorkspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                var resistor = transactionWorkspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                var source = transactionWorkspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 100f);
+                transactionWorkspace.Connect(source.InstanceId, SpiceComponentModel.PositiveTerminalId, resistor.InstanceId, SpiceComponentModel.PositiveTerminalId);
+                var currentPath = Path.Combine(tempDir, "current.spicejson");
+                if (!transactionWorkspace.TrySaveWorkspaceToPath(currentPath, out var saveError))
+                    throw new InvalidOperationException("AC-D transaction setup save failed: " + saveError);
+                transactionWorkspace.SelectComponent(transactionWorkspace.GetComponentViewForTesting(resistor.InstanceId));
+                transactionWorkspace.HandleTerminalClick(transactionWorkspace.GetComponentViewForTesting(resistor.InstanceId), SpiceComponentModel.PositiveTerminalId);
                 var beforeModel = transactionWorkspace.Model;
+                var beforeJson = SpiceDrawingSerializer.ToJson(beforeModel);
                 var beforeRevision = transactionWorkspace.ElectricalRevisionForTesting;
+                var beforePath = transactionWorkspace.CurrentSpiceFilePath;
+                var beforeDirty = transactionWorkspace.IsDirty;
+                var beforeSelected = transactionWorkspace.GetSelectedComponentIdForTesting();
+                var beforePending = transactionWorkspace.HasPendingWire;
+                var beforeComponentViews = transactionWorkspace.GetComponentViewCountForTesting();
+                var beforeWireViews = transactionWorkspace.GetWireViewCountForTesting();
                 transactionWorkspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                var beforeResultState = transactionWorkspace.ResultState;
+                var beforeCopyResult = transactionWorkspace.TryGetCopyableOutcomeText(out var beforeResultText);
+                var beforeCopyNetlist = transactionWorkspace.TryGetCopyableNetlistText(out var beforeNetlistText);
                 const string invalidV2 = "{\"format\":\"ElectricalSimulation2D.SpiceDrawing\",\"schemaVersion\":2,\"analysis\":{\"mode\":\"Unknown\",\"frequencyHz\":\"1000\"},\"components\":[],\"wires\":[]}";
                 if (transactionWorkspace.TryImportDrawingJson(invalidV2, out _) || !ReferenceEquals(beforeModel, transactionWorkspace.Model) ||
-                    beforeRevision != transactionWorkspace.ElectricalRevisionForTesting || transactionWorkspace.ResultState != SpiceWorkspaceResultState.Current || !transactionWorkspace.IsDirty)
+                    beforeJson != SpiceDrawingSerializer.ToJson(transactionWorkspace.Model) || beforeRevision != transactionWorkspace.ElectricalRevisionForTesting ||
+                    beforePath != transactionWorkspace.CurrentSpiceFilePath || beforeDirty != transactionWorkspace.IsDirty ||
+                    beforeResultState != transactionWorkspace.ResultState || beforeCopyResult != transactionWorkspace.TryGetCopyableOutcomeText(out var afterResultText) ||
+                    beforeResultText != afterResultText || beforeCopyNetlist != transactionWorkspace.TryGetCopyableNetlistText(out var afterNetlistText) ||
+                    beforeNetlistText != afterNetlistText || beforeSelected != transactionWorkspace.GetSelectedComponentIdForTesting() ||
+                    beforePending != transactionWorkspace.HasPendingWire || beforeComponentViews != transactionWorkspace.GetComponentViewCountForTesting() ||
+                    beforeWireViews != transactionWorkspace.GetWireViewCountForTesting())
                     throw new InvalidOperationException("AC-D invalid V2 import was not transactional.");
             }
-            finally { UnityEngine.Object.DestroyImmediate(transactionRoot); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(transactionRoot);
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        private static void ValidateAcDAtomicFileWrite()
+        {
+            var root = new GameObject("SpiceAcDAtomicFileWrite", typeof(RectTransform), typeof(Canvas));
+            var tempDir = CreateUniqueTempDir("AcDAtomicFileWrite");
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(root.transform, out _);
+                workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                var initialRevision = workspace.ElectricalRevisionForTesting;
+                var newTarget = Path.Combine(tempDir, "new-target.spicejson");
+                if (!workspace.TrySaveWorkspaceToPath(newTarget, out var newError) || !File.Exists(newTarget) || newError != null ||
+                    workspace.ElectricalRevisionForTesting != initialRevision || workspace.ResultState != SpiceWorkspaceResultState.Current || workspace.IsDirty)
+                    throw new InvalidOperationException("AC-D atomic write did not create a new drawing without changing electrical state.");
+
+                var sentinelPath = Path.Combine(tempDir, "existing-target.spicejson");
+                const string sentinel = "AC-D-ATOMIC-SENTINEL";
+                File.WriteAllText(sentinelPath, sentinel, System.Text.Encoding.UTF8);
+                var sentinelHash = Convert.ToBase64String(SHA256.Create().ComputeHash(File.ReadAllBytes(sentinelPath)));
+                if (!workspace.TrySaveWorkspaceToPath(sentinelPath, out var replaceError) || replaceError != null ||
+                    Convert.ToBase64String(SHA256.Create().ComputeHash(File.ReadAllBytes(sentinelPath))) == sentinelHash ||
+                    workspace.ElectricalRevisionForTesting != initialRevision || workspace.ResultState != SpiceWorkspaceResultState.Current)
+                    throw new InvalidOperationException("AC-D atomic write did not replace an existing target atomically.");
+
+                // 目标文件作为父目录会使文件服务在任何临时文件创建前失败，用于验证失败路径不破坏哨兵和会话状态。
+                var beforeFailedPath = workspace.CurrentSpiceFilePath;
+                var beforeFailedDirty = workspace.IsDirty;
+                var beforeFailedHash = Convert.ToBase64String(SHA256.Create().ComputeHash(File.ReadAllBytes(sentinelPath)));
+                var invalidTarget = Path.Combine(sentinelPath, "cannot-create.spicejson");
+                if (workspace.TrySaveWorkspaceToPath(invalidTarget, out _) || workspace.CurrentSpiceFilePath != beforeFailedPath ||
+                    workspace.IsDirty != beforeFailedDirty || Convert.ToBase64String(SHA256.Create().ComputeHash(File.ReadAllBytes(sentinelPath))) != beforeFailedHash ||
+                    Directory.GetFiles(tempDir, "*.tmp", SearchOption.AllDirectories).Length != 0 ||
+                    Directory.GetFiles(tempDir, "*.backup", SearchOption.AllDirectories).Length != 0)
+                    throw new InvalidOperationException("AC-D atomic write failure changed a sentinel file or left temporary artifacts.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                CleanupTempDir(tempDir);
+            }
+        }
+
+        private static void ValidateAcDV1Compatibility()
+        {
 
             var legacyFixtures = new[]
             {
@@ -2029,12 +2145,12 @@ namespace ElectricalSim.Spice.T3
 
             var acceptedWires = CreateDrawingLimitDtoWithEndpoints();
             for (var i = 0; i < SpiceDrawingLimits.MaxWires; i++)
-                acceptedWires.wires.Add(CreateLimitWire(SpiceWireRouteMode.Auto, 0));
+                acceptedWires.wires.Add(CreateUniqueLimitWire(i));
             if (!SpiceDrawingSerializer.TryFromDto(acceptedWires, out var acceptedWireModel, out var wireError) ||
                 acceptedWireModel.Wires.Count != SpiceDrawingLimits.MaxWires)
                 throw new InvalidOperationException("导线数量上限应被接受：" + wireError);
 
-            acceptedWires.wires.Add(CreateLimitWire(SpiceWireRouteMode.Auto, 0));
+            acceptedWires.wires.Add(CreateUniqueLimitWire(0));
             if (SpiceDrawingSerializer.TryFromDto(acceptedWires, out _, out var wireOverflowError) ||
                 string.IsNullOrEmpty(wireOverflowError) || !wireOverflowError.Contains("导线数量"))
                 throw new InvalidOperationException("导线数量超过上限时应被拒绝。");
@@ -2182,21 +2298,21 @@ namespace ElectricalSim.Spice.T3
             return new SpiceDrawingFileDto
             {
                 format = SpiceDrawingFormat.Format,
-                schemaVersion = SpiceDrawingFormat.SchemaVersion
+                schemaVersion = SpiceDrawingFormat.CurrentSchemaVersion,
+                analysis = new SpiceAnalysisDto
+                {
+                    mode = SpiceAnalysisMode.DcOperatingPoint.ToString(),
+                    frequencyHz = SpiceAnalysisLimits.DefaultFrequencyHz.ToString(CultureInfo.InvariantCulture)
+                }
             };
         }
 
         private static SpiceDrawingFileDto CreateDrawingLimitDtoWithEndpoints()
         {
             var dto = CreateDrawingLimitDto();
-            var source = CreateLimitComponent("source-001");
-            source.componentType = SpiceComponentKind.DcVoltageSource.ToString();
-            source.siValueText = "10";
-            dto.components.Add(source);
-            var ground = CreateLimitComponent("ground-001");
-            ground.componentType = SpiceComponentKind.Ground.ToString();
-            ground.siValueText = null;
-            dto.components.Add(ground);
+            // V2 会拒绝重复 Wire；为验证 1000 条上限，提供 500 个两端器件以构造 1000 条不同端点组合。
+            for (var i = 1; i <= SpiceDrawingLimits.MaxComponents; i++)
+                dto.components.Add(CreateLimitComponent("resistor-" + i.ToString("D3")));
             return dto;
         }
 
@@ -2216,10 +2332,10 @@ namespace ElectricalSim.Spice.T3
         {
             var wire = new SpiceWireDto
             {
-                startComponentId = "ground-001",
-                startTerminalId = "ground",
-                endComponentId = "source-001",
-                endTerminalId = "negative",
+                startComponentId = "resistor-001",
+                startTerminalId = SpiceComponentModel.PositiveTerminalId,
+                endComponentId = "resistor-002",
+                endTerminalId = SpiceComponentModel.NegativeTerminalId,
                 routeMode = routeMode.ToString()
             };
             for (var i = 0; i < waypointCount; i++)
@@ -2227,13 +2343,32 @@ namespace ElectricalSim.Spice.T3
             return wire;
         }
 
+        private static SpiceWireDto CreateUniqueLimitWire(int index)
+        {
+            var componentIndex = index % SpiceDrawingLimits.MaxComponents + 1;
+            var endIndex = componentIndex % SpiceDrawingLimits.MaxComponents + 1;
+            return new SpiceWireDto
+            {
+                startComponentId = "resistor-" + componentIndex.ToString("D3"),
+                startTerminalId = index < SpiceDrawingLimits.MaxComponents ? SpiceComponentModel.PositiveTerminalId : SpiceComponentModel.NegativeTerminalId,
+                endComponentId = "resistor-" + endIndex.ToString("D3"),
+                endTerminalId = SpiceComponentModel.NegativeTerminalId,
+                routeMode = SpiceWireRouteMode.Auto.ToString()
+            };
+        }
+
         private static void AddLimitWaypointsAcrossWires(SpiceDrawingFileDto dto, int totalWaypointCount)
         {
             var remaining = totalWaypointCount;
+            var wireIndex = 0;
             while (remaining > 0)
             {
                 var count = Math.Min(SpiceDrawingLimits.MaxManualRoutePointsPerWire, remaining);
-                dto.wires.Add(CreateLimitWire(SpiceWireRouteMode.Manual, count));
+                var wire = CreateUniqueLimitWire(wireIndex++);
+                wire.routeMode = SpiceWireRouteMode.Manual.ToString();
+                for (var pointIndex = 0; pointIndex < count; pointIndex++)
+                    wire.manualRoutePoints.Add(new SpiceVector2Dto { x = (pointIndex % 100).ToString(), y = (pointIndex / 100).ToString() });
+                dto.wires.Add(wire);
                 remaining -= count;
             }
         }
