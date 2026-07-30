@@ -99,8 +99,7 @@ namespace ElectricalSim.Spice.Workspace
             if (schematicSymbol != null)
             {
                 schematicSymbol.gameObject.SetActive(false);
-                if (Application.isPlaying) Destroy(schematicSymbol.gameObject);
-                else DestroyImmediate(schematicSymbol.gameObject);
+                SpiceUnityObjectLifetime.Destroy(schematicSymbol.gameObject);
                 schematicSymbol = null;
             }
 
