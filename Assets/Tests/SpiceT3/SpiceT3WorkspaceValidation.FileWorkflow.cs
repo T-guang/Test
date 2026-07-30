@@ -594,9 +594,9 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // 成功路径级操作不得写入 statusText：保存成功、导入成功后验证 C1 没有写“已保存到：绝对路径”或“已从以下路径导入：绝对路径”。
+        // 成功路径级操作不得写入 statusText：保存成功、导入成功后验证 正式文件工作流 没有写“已保存到：绝对路径”或“已从以下路径导入：绝对路径”。
         // 注意：事务式导入 的 CommitImportedModel 在导入提交阶段会合法地把 statusText 重置为“未计算”（清空旧结果），
-        // 这不属于 C1 的成功 UI 文案。本测试只验证 C1 没有写入“已保存到”/“已从以下路径导入”/完整路径三类成功提示。
+        // 这不属于 正式文件工作流 的成功 UI 文案。本测试只验证 正式文件工作流 没有写入“已保存到”/“已从以下路径导入”/完整路径三类成功提示。
         private static void ValidateDrawingFileSuccessDoesNotWriteStatusText()
         {
             var tempDir = CreateUniqueTempDir("NoStatusText");
@@ -612,7 +612,7 @@ namespace ElectricalSim.Spice.T3
                     var marker = "T3_MARKER_BEFORE_FILE_OP";
                     workspace.SetStatusTextForTesting(marker);
 
-                    // 保存成功后状态栏不应被 C1 改写（TrySaveWorkspaceToPath 不调用 CommitImportedModel）
+                    // 保存成功后状态栏不应被 正式文件工作流 改写（TrySaveWorkspaceToPath 不调用 CommitImportedModel）
                     var savePath = Path.Combine(tempDir, "save");
                     if (!workspace.TrySaveWorkspaceToPath(savePath, out var saveError))
                         throw new InvalidOperationException("保存应成功：" + saveError);
@@ -622,7 +622,7 @@ namespace ElectricalSim.Spice.T3
                     AssertNoSuccessUiText(statusAfterSave, savePath, "保存");
 
                     // 导入成功后状态栏可被 事务式导入 的 CommitImportedModel 重置为“未计算”，
-                    // 但 C1 不得写入“已从以下路径导入：绝对路径”之类的成功 UI 文案。
+                    // 但 正式文件工作流 不得写入“已从以下路径导入：绝对路径”之类的成功 UI 文案。
                     var savedFile = Path.Combine(tempDir, "save.spicejson");
                     var importRoot = new GameObject("SpiceFileNoStatusTextImport", typeof(RectTransform), typeof(Canvas));
                     try
@@ -650,7 +650,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // 校验 statusText 不包含 C1 的成功 UI 文案：“已保存到”、“已从以下路径导入”、或完整绝对路径本身。
+        // 校验 statusText 不包含 正式文件工作流 的成功 UI 文案：“已保存到”、“已从以下路径导入”、或完整绝对路径本身。
         private static void AssertNoSuccessUiText(string statusText, string fullPath, string operation)
         {
             if (statusText == null) return;
@@ -1028,7 +1028,7 @@ namespace ElectricalSim.Spice.T3
                     if (!workspace.HasCurrentSpiceFilePath)
                         throw new InvalidOperationException("测试前置：应有当前路径。");
 
-                    // 清空画布（C1 已保证 ClearWorkspace 清除 CurrentSpiceFilePath）
+                    // 清空画布（正式文件工作流 已保证 ClearWorkspace 清除 CurrentSpiceFilePath）
                     workspace.ClearAll();
 
                     if (workspace.HasCurrentSpiceFilePath)
@@ -1195,7 +1195,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // ：替换确认弹窗尺寸 520 × 260，标题 20pt、正文 16pt、按钮 110×40、间距 14、圆角 sprite。
+        // 验证：替换确认弹窗尺寸 520 × 260，标题 20pt、正文 16pt、按钮 110×40、间距 14、圆角 sprite。
         private static void ValidateReplaceConfirmationDialogEnlargedSize()
         {
             var canvasRoot = new GameObject("SpiceReplaceSize", typeof(RectTransform), typeof(Canvas));
@@ -1231,7 +1231,7 @@ namespace ElectricalSim.Spice.T3
                 // 按钮在 Panel 边界内（offsetMin.x >= -size.x/2，offsetMax.x <= size.x/2）
                 if (cancelRect.offsetMin.x < -size.x / 2f + 1f || confirmRect.offsetMax.x > size.x / 2f - 1f)
                     throw new InvalidOperationException("按钮超出 Panel 边界。");
-                // ：按钮尺寸 110×40
+                // 验证：按钮尺寸 110×40
                 var cancelWidth = cancelRect.rect.width;
                 var cancelHeight = cancelRect.rect.height;
                 var confirmWidth = confirmRect.rect.width;
@@ -1240,7 +1240,7 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("取消按钮尺寸应为 110×40，实际：" + cancelWidth + "×" + cancelHeight);
                 if (Math.Abs(confirmWidth - 110f) > 0.5f || Math.Abs(confirmHeight - 40f) > 0.5f)
                     throw new InvalidOperationException("继续导入按钮尺寸应为 110×40，实际：" + confirmWidth + "×" + confirmHeight);
-                // ：两个按钮的 Image 应使用圆角 sprite 与 Sliced 类型
+                // 验证：两个按钮的 Image 应使用圆角 sprite 与 Sliced 类型
                 AssertRoundedButtonSprite(cancelTransform.GetComponent<Button>(), "取消");
                 AssertRoundedButtonSprite(confirmTransform.GetComponent<Button>(), "继续导入");
             }
@@ -1398,7 +1398,7 @@ namespace ElectricalSim.Spice.T3
         // 由于 batchmode 无法调用原生对话框，本测试验证 WindowsFileDialog 在 initialDirectory
         // 存在时切换工作目录、在 finally 恢复的契约：通过反射或直接调用验证目录恢复。
         // 非 Windows 平台跳过（WindowsFileDialog 整体被 #if 隔离）。
-        // ：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
+        // 验证：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
         // 无桌面会话下 SIGSEGV（Mono COM interop 限制）。batchmode 跳过真实 COM 调用，
         // 由 ValidateFileDialogShowHResultClassification 纯函数覆盖 HRESULT 分类逻辑。
         private static void AssertRoundedButtonSprite(Button button, string label)
@@ -1426,7 +1426,7 @@ namespace ElectricalSim.Spice.T3
                 var initialDir = System.IO.Path.Combine(tempDir, "InitialDir");
                 System.IO.Directory.CreateDirectory(initialDir);
 
-                // ：现代 IFileDialog 实现不改进程工作目录（用 SetFolder 设置初始目录）。
+                // 验证：现代 IFileDialog 实现不改进程工作目录（用 SetFolder 设置初始目录）。
                 // batchmode 下 IFileDialog 调用会失败返回 null，但不抛异常、不改工作目录。
                 ElectricalSim.Platform.WindowsFileDialog.OpenFile("测试", "All|*.*", "txt", initialDir);
                 var afterOpen = System.IO.Directory.GetCurrentDirectory();
@@ -1453,7 +1453,7 @@ namespace ElectricalSim.Spice.T3
 #endif
         }
 
-        // ：默认保存文件名不应预置 .spicejson 扩展名（由对话框补全）。
+        // 验证：默认保存文件名不应预置 .spicejson 扩展名（由对话框补全）。
         private static void ValidateDefaultSaveFileNameHasNoExtension()
         {
             // BuildDefaultSaveFileName 是 Host 的 private static 方法，通过反射调用验证契约。
@@ -1471,16 +1471,16 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException("默认文件名应以 SPICE电路_ 开头，实际：" + fileName);
         }
 
-        // ：.spicejson 扩展名归一测试。
+        // 验证：.spicejson 扩展名归一测试。
         // 无扩展名 → 追加 .spicejson；已有小写/大写 .spicejson → 不重复；已有重复 → 去重为一个。
         private static void ValidateSpiceJsonExtensionNormalization()
         {
-            // C1 的 NormalizeExtension：无扩展名追加，已有 .spicejson（任意大小写）不追加。
+            // 正式文件工作流 的 NormalizeExtension：无扩展名追加，已有 .spicejson（任意大小写）不追加。
             // 的 StripTrailingDuplicateSpiceJson：去除末尾重复的 .spicejson.spicejson。
             // 组合后：无扩展名 → .spicejson；已有小写 → .spicejson；已大写 → .SPICEJSON（保持）；
             // 已有重复 → 去重为一个 .spicejson。
 
-            // 1. C1 NormalizeExtension 契约
+            // 1. 正式文件工作流 NormalizeExtension 契约
             var noExt = SpiceDrawingFileService.NormalizeExtension("C:\\path\\SPICE电路_20260727_120000");
             if (!noExt.EndsWith(".spicejson", StringComparison.Ordinal))
                 throw new InvalidOperationException("无扩展名应追加 .spicejson，实际：" + noExt);
@@ -1532,7 +1532,7 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException("无扩展名不应被改变，实际：" + noStrip);
         }
 
-        // ：断言按钮使用圆角 sprite 与 Sliced 类型。
+        // 验证：断言按钮使用圆角 sprite 与 Sliced 类型。
         private static void AssertRoundedButtonSprite(Button button, string label)
         {
             if (button == null) throw new InvalidOperationException(label + " 按钮应存在。");
@@ -1542,7 +1542,7 @@ namespace ElectricalSim.Spice.T3
             if (image.type != Image.Type.Sliced) throw new InvalidOperationException(label + " 按钮 Image 类型应为 Sliced。");
         }
 
-        // ：验证 IFileOpenDialog / IFileSaveDialog 都声明了 SetDefaultExtension 方法，
+        // 验证：验证 IFileOpenDialog / IFileSaveDialog 都声明了 SetDefaultExtension 方法，
         // 且位于 GetResult 之后、派生扩展（GetResults / SetSaveAsItem）之前。
         // vtable 槽位错位会导致调用 SetDefaultExtension 实际触发 GetResults/SetSaveAsItem。
         private static void ValidateFileDialogSetDefaultExtensionInterfaceExists()
@@ -1601,7 +1601,7 @@ namespace ElectricalSim.Spice.T3
 #endif
         }
 
-        // ：验证带 out error 的新签名存在，且 batchmode（-nographics，无桌面会话）下
+        // 验证：验证带 out error 的新签名存在，且 batchmode（-nographics，无桌面会话）下
         // IFileDialog.Show 必失败（非 ERROR_CANCELLED），error 应非空 —— 失败与取消可区分。
         // 取消路径无法在 batchmode 自动测试（需真实用户交互），仅验证签名与失败路径。
         private static void ValidateFileDialogCancelVsFailureDistinguishable()
@@ -1616,7 +1616,7 @@ namespace ElectricalSim.Spice.T3
             if (saveOverload == null)
                 throw new InvalidOperationException("SaveFile(title, filter, extension, initialDirectory, defaultFileName, out string error) 重载应存在（C2.4）。");
 
-            // ：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
+            // 验证：batchmode 下强类型 COM 编组让 CoCreateInstance 成功，但后续 SetOptions 在
             // 无桌面会话下 SIGSEGV（Mono COM interop 限制），无法安全测试失败路径。
             // 失败与取消的可区分性由 ValidateFileDialogShowHResultClassification 纯函数覆盖
             // （0 → Success；ERROR_CANCELLED → Cancelled/error=null；其余 → Failure/error 非空）。
@@ -1657,7 +1657,7 @@ namespace ElectricalSim.Spice.T3
 #endif
         }
 
-        // ：验证 IFileOpenDialog / IFileSaveDialog 的 Show 方法标注了 [PreserveSig] 且返回 int。
+        // 验证：验证 IFileOpenDialog / IFileSaveDialog 的 Show 方法标注了 [PreserveSig] 且返回 int。
         // 缺失 [PreserveSig] 时 .NET COM interop 会把失败 HRESULT（含 ERROR_CANCELLED）转成
         // COMException 抛出，导致取消被 catch 块误判为 failure，error 被错误设为非空。
         private static void ValidateFileDialogShowHasPreserveSig()
@@ -1690,7 +1690,7 @@ namespace ElectricalSim.Spice.T3
         }
 #endif
 
-        // ：通过纯函数 ClassifyShowHResult 覆盖三类 HRESULT 分支：
+        // 验证：通过纯函数 ClassifyShowHResult 覆盖三类 HRESULT 分支：
         //   0                      → Success
         //   ERROR_CANCELLED_HRESULT → Cancelled（用户取消，error=null）
         //   任意其他非零            → Failure
@@ -1748,7 +1748,7 @@ namespace ElectricalSim.Spice.T3
 #endif
         }
 
-        // ：验证 WindowsFileDialog 的 COM 创建编组契约：
+        // 验证：验证 WindowsFileDialog 的 COM 创建编组契约：
         // 1. 不存在 `out object` 的 CoCreateInstance P/Invoke（已删除）。
         // 2. 存在两个强类型 P/Invoke：CoCreateFileOpenDialog(out IFileOpenDialog) /
         //    CoCreateFileSaveDialog(out IFileSaveDialog)，均 EntryPoint="CoCreateInstance"，
@@ -1842,7 +1842,7 @@ namespace ElectricalSim.Spice.T3
 
 #endif
 
-        // ：验证稳定的 comdlg32 API 仍提供带 error 的路径入口，并且产品代码
+        // 验证：验证稳定的 comdlg32 API 仍提供带 error 的路径入口，并且产品代码
         // 不再包含会让 Unity Mono 崩溃的现代 IFileDialog/CoCreateInstance 声明。
         private static void ValidateLegacyFileDialogErrorContract()
         {

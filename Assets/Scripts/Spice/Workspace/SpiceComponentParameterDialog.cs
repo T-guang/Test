@@ -91,7 +91,8 @@ namespace ElectricalSim.Spice.Workspace
         public void Dispose()
         {
             CloseWithoutApply();
-            if (blocker != null) Destroy(blocker.gameObject);
+            // 参数弹窗的遮罩也是运行时创建的 View；统一入口保证 Editor 测试不会退回延迟 Destroy 警告。
+            if (blocker != null) SpiceUnityObjectLifetime.Destroy(blocker.gameObject);
             blocker = null;
         }
 
