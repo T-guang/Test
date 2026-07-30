@@ -86,6 +86,8 @@ namespace ElectricalSim.Spice.Workspace
             if (summaryText != null)
                 summaryText.text = data.Kind == SpiceComponentKind.AcVoltageSource
                     ? SpiceWorkspaceDisplay.FormatAcVoltageSource(data.SiValue, data.AcPhaseDegrees)
+                    : data.Kind == SpiceComponentKind.IdealOperationalAmplifier
+                        ? "A=1e6"
                     : SpiceWorkspaceDisplay.FormatParameter(data.Kind, data.SiValue);
         }
 
@@ -195,6 +197,16 @@ namespace ElectricalSim.Spice.Workspace
             if (data.Kind == SpiceComponentKind.Ground)
             {
                 CreateTerminal(SpiceComponentModel.GroundTerminalId, new Vector2(0f, 42f));
+            }
+            else if (data.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+            {
+                // 三个可接线端子按 Core 的稳定语义摆放；旋转只作用于 SymbolRoot，因此端子、标签和导线方向始终同步。
+                CreateTerminal(SpiceComponentModel.NonInvertingTerminalId, new Vector2(-62f, 28f));
+                CreateTerminal(SpiceComponentModel.InvertingTerminalId, new Vector2(-62f, -28f));
+                CreateTerminal(SpiceComponentModel.OutputTerminalId, new Vector2(70f, 0f));
+                CreateReferenceLabel("NonInvertingReference", "IN+", new Vector2(-44f, 28f));
+                CreateReferenceLabel("InvertingReference", "IN-", new Vector2(-44f, -28f));
+                CreateReferenceLabel("OutputReference", "OUT", new Vector2(48f, 18f));
             }
             else
             {
@@ -308,6 +320,15 @@ namespace ElectricalSim.Spice.Workspace
                     aLabel.rectTransform.anchoredPosition = Vector2.zero;
                     aLabel.raycastTarget = false;
                     break;
+                case SpiceComponentKind.IdealOperationalAmplifier:
+                    CreateLine(symbol.transform, new Vector2(-36f, 34f), new Vector2(-36f, -34f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-36f, 34f), new Vector2(38f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(38f, 0f), new Vector2(-36f, -34f), 3f);
+                    var opLabel = SpiceWorkspaceUi.CreateText(symbol.transform, "OpLabel", "OP", 16, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.PrimaryBlue);
+                    opLabel.rectTransform.sizeDelta = new Vector2(36f, 22f);
+                    opLabel.rectTransform.anchoredPosition = new Vector2(-4f, 0f);
+                    opLabel.raycastTarget = false;
+                    break;
                 case SpiceComponentKind.Ground:
                     CreateLine(symbol.transform, new Vector2(0f, 34f), new Vector2(0f, 0f), 3f);
                     CreateLine(symbol.transform, new Vector2(-28f, 0f), new Vector2(28f, 0f), 3f);
@@ -363,7 +384,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
             var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
-            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.AcVoltageSource ? "VAC" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : "GND";
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.AcVoltageSource ? "VAC" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : component.Kind == SpiceComponentKind.IdealOperationalAmplifier ? "OP" : "GND";
             return prefix + index.ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -378,6 +399,7 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.SiliconDiode) return "D_GENERIC";
             if (kind == SpiceComponentKind.VoltageProbe) return "V+ - V-";
             if (kind == SpiceComponentKind.CurrentProbe) return "IN → OUT";
+            if (kind == SpiceComponentKind.IdealOperationalAmplifier) return "A=1e6";
             if (kind == SpiceComponentKind.Resistor) return value >= 1000000d ? Format(value / 1000000d) + " MΩ" : value >= 1000d ? Format(value / 1000d) + " kΩ" : Format(value) + " Ω";
             if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
             if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";

@@ -48,6 +48,7 @@ namespace ElectricalSim.Spice.Workspace
         private Text netlistText;
         private Text netlistStatusText;
         private Text parameterTitle;
+        private Text opAmpInfoText;
         private InputField parameterInput;
         private Text acPhaseLabel;
         private InputField acPhaseInput;
@@ -546,6 +547,7 @@ namespace ElectricalSim.Spice.Workspace
         internal Button GetApplyAcFrequencyButtonForTesting() => applyAcFrequencyButton;
         internal CanvasGroup GetPaletteCardForTesting(SpiceComponentKind kind) => paletteCardGroups.TryGetValue(kind, out var group) ? group : null;
         internal InputField GetAcPhaseInputForTesting() => acPhaseInput;
+        internal Text GetOpAmpInfoForTesting() => opAmpInfoText;
         internal Button GetParameterApplyButtonForTesting() => parameterApplyButton;
         internal string GetVisibleResultTextForTesting() => resultText != null ? resultText.text : null;
 
@@ -1184,6 +1186,7 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
             CreatePaletteCard(palette.transform, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
+            CreatePaletteCard(palette.transform, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
             var workspace = bindings.WorkspaceViewport;
             viewportRect = workspace;
@@ -1254,6 +1257,9 @@ namespace ElectricalSim.Spice.Workspace
             var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
             parameterApplyButton = apply;
+            opAmpInfoText = SpiceWorkspaceUi.CreateText(parameterRoot, "OpAmpInfo", string.Empty, 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(opAmpInfoText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 12f), new Vector2(-14f, -44f));
+            opAmpInfoText.gameObject.SetActive(false);
 
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
             var resultHeader = resultRoot.Find("ResultHeader") as RectTransform;
@@ -1735,6 +1741,8 @@ namespace ElectricalSim.Spice.Workspace
         private void RefreshParameterPanel()
         {
             SetAcPhaseControlsVisible(false);
+            SetOpAmpInfoVisible(false);
+            SetNormalParameterControlsVisible(true);
             if (parameterApplyButton != null) parameterApplyButton.interactable = false;
             if (selectedComponent == null || selectedComponent.Kind == SpiceComponentKind.Ground)
             {
@@ -1756,6 +1764,18 @@ namespace ElectricalSim.Spice.Workspace
                 if (parameterApplyButton != null) parameterApplyButton.interactable = !isRunning;
                 return;
             }
+            if (selectedComponent.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+            {
+                // 这个固定 VCVS 没有可编辑参数；视图只呈现 Core 模型边界，任何电气改动仍须由 Controller 编排 Model API。
+                parameterTitle.text = selectedComponent.InstanceId + " 理想运算放大器（线性）";
+                parameterInput.gameObject.SetActive(false);
+                unitButton.gameObject.SetActive(false);
+                if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(false);
+                opAmpInfoText.text = "固定开环增益：1e6\n端子：IN+、IN-、OUT\n线性理想模型，无电源引脚和饱和限制\n无可编辑参数";
+                SetOpAmpInfoVisible(true);
+                return;
+            }
+            SetNormalParameterControlsVisible(true);
             if (selectedComponent.Kind == SpiceComponentKind.SiliconDiode)
             {
                 parameterTitle.text = selectedComponent.InstanceId + " 参数设置";
@@ -1801,6 +1821,8 @@ namespace ElectricalSim.Spice.Workspace
 
         private void ClearParameterPanel()
         {
+            SetNormalParameterControlsVisible(true);
+            SetOpAmpInfoVisible(false);
             parameterTitle.text = "参数设置";
             parameterInput.text = string.Empty;
             parameterInput.interactable = false;
@@ -1816,6 +1838,18 @@ namespace ElectricalSim.Spice.Workspace
             if (acPhaseInput != null) acPhaseInput.gameObject.SetActive(visible);
             var phaseUnit = acPhaseLabel != null ? acPhaseLabel.transform.parent.Find("AcPhaseUnit") : null;
             if (phaseUnit != null) phaseUnit.gameObject.SetActive(visible);
+        }
+
+        private void SetOpAmpInfoVisible(bool visible)
+        {
+            if (opAmpInfoText != null) opAmpInfoText.gameObject.SetActive(visible);
+        }
+
+        private void SetNormalParameterControlsVisible(bool visible)
+        {
+            if (parameterInput != null) parameterInput.gameObject.SetActive(visible);
+            if (unitButton != null) unitButton.gameObject.SetActive(visible);
+            if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(visible);
         }
 
         private void CycleUnit()
@@ -1914,6 +1948,7 @@ namespace ElectricalSim.Spice.Workspace
         private static string PaletteLabel(SpiceComponentKind kind)
         {
             if (kind == SpiceComponentKind.AcVoltageSource) return "交流电压源";
+            if (kind == SpiceComponentKind.IdealOperationalAmplifier) return "理想运算放大器";
             return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : kind == SpiceComponentKind.VoltageProbe ? "电压探针" : kind == SpiceComponentKind.CurrentProbe ? "电流探针" : "接地";
         }
 
@@ -1949,6 +1984,7 @@ namespace ElectricalSim.Spice.Workspace
                 : direction == "A-to-B" ? "A → B"
                 : direction == "V-plus-to-V-minus" ? "V+ → V-"
                 : direction == "IN-to-OUT" ? "IN → OUT"
+                : direction != null && direction.StartsWith("OUT-to-GND", StringComparison.Ordinal) ? "OUT → GND（ngspice 支路约定）"
                 : "正端 → 负端";
         }
 

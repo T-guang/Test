@@ -48,6 +48,8 @@ namespace ElectricalSim.Spice.T3
             ValidateDrawingV1AcCompatibilityBoundaries();
             SpiceAcB2Validation.RunNetlistAndParserChecks();
             SpiceIdealOperationalAmplifierValidation.RunAll();
+            ValidateIdealOperationalAmplifierWorkspace();
+            Debug.Log("[Spice][OpAmp] Workspace：PASS");
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
             // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
@@ -211,6 +213,33 @@ namespace ElectricalSim.Spice.T3
                 resetSource.InstanceId != "source-001" || resetVoltageProbe.InstanceId != "voltage-probe-001" ||
                 resetCurrentProbe.InstanceId != "current-probe-001" || resetSwitch.InstanceId != "switch-001")
                 throw new InvalidOperationException("Clearing the SPICE workspace did not reset per-kind instance naming.");
+        }
+
+        private static void ValidateIdealOperationalAmplifierWorkspace()
+        {
+            var canvasRoot = new GameObject("SpiceOpAmpWorkspaceValidation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var initialRevision = workspace.ElectricalRevisionForTesting;
+                var opAmp = workspace.CreateComponent(SpiceComponentKind.IdealOperationalAmplifier, Vector2.zero);
+                if (opAmp == null || opAmp.InstanceId != "opamp-001" || workspace.ElectricalRevisionForTesting != initialRevision + 1)
+                    throw new InvalidOperationException("Ideal operational amplifier workspace creation did not use the normal model/revision path.");
+                var view = workspace.GetComponentViewForTesting(opAmp.InstanceId);
+                if (view == null || view.transform.Find("SymbolRoot/Terminal_nonInverting") == null ||
+                    view.transform.Find("SymbolRoot/Terminal_inverting") == null || view.transform.Find("SymbolRoot/Terminal_output") == null ||
+                    view.transform.Find("SymbolRoot/Symbol/OpLabel") == null)
+                    throw new InvalidOperationException("Ideal operational amplifier canvas symbol or terminals are incomplete.");
+                workspace.SelectComponent(view);
+                if (workspace.GetOpAmpInfoForTesting() == null || !workspace.GetOpAmpInfoForTesting().gameObject.activeSelf ||
+                    workspace.GetParameterApplyButtonForTesting().gameObject.activeSelf || workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
+                    throw new InvalidOperationException("Ideal operational amplifier parameter panel must be read-only without ordinary apply controls.");
+                var card = workspace.GetPaletteCardForTesting(SpiceComponentKind.IdealOperationalAmplifier);
+                if (card == null || !card.interactable || !workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) ||
+                    !workspace.GetPaletteCardForTesting(SpiceComponentKind.IdealOperationalAmplifier).interactable || workspace.Model.FindComponent(opAmp.InstanceId) == null)
+                    throw new InvalidOperationException("Ideal operational amplifier must remain available and retained in both analysis modes.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(canvasRoot); }
         }
 
 

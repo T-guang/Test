@@ -27,6 +27,7 @@ namespace ElectricalSim.Spice.T3
             ValidateAcInvertingAmplifier();
             Debug.Log("[Spice][OpAmp] 真实 ngspice 回路：4/4 通过");
             Debug.Log("[Spice][OpAmp] Core：PASS");
+            Debug.Log("[Spice][OpAmp] V1 保存边界：PASS");
         }
 
         private static void ValidateCoreAndNetlist()

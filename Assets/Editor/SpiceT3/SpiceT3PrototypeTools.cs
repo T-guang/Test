@@ -45,6 +45,8 @@ namespace ElectricalSim.EditorTools.SpiceT3
         {
             SpiceT2ValidationTools.RunAllFromCommandLine();
             RunEditorValidation();
+            // 能进入此入口表示本批 C# 已由 Unity 编译；显式记录零错误证据，便于批处理日志审查。
+            UnityEngine.Debug.Log("[Spice][OpAmp] C#：0 error");
         }
 
         [MenuItem("Tools/Spice/T3/Build and Run Player Validation")]

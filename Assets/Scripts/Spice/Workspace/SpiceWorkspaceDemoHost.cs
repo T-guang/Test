@@ -388,6 +388,7 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
             StyleAssistant(bindings);
         }
@@ -562,6 +563,14 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "Source", new Vector2(34f, -14f), new Vector2(64f, 14f), 3f);
                     AddText(symbol, "Ac", "~", new Vector2(50f, 0f), 20);
                     AddLine(symbol, "LeadRight", new Vector2(64f, 0f), new Vector2(94f, 0f));
+                    break;
+                case SpiceComponentKind.IdealOperationalAmplifier:
+                    AddLine(symbol, "TriangleLeft", new Vector2(34f, -18f), new Vector2(34f, 18f));
+                    AddLine(symbol, "TriangleTop", new Vector2(34f, 18f), new Vector2(70f, 0f));
+                    AddLine(symbol, "TriangleBottom", new Vector2(70f, 0f), new Vector2(34f, -18f));
+                    AddText(symbol, "Op", "OP", new Vector2(48f, 0f), 12);
+                    AddText(symbol, "Plus", "+", new Vector2(24f, 11f), 12);
+                    AddText(symbol, "Minus", "−", new Vector2(24f, -11f), 12);
                     break;
                 case SpiceComponentKind.DcCurrentSource:
                     AddLine(symbol, "LeadLeft", new Vector2(8f, 0f), new Vector2(34f, 0f));
