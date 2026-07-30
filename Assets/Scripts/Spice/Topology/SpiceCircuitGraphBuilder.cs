@@ -78,7 +78,9 @@ namespace ElectricalSim.Spice.Topology
                 }
 
                 if (string.Equals(wire.Start.ComponentInstanceId, wire.End.ComponentInstanceId, StringComparison.Ordinal) &&
-                    !IsAllowedIdealOperationalAmplifierFeedbackWire(components, wire))
+                    (!components.TryGetValue(wire.Start.ComponentInstanceId, out var sameComponent) ||
+                     !SpiceConnectionRules.IsConnectionAllowed(sameComponent.Kind, wire.Start.ComponentInstanceId, wire.Start.TerminalId,
+                         sameComponent.Kind, wire.End.ComponentInstanceId, wire.End.TerminalId)))
                 {
                     graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_SAME_COMPONENT_CONNECTION", SpiceDiagnosticSeverity.Error, "A wire cannot directly connect two terminals of the same component.", wire.Start.ComponentInstanceId, wire.Start.TerminalId));
                     continue;
@@ -134,7 +136,15 @@ namespace ElectricalSim.Spice.Topology
                 graph.SpiceNameByComponentId[component.InstanceId] = name;
                 graph.ComponentIdBySpiceName[name] = component.InstanceId;
 
-                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier) continue;
+                if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                {
+                    if (graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)] == "0")
+                    {
+                        graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_OPAMP_OUTPUT_SHORTED", SpiceDiagnosticSeverity.Error,
+                            "Ideal operational amplifier OUT cannot directly connect to GND because the V1 output is an ideal controlled source referenced to GND.", component.InstanceId, SpiceComponentModel.OutputTerminalId));
+                    }
+                    continue;
+                }
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 if (positive == negative && IsIdealVoltageConstraint(component.Kind))
@@ -180,14 +190,13 @@ namespace ElectricalSim.Spice.Topology
             {
                 if (component.Kind == SpiceComponentKind.IdealOperationalAmplifier)
                 {
-                    var opAmpTerminals = SpiceComponentModel.TerminalIdsFor(component.Kind);
-                    var firstRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, opAmpTerminals[0])]);
-                    foreach (var terminalId in opAmpTerminals.Skip(1))
+                    // VCVS 的唯一导电输出支路是 OUT→GND；IN+ 与 IN- 是高阻控制端，不能因拓扑检查被错误连成星形。
+                    var outputRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.OutputTerminalId)]);
+                    neighbors[outputRoot].Add(groundedRoot);
+                    neighbors[groundedRoot].Add(outputRoot);
+                    foreach (var terminalId in SpiceComponentModel.TerminalIdsFor(component.Kind))
                     {
                         var terminalRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, terminalId)]);
-                        neighbors[firstRoot].Add(terminalRoot);
-                        neighbors[terminalRoot].Add(firstRoot);
-                        componentIdsByRoot[firstRoot].Add(component.InstanceId);
                         componentIdsByRoot[terminalRoot].Add(component.InstanceId);
                     }
                     continue;
@@ -248,16 +257,6 @@ namespace ElectricalSim.Spice.Topology
                 return false;
             }
             return true;
-        }
-
-        private static bool IsAllowedIdealOperationalAmplifierFeedbackWire(Dictionary<string, SpiceComponentModel> components, SpiceWireModel wire)
-        {
-            if (!components.TryGetValue(wire.Start.ComponentInstanceId ?? string.Empty, out var component) ||
-                component.Kind != SpiceComponentKind.IdealOperationalAmplifier)
-                return false;
-            // 电压跟随器需要把 IN- 与 OUT 直接并为同一节点；这是三端 VCVS 唯一允许的同器件接线，不放宽其他器件的自短接诊断。
-            return (wire.Start.TerminalId == SpiceComponentModel.InvertingTerminalId && wire.End.TerminalId == SpiceComponentModel.OutputTerminalId) ||
-                   (wire.Start.TerminalId == SpiceComponentModel.OutputTerminalId && wire.End.TerminalId == SpiceComponentModel.InvertingTerminalId);
         }
 
         private static void ValidateComponents(Dictionary<string, SpiceComponentModel> components, SpiceCircuitGraph graph)

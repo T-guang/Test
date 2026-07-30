@@ -43,6 +43,31 @@ namespace ElectricalSim.Spice.Core
     }
 
     /// <summary>
+    /// 集中定义元件自身端子之间能否直接接线的纯规则。工作区交互和拓扑校验必须共用它，避免 UI 接受而图校验拒绝的漂移。
+    /// </summary>
+    public static class SpiceConnectionRules
+    {
+        public static bool IsConnectionAllowed(
+            SpiceComponentKind startKind,
+            string startComponentId,
+            string startTerminalId,
+            SpiceComponentKind endKind,
+            string endComponentId,
+            string endTerminalId)
+        {
+            if (!string.Equals(startComponentId, endComponentId, StringComparison.Ordinal)) return true;
+            if (string.Equals(startTerminalId, endTerminalId, StringComparison.Ordinal)) return false;
+            if (startKind != SpiceComponentKind.IdealOperationalAmplifier || endKind != SpiceComponentKind.IdealOperationalAmplifier)
+                return false;
+            // 线性运放的 VCVS 允许 OUT 回授到高阻 IN-，以表达电压跟随器；任何其他内部短接都会改变控制输入语义。
+            return (string.Equals(startTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal) &&
+                    string.Equals(endTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal)) ||
+                   (string.Equals(startTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal) &&
+                    string.Equals(endTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal));
+        }
+    }
+
+    /// <summary>
     /// 与 Unity 场景无关的元件实例。T2 所有数值均使用 SI 基础单位：V、Ohm、F、H。
     /// </summary>
     public sealed class SpiceComponentModel

@@ -43,7 +43,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (string.IsNullOrEmpty(instanceId)) throw new ArgumentException("InstanceId is required.", nameof(instanceId));
             if (FindComponent(instanceId) != null) throw new InvalidOperationException("Duplicate InstanceId: " + instanceId);
-            // 无参数器件（GND/二极管/探针）使用固定默认值 0，不通过 IsValidParameter 校验用户参数。
+            // 无参数器件（GND/二极管/探针/理想运算放大器）使用固定默认值 0，不通过 IsValidParameter 校验用户参数。
             var effectiveValue = HasUserParameter(kind) ? siValue : DefaultValue(kind);
             if (HasUserParameter(kind) && !IsValidParameter(kind, siValue)) throw new ArgumentOutOfRangeException(nameof(siValue), "Parameter is invalid for " + kind + ".");
             var clampedRotation = ((rotationQuarterTurns % 4) + 4) % 4;
@@ -93,10 +93,10 @@ namespace ElectricalSim.Spice.Workspace
 
         public bool AddWire(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId, SpiceWireVisualState visualState = null)
         {
-            if (string.Equals(startComponentId, endComponentId, StringComparison.Ordinal)) return false;
             var start = FindComponent(startComponentId);
             var end = FindComponent(endComponentId);
             if (start == null || end == null || !start.HasTerminal(startTerminalId) || !end.HasTerminal(endTerminalId)) return false;
+            if (!SpiceConnectionRules.IsConnectionAllowed(start.Kind, startComponentId, startTerminalId, end.Kind, endComponentId, endTerminalId)) return false;
             wires.Add(new SpiceWorkspaceWireData(startComponentId, startTerminalId, endComponentId, endTerminalId, visualState ?? SpiceWireVisualState.Auto()));
             Changed?.Invoke(SpiceWorkspaceChange.Topology);
             return true;
@@ -202,13 +202,13 @@ namespace ElectricalSim.Spice.Workspace
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
             if (kind == SpiceComponentKind.IdealSwitch) return value == 0d || value == 1d;
             if (kind == SpiceComponentKind.AcVoltageSource) return SpiceAnalysisLimits.IsValidAcMagnitude(value);
-            // 二极管使用固定 D_GENERIC 模型，GND 与两类探针无参数；均不允许通过参数区写入内部值。
+            // 二极管使用固定 D_GENERIC 模型，GND、两类探针与理想运算放大器无参数；均不允许通过参数区写入内部值。
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
                 (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && kind != SpiceComponentKind.IdealOperationalAmplifier && value > 0d);
         }
 
         /// <summary>
-        /// 判断器件类型是否有用户可编辑参数。无参数器件（GND/二极管/探针）导入时使用固定默认值。
+        /// 判断器件类型是否有用户可编辑参数。无参数器件（GND/二极管/探针/理想运算放大器）导入时使用固定默认值。
         /// </summary>
         public static bool HasUserParameter(SpiceComponentKind kind)
         {

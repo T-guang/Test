@@ -20,11 +20,15 @@ namespace ElectricalSim.Spice.T3
         public static void RunAll()
         {
             ValidateCoreAndNetlist();
+            ValidateTopologyDiagnostics();
+            Debug.Log("[Spice][OpAmp] floating-input diagnostics: PASS");
+            Debug.Log("[Spice][OpAmp] output-short diagnostics: PASS");
             ValidateV1SaveBoundary();
             ValidateDcVoltageFollower();
             ValidateDcInvertingAmplifier();
             ValidateAcVoltageFollower();
             ValidateAcInvertingAmplifier();
+            Debug.Log("[Spice][OpAmp] real ngspice fixtures: 4/4 PASS");
             Debug.Log("[Spice][OpAmp] 真实 ngspice 回路：4/4 通过");
             Debug.Log("[Spice][OpAmp] Core：PASS");
             Debug.Log("[Spice][OpAmp] V1 保存边界：PASS");
@@ -37,6 +41,9 @@ namespace ElectricalSim.Spice.T3
                 !opAmp.HasTerminal(SpiceComponentModel.InvertingTerminalId) ||
                 !opAmp.HasTerminal(SpiceComponentModel.OutputTerminalId) ||
                 SpiceComponentModel.TerminalIdsFor(opAmp.Kind).Count != 3 ||
+                SpiceComponentModel.TerminalIdsFor(opAmp.Kind)[0] != SpiceComponentModel.NonInvertingTerminalId ||
+                SpiceComponentModel.TerminalIdsFor(opAmp.Kind)[1] != SpiceComponentModel.InvertingTerminalId ||
+                SpiceComponentModel.TerminalIdsFor(opAmp.Kind)[2] != SpiceComponentModel.OutputTerminalId ||
                 SpiceComponentDefaults.IdealOperationalAmplifierOpenLoopGain != 1e6d)
                 throw new InvalidOperationException("Ideal operational amplifier core contract is incomplete.");
 
@@ -44,16 +51,52 @@ namespace ElectricalSim.Spice.T3
             var graph = SpiceCircuitGraphBuilder.Build(dc);
             if (!graph.IsValid || graph.SpiceNameByComponentId["opamp-001"] != "EOP1")
                 throw new InvalidOperationException("Ideal operational amplifier graph naming is not deterministic.");
+            var expectedDcLine = "EOP1 " + graph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.OutputTerminalId)] + " 0 " +
+                graph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.NonInvertingTerminalId)] + " " +
+                graph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.InvertingTerminalId)] + " 1000000";
             var netlist = SpiceNetlistBuilder.BuildDcOperatingPoint(dc, graph).Content;
-            if (!netlist.Contains("EOP1 ") || !netlist.Contains(" 0 ") || !netlist.Contains(" 1000000"))
+            if (!netlist.Split('\n').Any(line => line.TrimEnd('\r') == expectedDcLine))
                 throw new InvalidOperationException("DC VCVS line was not generated.");
 
             var ac = CreateFollower(true);
             var acGraph = SpiceCircuitGraphBuilder.Build(ac);
             var acNetlist = SpiceAcNetlistBuilder.Build(ac, acGraph);
-            if (!acGraph.IsValid || !acNetlist.Content.Contains("EOP1 ") ||
+            var expectedAcLine = "EOP1 " + acGraph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.OutputTerminalId)] + " 0 " +
+                acGraph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.NonInvertingTerminalId)] + " " +
+                acGraph.NodeByTerminal[new SpiceTerminalRef("opamp-001", SpiceComponentModel.InvertingTerminalId)] + " 1000000";
+            if (!acGraph.IsValid || !acNetlist.Content.Split('\n').Any(line => line.TrimEnd('\r') == expectedAcLine) ||
                 !acNetlist.OutputRequests.Any(request => request.Expression == "i(EOP1)"))
                 throw new InvalidOperationException("AC VCVS line or branch-current request was not generated.");
+
+            var twoOpAmps = SpiceCircuitGraphBuilder.Build(CreateTwoFollowers());
+            if (!twoOpAmps.IsValid || twoOpAmps.SpiceNameByComponentId["opamp-001"] != "EOP1" || twoOpAmps.SpiceNameByComponentId["opamp-002"] != "EOP2")
+                throw new InvalidOperationException("Multiple ideal operational amplifier names are not deterministic.");
+        }
+
+        private static void ValidateTopologyDiagnostics()
+        {
+            var follower = SpiceCircuitGraphBuilder.Build(CreateFollower(false));
+            var inverting = SpiceCircuitGraphBuilder.Build(CreateInverting(false));
+            if (!follower.IsValid || !inverting.IsValid)
+                throw new InvalidOperationException("Feedback circuits must remain graph-valid.");
+
+            var floating = CreateFloatingInputCircuit();
+            var floatingGraph = SpiceCircuitGraphBuilder.Build(floating);
+            if (floatingGraph.IsValid || !floatingGraph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT"))
+                throw new InvalidOperationException("Floating op-amp inputs must report SPICE_FLOATING_SUBCIRCUIT.");
+            var rejected = new SpiceSimulationService().SimulateAsync(floating).GetAwaiter().GetResult();
+            if (rejected.Success || rejected.RawNgspiceResult != null)
+                throw new InvalidOperationException("Floating op-amp input diagnostics must reject before invoking ngspice.");
+
+            foreach (var reverse in new[] { false, true })
+            {
+                var shorted = CreateOutputShortCircuit(reverse);
+                var shortedGraph = SpiceCircuitGraphBuilder.Build(shorted);
+                if (shortedGraph.IsValid || !shortedGraph.Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED"))
+                    throw new InvalidOperationException("Op-amp output-to-ground short must be rejected in both wire directions.");
+            }
+            Debug.Log("[Spice][OpAmp] 浮空输入诊断：PASS");
+            Debug.Log("[Spice][OpAmp] 输出短接诊断：PASS");
         }
 
         private static void ValidateDcVoltageFollower()
@@ -106,6 +149,13 @@ namespace ElectricalSim.Spice.T3
                 throw new InvalidOperationException(name + " failed: " + string.Join(" | ", result.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
             if (result.RawNgspiceResult == null || !result.RawNgspiceResult.Success)
                 throw new InvalidOperationException(name + " did not use the real ngspice service path.");
+            // 审查证据直接记录正式 Service 返回的网表和 ngspice 原始输出，避免审查包另行拼装近似 netlist。
+            Debug.Log("__SPICE_OPAMP_FIXTURE_EVIDENCE_BEGIN__\nfixture=" + name +
+                "\n-- generated.cir --\n" + result.GeneratedNetlistContent +
+                "\n-- stdout --\n" + result.RawNgspiceResult.StandardOutput +
+                "\n-- stderr --\n" + result.RawNgspiceResult.StandardError +
+                "\n-- exit-code --\n" + result.RawNgspiceResult.ExitCode +
+                "\n__SPICE_OPAMP_FIXTURE_EVIDENCE_END__");
             return result;
         }
 
@@ -137,6 +187,51 @@ namespace ElectricalSim.Spice.T3
             Wire(circuit, "resistor-002", SpiceComponentModel.PositiveTerminalId, "opamp-001", SpiceComponentModel.OutputTerminalId);
             Wire(circuit, sourceId, SpiceComponentModel.NegativeTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
             Wire(circuit, "opamp-001", SpiceComponentModel.NonInvertingTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
+            return circuit;
+        }
+
+        private static SpiceCircuitModel CreateTwoFollowers()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 1d));
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source-002", 2d));
+            circuit.Components.Add(SpiceComponentModel.IdealOperationalAmplifier("opamp-001"));
+            circuit.Components.Add(SpiceComponentModel.IdealOperationalAmplifier("opamp-002"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            foreach (var index in new[] { "001", "002" })
+            {
+                Wire(circuit, "source-" + index, SpiceComponentModel.PositiveTerminalId, "opamp-" + index, SpiceComponentModel.NonInvertingTerminalId);
+                Wire(circuit, "source-" + index, SpiceComponentModel.NegativeTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
+                Wire(circuit, "opamp-" + index, SpiceComponentModel.InvertingTerminalId, "opamp-" + index, SpiceComponentModel.OutputTerminalId);
+            }
+            return circuit;
+        }
+
+        private static SpiceCircuitModel CreateFloatingInputCircuit()
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 1d));
+            circuit.Components.Add(SpiceComponentModel.IdealOperationalAmplifier("opamp-001"));
+            circuit.Components.Add(SpiceComponentModel.Resistor("resistor-001", 1000d));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            Wire(circuit, "source-001", SpiceComponentModel.PositiveTerminalId, "opamp-001", SpiceComponentModel.NonInvertingTerminalId);
+            Wire(circuit, "source-001", SpiceComponentModel.NegativeTerminalId, "opamp-001", SpiceComponentModel.InvertingTerminalId);
+            Wire(circuit, "opamp-001", SpiceComponentModel.OutputTerminalId, "resistor-001", SpiceComponentModel.PositiveTerminalId);
+            Wire(circuit, "resistor-001", SpiceComponentModel.NegativeTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
+            return circuit;
+        }
+
+        private static SpiceCircuitModel CreateOutputShortCircuit(bool reverse)
+        {
+            var circuit = new SpiceCircuitModel();
+            circuit.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 1d));
+            circuit.Components.Add(SpiceComponentModel.IdealOperationalAmplifier("opamp-001"));
+            circuit.Components.Add(SpiceComponentModel.Ground("ground-001"));
+            Wire(circuit, "source-001", SpiceComponentModel.PositiveTerminalId, "opamp-001", SpiceComponentModel.NonInvertingTerminalId);
+            Wire(circuit, "source-001", SpiceComponentModel.NegativeTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
+            Wire(circuit, "opamp-001", SpiceComponentModel.InvertingTerminalId, "source-001", SpiceComponentModel.PositiveTerminalId);
+            if (reverse) Wire(circuit, "ground-001", SpiceComponentModel.GroundTerminalId, "opamp-001", SpiceComponentModel.OutputTerminalId);
+            else Wire(circuit, "opamp-001", SpiceComponentModel.OutputTerminalId, "ground-001", SpiceComponentModel.GroundTerminalId);
             return circuit;
         }
 

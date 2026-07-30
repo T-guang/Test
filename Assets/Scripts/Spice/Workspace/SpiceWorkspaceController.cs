@@ -547,6 +547,8 @@ namespace ElectricalSim.Spice.Workspace
         internal Button GetApplyAcFrequencyButtonForTesting() => applyAcFrequencyButton;
         internal CanvasGroup GetPaletteCardForTesting(SpiceComponentKind kind) => paletteCardGroups.TryGetValue(kind, out var group) ? group : null;
         internal InputField GetAcPhaseInputForTesting() => acPhaseInput;
+        internal InputField GetParameterInputForTesting() => parameterInput;
+        internal Button GetUnitButtonForTesting() => unitButton;
         internal Text GetOpAmpInfoForTesting() => opAmpInfoText;
         internal Button GetParameterApplyButtonForTesting() => parameterApplyButton;
         internal string GetVisibleResultTextForTesting() => resultText != null ? resultText.text : null;
@@ -1112,7 +1114,13 @@ namespace ElectricalSim.Spice.Workspace
                 pendingComponent != null &&
                 component != null &&
                 component.Data.HasTerminal(terminalId) &&
-                !string.Equals(pendingComponent.InstanceId, component.InstanceId, StringComparison.Ordinal);
+                SpiceConnectionRules.IsConnectionAllowed(
+                    pendingComponent.Kind,
+                    pendingComponent.InstanceId,
+                    pendingTerminalId,
+                    component.Kind,
+                    component.InstanceId,
+                    terminalId);
         }
 
         private void AddPendingWaypoint(Vector2 pointer)
@@ -2002,6 +2010,7 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_SAME_COMPONENT_CONNECTION" ? "同一元件端子不能直接连接" :
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "缺少直流电压源" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "电压源两端短接" :
+                diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED" ? "运放输出端短接" :
                 diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "元件两端短接" : "SPICE 计算诊断";
             var detail = diagnostic.Code == "SPICE_GROUND_MISSING" ? "电路至少需要一个 GND 作为 0 V 参考。" :
                 diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "该端子尚未通过导线连接。" :
@@ -2010,6 +2019,7 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_SAME_COMPONENT_CONNECTION" ? "请改为连接不同元件的端子。" :
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "当前直流工作点计算需要一个直流电压源。" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "请断开电压源两端的直接短接。" :
+                diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED" ? "理想运放 OUT 不能直接连接 GND，因为 V1 输出本身是相对于 GND 的理想受控电压源。" :
                 diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "请检查该元件两端是否被同一电气节点直接连接。" : diagnostic.Message;
             var related = string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : "\n关联元件：" + diagnostic.ComponentId + (string.IsNullOrEmpty(diagnostic.TerminalId) ? string.Empty : " / 端子：" + diagnostic.TerminalId);
             return title + "\n" + detail + related + "\n错误码：" + diagnostic.Code;
