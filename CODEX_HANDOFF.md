@@ -3,7 +3,7 @@
 ## 当前基线（唯一）
 
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`；Unity：`2022.3.57f1c1`；分支：`feature/spice-t4a-dc-host-integration`。
-- Code baseline：`477fadf test(spice): bind drawing v2 evidence to real checks`。这是 AC-D 后的最新代码提交；七项 AC-D 日志均在对应独立校验无异常返回后才输出。
+- Code baseline：`eb20f67 fix(spice): clean edit mode object destruction`。Q1 的测试拆分、中文日志/注释收口与 Editor 生命周期治理均已完成；七项 AC-D 日志仍在对应独立校验无异常返回后才输出。
 - Docs HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。后续历史章节仅供追溯，不构成当前基线。
 - 理想运算放大器 V1：`e04089b`（Core/求解）和 `7a10aff`（工作区）；V1.1 反馈拓扑：`5e00991`。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`；不得修改场景、ProjectSettings、控制模式、Wire 交互或 Player Harness。
@@ -37,7 +37,7 @@
 - V2 显式保存 `analysis.mode`、`analysis.frequencyHz`、既有元件/位置/旋转/参数/Wire/折点，以及交流源 `phaseDegrees`。理想运放只依赖 Kind、身份、位置、旋转与 Wire，不写无意义参数。
 - 保存不包含结果、网表、ngspice 输出、revision、请求号、选择、pending Wire、缩放、平移、文件路径或按钮状态；成功保存只清除 dirty，不推进 electrical revision。
 - 导入始终先构建并验证临时 `SpiceWorkspaceModel`，组件全部完成后才验证 Wire。V2 同器件反馈必须调用 `SpiceConnectionRules.IsConnectionAllowed`；失败不替换正式 Model、路径、结果或视图。
-- 下一步唯一为 SPICE 最终代码、中文注释与项目日志收口；Windows Player Build 与三分辨率人工验收在收口后执行。
+- 后续工作需另行授权：SPICE 最终代码质量 Q2（Controller/DemoHost 职责收口）。Windows Player Build 与三分辨率人工验收仍延期。
 
 ## AC-D 证据与回归
 
@@ -49,6 +49,15 @@
 - `ValidateAcDAtomicFileWrite` 覆盖新目标创建、已有目标原子替换、故意失败时哨兵 SHA-256、临时/备份清理、路径/dirty 保持，以及成功保存不推进 revision、不使 Current 结果变 Stale。
 - `ValidateAcDD2LimitRegression` 以 V2 DTO 覆盖器件/Wire 数量、单 Wire/全图折点、InstanceId/TerminalId 长度、坐标、参数、frequency、phase 与 1 MB 文件边界。
 - 最近完整 batch 原始日志：`E:\Builds\ElectricalSimulation2D\SpiceFinalQuality\20260730-142807\unity-ac-d-evidence-final.log`。包含 C# 0 error、T1、T2 Fixtures=22、T3、14/14 AC fixtures、全部 AC-C1、运放 4/4 与全部 AC-D 专项通过。
+
+## 最终质量收口 Q1
+
+- `SpiceT3WorkspaceValidation` 已拆为 9 个同一 `public static partial class` 文件。主文件仅保留唯一 `RunPureChecks()`、固定调用顺序和每组通过日志；其余文件按 AC、Drawing、FileWorkflow、OpAmp、Presentation、HostUi、Core 与 Common 分组。
+- 拆分完整性检查固定验证 104 个 `Validate*` 方法且不允许重名；审查包另提供拆分前后方法数、调用数和未引用方法机器清单。
+- 项目自有通过日志统一为 `[Spice][模块] 中文描述：通过`。ngspice stdout/stderr、fixture 原始证据、类名、字段名、错误码和 Build/Result/Log 参数保留英文契约。
+- `SpiceUnityObjectLifetime` 是唯一新增的 SPICE 视图销毁入口：Editor 非运行态使用 `DestroyImmediate`，Play Mode/Player 使用 `Destroy`。Controller 和 WireView 共用该入口，Q1 Edit Mode 测试覆盖删除元件/Wire、清空、成功导入、null/已销毁对象及无 `MissingReferenceException`。
+- Q1 最终完整 batch 原始日志：`E:\Builds\ElectricalSimulation2D\SpiceFinalQualityQ1\20260730-150548\unity-q1-final.log`。其中 `Destroy may not be called from edit mode`、`MissingReferenceException`、`StackOverflowException`、`UnobservedTaskException` 均为 0。
+- Q1 代码提交：`645c109 refactor(spice): split workspace validation suite`；`46ca7a6 chore(spice): standardize chinese test logs and comments`；`eb20f67 fix(spice): clean edit mode object destruction`。
 
 <!-- 历史归档：以下内容仅保留追溯，不构成当前基线或后续指令。
 
