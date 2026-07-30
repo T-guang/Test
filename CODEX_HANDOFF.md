@@ -3,11 +3,10 @@
 ## 当前基线（唯一）
 
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`；Unity：`2022.3.57f1c1`；分支：`feature/spice-t4a-dc-host-integration`。
-- Code baseline：`f1d955d feat(spice): integrate drawing v2 save and import`。
+- Code baseline：`477fadf test(spice): bind drawing v2 evidence to real checks`。这是 AC-D 后的最新代码提交；七项 AC-D 日志均在对应独立校验无异常返回后才输出。
 - Docs HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。后续历史章节仅供追溯，不构成当前基线。
-- AC-B1：`c677c97`；AC-B1.1：`515c808`；AC-B2：`b185fa4`；AC-B2.1：`3405933`；AC-C1：`bd598e7`、`450119b`；AC-C1.1：`c5c3ddc`。
 - 理想运算放大器 V1：`e04089b`（Core/求解）和 `7a10aff`（工作区）；V1.1 反馈拓扑：`5e00991`。
-- 正式场景仍为 `Assets/Scenes/Demo.unity`，本批未修改场景、ProjectSettings、控制模式、Wire 交互或 schemaVersion。
+- 正式场景仍为 `Assets/Scenes/Demo.unity`；不得修改场景、ProjectSettings、控制模式、Wire 交互或 Player Harness。
 
 ## SPICE Workspace 状态与刷新所有权
 
@@ -39,6 +38,19 @@
 - 保存不包含结果、网表、ngspice 输出、revision、请求号、选择、pending Wire、缩放、平移、文件路径或按钮状态；成功保存只清除 dirty，不推进 electrical revision。
 - 导入始终先构建并验证临时 `SpiceWorkspaceModel`，组件全部完成后才验证 Wire。V2 同器件反馈必须调用 `SpiceConnectionRules.IsConnectionAllowed`；失败不替换正式 Model、路径、结果或视图。
 - 下一步唯一为 SPICE 最终代码、中文注释与项目日志收口；Windows Player Build 与三分辨率人工验收在收口后执行。
+
+## AC-D 证据与回归
+
+- `ValidateAcDV2Serialization` 验证 V2 确定性 JSON、字节一致性、SHA-256 和普通 DC 图纸恢复。
+- `ValidateAcDV1Compatibility` 覆盖空图纸、Ground、开关和电阻旧图纸读取，以及默认 DC/频率和重新保存升级。
+- `ValidateAcDAcDrawingRoundTrip` 用真实 ngspice 验证 1234.5 Hz、2.5 V ∠ -170° RC 图纸恢复。
+- `ValidateAcDOpAmpFeedbackRoundTrip` 用真实 ngspice 验证 DC 跟随器和 AC 反相器，覆盖运放反馈 Wire、交流相位及有限开环增益结果。
+- `ValidateAcDImportTransaction` 比较失败导入前后的 Model 引用及序列化快照、revision、路径、dirty、ResultState、可复制结果/网表、选择、pending Wire 和组件/Wire View 数量。
+- `ValidateAcDAtomicFileWrite` 覆盖新目标创建、已有目标原子替换、故意失败时哨兵 SHA-256、临时/备份清理、路径/dirty 保持，以及成功保存不推进 revision、不使 Current 结果变 Stale。
+- `ValidateAcDD2LimitRegression` 以 V2 DTO 覆盖器件/Wire 数量、单 Wire/全图折点、InstanceId/TerminalId 长度、坐标、参数、frequency、phase 与 1 MB 文件边界。
+- 最近完整 batch 原始日志：`E:\Builds\ElectricalSimulation2D\SpiceFinalQuality\20260730-142807\unity-ac-d-evidence-final.log`。包含 C# 0 error、T1、T2 Fixtures=22、T3、14/14 AC fixtures、全部 AC-C1、运放 4/4 与全部 AC-D 专项通过。
+
+<!-- 历史归档：以下内容仅保留追溯，不构成当前基线或后续指令。
 
 ## Current AC baseline
 
