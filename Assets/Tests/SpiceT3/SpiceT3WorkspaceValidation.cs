@@ -157,6 +157,16 @@ namespace ElectricalSim.Spice.T3
             ValidateLegacyFileDialogErrorContract();
             ValidateQualityQ1EditorObjectLifetime();
             Debug.Log("[Spice][Quality-Q1] Editor 对象生命周期：通过");
+            ValidateQualityQ2TypeMoveIntegrity();
+            Debug.Log("[Spice][Quality-Q2] 类型移动完整性：通过");
+            ValidateQualityQ2ControllerPartialIntegrity();
+            Debug.Log("[Spice][Quality-Q2] Controller partial 完整性：通过");
+            ValidateQualityQ2PublicApiCompatibility();
+            Debug.Log("[Spice][Quality-Q2] 公共接口兼容：通过");
+            ValidateQualityQ2UiHierarchyContract();
+            Debug.Log("[Spice][Quality-Q2] UI 层级契约：通过");
+            ValidateQualityQ2DirectedDeduplication();
+            Debug.Log("[Spice][Quality-Q2] 定向去重：通过");
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);

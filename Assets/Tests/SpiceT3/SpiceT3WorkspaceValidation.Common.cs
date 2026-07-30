@@ -24,13 +24,15 @@ namespace ElectricalSim.Spice.T3
         /// </summary>
         private static void ValidateQualityQ1SuiteSplitIntegrity()
         {
-            const int expectedValidateMethodCount = 104;
+            const int expectedPreQ2ValidateMethodCount = 104;
+            const int expectedQ2ValidateMethodCount = 5;
             var validationMethods = typeof(SpiceT3WorkspaceValidation)
                 .GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
                 .Where(method => method.Name.StartsWith("Validate", StringComparison.Ordinal))
                 .ToArray();
-            if (validationMethods.Length != expectedValidateMethodCount)
-                throw new InvalidOperationException("Q1 测试拆分后的 Validate 方法数量不一致：" + validationMethods.Length);
+            var preQ2Methods = validationMethods.Where(method => !method.Name.StartsWith("ValidateQualityQ2", StringComparison.Ordinal)).ToArray();
+            if (preQ2Methods.Length != expectedPreQ2ValidateMethodCount || validationMethods.Length != expectedPreQ2ValidateMethodCount + expectedQ2ValidateMethodCount)
+                throw new InvalidOperationException("Q1 原有和 Q2 新增 Validate 方法数量不一致：" + preQ2Methods.Length + "/" + validationMethods.Length);
             if (validationMethods.GroupBy(method => method.Name, StringComparer.Ordinal).Any(group => group.Count() != 1))
                 throw new InvalidOperationException("Q1 测试拆分后出现重复 Validate 方法名。");
         }
@@ -98,6 +100,122 @@ namespace ElectricalSim.Spice.T3
             }
             if (messages.Any(message => message != null && message.Contains("Destroy may not be called from edit mode")))
                 throw new InvalidOperationException("Q1 生命周期入口仍触发了 Edit Mode Destroy 警告。");
+        }
+
+        /// <summary>
+        /// Q2 只移动既有类型定义，因此完整类型名、MonoBehaviour 基类和程序集归属必须保持不变。
+        /// 这能防止移动后出现 Missing Script 或 AddComponent 目标漂移，而无需改变任何运行时架构。
+        /// </summary>
+        private static void ValidateQualityQ2TypeMoveIntegrity()
+        {
+            var expected = new[]
+            {
+                typeof(SpiceWorkspacePresentationAdapter),
+                typeof(SpiceWorkspacePaletteCardPresentation),
+                typeof(SpiceAssistantOutcomePresentation),
+                typeof(SpiceAssistantParameterPresentation),
+                typeof(SpiceScrollableTextView),
+                typeof(SpiceScrollableTextLayout),
+                typeof(SpiceWorkspaceBlankClick),
+                typeof(SpiceWorkspaceUi)
+            };
+            if (expected.Any(type => type.FullName == null || !type.FullName.StartsWith("ElectricalSim.Spice.Workspace.", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Q2 类型移动后发现工作区完整类型名漂移。");
+            if (!typeof(MonoBehaviour).IsAssignableFrom(typeof(SpiceWorkspaceBlankClick)) ||
+                !typeof(MonoBehaviour).IsAssignableFrom(typeof(SpiceWorkspacePaletteCardPresentation)))
+                throw new InvalidOperationException("Q2 类型移动后 MonoBehaviour 基类契约不一致。");
+        }
+
+        /// <summary>
+        /// partial 只重新归档同一个 Controller 的方法。源文件存在性与关键方法归属共同防止误拆为新类型，
+        /// 也避免主文件重新膨胀为职责混杂的大文件。
+        /// </summary>
+        private static void ValidateQualityQ2ControllerPartialIntegrity()
+        {
+            var workspaceRoot = Path.GetDirectoryName(Application.dataPath);
+            var expectedFiles = new[]
+            {
+                "SpiceWorkspaceController.cs",
+                "SpiceWorkspaceController.Simulation.cs",
+                "SpiceWorkspaceController.Interaction.cs",
+                "SpiceWorkspaceController.Persistence.cs",
+                "SpiceWorkspaceController.Presentation.cs"
+            };
+            var controllerDirectory = Path.Combine(workspaceRoot, "Assets", "Scripts", "Spice", "Workspace");
+            if (expectedFiles.Any(file => !File.Exists(Path.Combine(controllerDirectory, file))))
+                throw new InvalidOperationException("Q2 Controller partial 文件不完整。");
+
+            var methods = typeof(SpiceWorkspaceController).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            var required = new[] { "RunCalculationAsync", "CommitImportedModel", "HandleTerminalClick", "BuildUi", "RefreshParameterPanel" };
+            if (required.Any(name => !methods.Any(method => method.Name == name && method.DeclaringType == typeof(SpiceWorkspaceController))))
+                throw new InvalidOperationException("Q2 Controller partial 后缺少既有职责方法。");
+        }
+
+        /// <summary>
+        /// 仅验证原有公开入口和测试接缝仍可反射获取；不以扩大可见性来迁就测试。
+        /// 保存、导入和求解仍由既有 Controller 实现承担。
+        /// </summary>
+        private static void ValidateQualityQ2PublicApiCompatibility()
+        {
+            var type = typeof(SpiceWorkspaceController);
+            var publicMembers = new[]
+            {
+                "Model", "ResultState", "WorkspaceRect", "ViewportRect", "ContentRect", "ViewController", "WireLayer", "OverlayLayer", "HasPendingWire", "IsDirty",
+                "Initialize", "CreateComponent", "Connect", "RunCalculationAsync", "TrySaveWorkspaceToPath", "TrySaveCurrentWorkspace", "TryImportWorkspaceFromPath",
+                "TryImportDrawingJson", "TryGetCopyableNetlistText", "TryGetCopyableOutcomeText", "ValidateAssistantPanelLayout", "ComputeContentBounds"
+            };
+            var members = type.GetMembers(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                .Select(member => member.Name)
+                .ToArray();
+            if (publicMembers.Any(name => !members.Contains(name)))
+                throw new InvalidOperationException("Q2 Controller 公开接口或既有测试接缝发生缺失。");
+
+            var hostMembers = typeof(SpiceWorkspaceDemoHost).GetMembers(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                .Select(member => member.Name)
+                .ToArray();
+            if (new[] { "Configure", "Controller", "IsInitialized" }.Any(name => !hostMembers.Contains(name)))
+                throw new InvalidOperationException("Q2 DemoHost 公开接口发生缺失。");
+        }
+
+        /// <summary>
+        /// 使用正式 Host/Bindings 创建路径检查既有 UI 名称和控制项，不改变布局、颜色或层级。
+        /// 这同时证明类型移动没有让动态 AddComponent 目标失效。
+        /// </summary>
+        private static void ValidateQualityQ2UiHierarchyContract()
+        {
+            var root = new GameObject("SpiceQualityQ2Ui", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(root.transform, out var bindings);
+                if (bindings.RunButton == null || bindings.PaletteRoot == null || bindings.WorkspaceViewport == null || bindings.AssistantRoot == null ||
+                    workspace.GetDcAnalysisModeButtonForTesting() == null || workspace.GetAcAnalysisModeButtonForTesting() == null ||
+                    workspace.GetAcFrequencyInputForTesting() == null || workspace.GetApplyAcFrequencyButtonForTesting() == null ||
+                    workspace.GetPaletteCardForTesting(SpiceComponentKind.AcVoltageSource) == null)
+                    throw new InvalidOperationException("Q2 UI 层级契约缺少既有工作区控件。");
+                if (workspace.GetDcAnalysisModeButtonForTesting().name != "DcAnalysisMode" || workspace.GetAcAnalysisModeButtonForTesting().name != "AcAnalysisMode")
+                    throw new InvalidOperationException("Q2 UI 层级契约中的分析按钮名称发生变化。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        /// <summary>
+        /// 定向去重只收口已证实的工具栏样式和 ResultState 控件三连刷新；
+        /// 通过源代码契约确认没有把无关 Refresh 纳入万能入口。
+        /// </summary>
+        private static void ValidateQualityQ2DirectedDeduplication()
+        {
+            var workspaceRoot = Path.GetDirectoryName(Application.dataPath);
+            var directory = Path.Combine(workspaceRoot, "Assets", "Scripts", "Spice", "Workspace");
+            var adapter = File.ReadAllText(Path.Combine(directory, "SpiceWorkspacePresentationAdapter.cs"));
+            var presentation = File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Presentation.cs"));
+            if (adapter.IndexOf("ApplyToolbarButtonStyle", StringComparison.Ordinal) < 0 ||
+                presentation.IndexOf("RefreshResultStateDependentControls", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Q2 定向去重入口缺失。");
+            if (presentation.IndexOf("RefreshNetlistUi();\r\n            RefreshCopyResultButton();\r\n            RefreshResultStateDependentControls();", StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("Q2 定向去重意外纳入了结果文本或网表刷新。");
         }
 
         private static string CreateUniqueTempDir(string label)

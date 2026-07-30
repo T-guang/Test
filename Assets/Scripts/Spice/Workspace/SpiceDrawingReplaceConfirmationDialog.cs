@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// C2 非空画布导入前的替换确认模态。挂在 SimulationModeController.PopupLayer 下，
+    /// 文件工作流 非空画布导入前的替换确认模态。挂在 SimulationModeController.PopupLayer 下，
     /// 复用既有 SpiceWorkspaceUi 样式。半透明全屏 Blocker 接收 Raycast，阻止背景交互。
     /// 关闭方式仅：取消 / 继续导入 / Esc / Host 销毁。点击弹窗外部不关闭。
     /// 不新建 Canvas/EventSystem；不使用 GameObject.Find/FindObjectOfType；不新增全局 Update 轮询。
