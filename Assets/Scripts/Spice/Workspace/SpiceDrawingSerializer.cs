@@ -13,7 +13,11 @@ namespace ElectricalSim.Spice.Workspace
     public static class SpiceDrawingFormat
     {
         public const string Format = "ElectricalSimulation2D.SpiceDrawing";
-        public const int SchemaVersion = 1;
+        public const int LegacySchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
+
+        // 保留旧别名仅供既有 V1 fixture 构造 DTO；正式 writer 必须只使用 CurrentSchemaVersion。
+        public const int SchemaVersion = LegacySchemaVersion;
 
         public static bool IsSupportedComponentKindInSchemaV1(SpiceComponentKind kind)
         {
@@ -45,8 +49,19 @@ namespace ElectricalSim.Spice.Workspace
     {
         public string format;
         public int schemaVersion;
+        public SpiceAnalysisDto analysis;
         public List<SpiceComponentDto> components = new List<SpiceComponentDto>();
         public List<SpiceWireDto> wires = new List<SpiceWireDto>();
+    }
+
+    /// <summary>
+    /// V2 将分析配置作为图纸电气状态保存。数值仍使用 invariant-culture 文本，便于严格拒绝缺失、NaN 和 Infinity。
+    /// </summary>
+    [Serializable]
+    public sealed class SpiceAnalysisDto
+    {
+        public string mode;
+        public string frequencyHz;
     }
 
     /// <summary>
@@ -61,6 +76,7 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceVector2Dto position;
         public int rotationQuarterTurns;
         public string siValueText;
+        public string phaseDegrees;
     }
 
     /// <summary>
@@ -137,12 +153,16 @@ namespace ElectricalSim.Spice.Workspace
         public static SpiceDrawingFileDto ToDto(SpiceWorkspaceModel model)
         {
             if (model == null) throw new ArgumentNullException(nameof(model));
-            if (!TryValidateSchemaV1SaveCompatibility(model, out var compatibilityError))
-                throw new InvalidOperationException(compatibilityError);
+            // 正式 writer 只输出 V2，避免 AC 设置、交流源相位和运放反馈拓扑在新文件中被静默丢失。
             var dto = new SpiceDrawingFileDto
             {
                 format = SpiceDrawingFormat.Format,
-                schemaVersion = SpiceDrawingFormat.SchemaVersion
+                schemaVersion = SpiceDrawingFormat.CurrentSchemaVersion,
+                analysis = new SpiceAnalysisDto
+                {
+                    mode = model.AnalysisMode.ToString(),
+                    frequencyHz = FormatFiniteNumber(model.AcFrequencyHz)
+                }
             };
 
             var sortedComponents = new List<SpiceWorkspaceComponentData>(model.Components);
@@ -154,13 +174,17 @@ namespace ElectricalSim.Spice.Workspace
                 {
                     instanceId = component.InstanceId,
                     componentType = component.Kind.ToString(),
-                    position = new SpiceVector2Dto { x = component.Position.x.ToString("R", CultureInfo.InvariantCulture), y = component.Position.y.ToString("R", CultureInfo.InvariantCulture) },
+                    position = new SpiceVector2Dto { x = FormatFiniteNumber(component.Position.x), y = FormatFiniteNumber(component.Position.y) },
                     rotationQuarterTurns = component.RotationQuarterTurns
                 };
                 // 只有有用户参数的器件才保存参数；无参数器件不保存 siValueText。
                 if (SpiceWorkspaceModel.HasUserParameter(component.Kind))
                 {
-                    componentDto.siValueText = component.SiValue.ToString("R", CultureInfo.InvariantCulture);
+                    componentDto.siValueText = FormatFiniteNumber(component.SiValue);
+                }
+                if (component.Kind == SpiceComponentKind.AcVoltageSource)
+                {
+                    componentDto.phaseDegrees = FormatFiniteNumber(SpiceAnalysisLimits.NormalizePhaseDegrees(component.AcPhaseDegrees));
                 }
                 dto.components.Add(componentDto);
             }
@@ -188,7 +212,7 @@ namespace ElectricalSim.Spice.Workspace
                     for (var i = 0; i < waypoints.Count; i++)
                     {
                         var point = swapped ? waypoints[waypoints.Count - 1 - i] : waypoints[i];
-                        wireDto.manualRoutePoints.Add(new SpiceVector2Dto { x = point.x.ToString("R", CultureInfo.InvariantCulture), y = point.y.ToString("R", CultureInfo.InvariantCulture) });
+                        wireDto.manualRoutePoints.Add(new SpiceVector2Dto { x = FormatFiniteNumber(point.x), y = FormatFiniteNumber(point.y) });
                     }
                 }
                 dto.wires.Add(wireDto);
@@ -279,6 +303,13 @@ namespace ElectricalSim.Spice.Workspace
             return JsonUtility.ToJson(dto, true);
         }
 
+        private static string FormatFiniteNumber(double value)
+        {
+            if (!SpiceAnalysisLimits.IsFinite(value)) throw new InvalidOperationException("Drawing data contains a non-finite number.");
+            // 规范化 -0，保证同一模型重复写入时文本和哈希稳定。
+            return (value == 0d ? 0d : value).ToString("R", CultureInfo.InvariantCulture);
+        }
+
         /// <summary>
         /// 从 JSON 字符串解析并构建临时工作区模型。任何解析或校验失败时返回 false 且不产生部分模型。
         /// 成功时，临时模型的编号分配器已通过 RestoreInstanceNumbersFromExisting 恢复。
@@ -341,11 +372,18 @@ namespace ElectricalSim.Spice.Workspace
                 return false;
             }
 
-            if (dto.schemaVersion != SpiceDrawingFormat.SchemaVersion)
+            var isV1 = dto.schemaVersion == SpiceDrawingFormat.LegacySchemaVersion;
+            var isV2 = dto.schemaVersion == SpiceDrawingFormat.CurrentSchemaVersion;
+            if (!isV1 && !isV2)
             {
-                error = "不支持的 schemaVersion：" + dto.schemaVersion + "，当前支持 " + SpiceDrawingFormat.SchemaVersion;
+                error = "不支持的 SPICE 图纸格式版本：" + dto.schemaVersion + "。当前仅支持版本 1 和 2。";
                 return false;
             }
+
+            // V1 未记录分析设置，兼容读取时固定回落到历史 DC/默认频率；V2 必须显式提供经过范围校验的正式值。
+            var analysisMode = SpiceAnalysisMode.DcOperatingPoint;
+            var frequencyHz = SpiceAnalysisLimits.DefaultFrequencyHz;
+            if (isV2 && !TryParseAnalysis(dto.analysis, out analysisMode, out frequencyHz, out error)) return false;
 
             if (dto.components == null) dto.components = new List<SpiceComponentDto>();
             if (dto.wires == null) dto.wires = new List<SpiceWireDto>();
@@ -383,8 +421,12 @@ namespace ElectricalSim.Spice.Workspace
                 totalManualRoutePoints += pointCount;
             }
 
+            // 解析全程只修改临时模型，调用方仅在本方法成功后原子替换正式 Workspace。
             var tempModel = new SpiceWorkspaceModel();
+            tempModel.TrySetAcFrequency(frequencyHz);
+            tempModel.TrySetAnalysisMode(analysisMode);
             var instanceIdSet = new HashSet<string>(StringComparer.Ordinal);
+            var wireIdentitySet = new HashSet<string>(StringComparer.Ordinal);
 
             // 第一阶段：组件校验和构建
             foreach (var componentDto in dto.components)
@@ -411,7 +453,7 @@ namespace ElectricalSim.Spice.Workspace
                     return false;
                 }
 
-                if (!SpiceDrawingFormat.IsSupportedComponentKindInSchemaV1(kind))
+                if (isV1 && !SpiceDrawingFormat.IsSupportedComponentKindInSchemaV1(kind))
                 {
                     error = kind == SpiceComponentKind.AcVoltageSource
                         ? "图纸格式 V1 不支持交流电压源。"
@@ -429,6 +471,7 @@ namespace ElectricalSim.Spice.Workspace
 
                 // 有参数器件必须提供 siValueText；无参数器件不保存参数。
                 double siValue = 0d;
+                double phaseDegrees = 0d;
                 if (SpiceWorkspaceModel.HasUserParameter(kind))
                 {
                     if (string.IsNullOrWhiteSpace(componentDto.siValueText))
@@ -456,6 +499,16 @@ namespace ElectricalSim.Spice.Workspace
                         error = "参数值不在合法范围：" + componentDto.instanceId + " = " + siValue.ToString(CultureInfo.InvariantCulture);
                         return false;
                     }
+                }
+
+                if (kind == SpiceComponentKind.AcVoltageSource)
+                {
+                    if (!isV2 || !TryParseFiniteNumber(componentDto.phaseDegrees, "交流源相位", out phaseDegrees, out error))
+                    {
+                        if (string.IsNullOrEmpty(error)) error = "交流源缺少相位：" + componentDto.instanceId;
+                        return false;
+                    }
+                    phaseDegrees = SpiceAnalysisLimits.NormalizePhaseDegrees(phaseDegrees);
                 }
 
                 // position 是必填字段：SpiceVector2Dto 为 class，缺失时为 null，必须拒绝以区分合法 (0,0)。
@@ -487,7 +540,8 @@ namespace ElectricalSim.Spice.Workspace
                         componentDto.instanceId,
                         new Vector2(posX, posY),
                         siValue,
-                        componentDto.rotationQuarterTurns);
+                        componentDto.rotationQuarterTurns,
+                        phaseDegrees);
                 }
                 catch (InvalidOperationException exception)
                 {
@@ -535,9 +589,18 @@ namespace ElectricalSim.Spice.Workspace
                     return false;
                 }
 
-                if (string.Equals(wireDto.startComponentId, wireDto.endComponentId, StringComparison.Ordinal))
+                if (isV1 && string.Equals(wireDto.startComponentId, wireDto.endComponentId, StringComparison.Ordinal))
                 {
                     error = "导线两端不能指向同一组件：" + wireDto.startComponentId;
+                    return false;
+                }
+
+                // V2 组件已全部构建，必须通过唯一连接规则验证反馈线，不能在序列化层复制运放的特殊判断。
+                if (isV2 && !SpiceConnectionRules.IsConnectionAllowed(startComponent.Kind, wireDto.startComponentId, wireDto.startTerminalId,
+                    endComponent.Kind, wireDto.endComponentId, wireDto.endTerminalId))
+                {
+                    error = "导线不符合组件连接规则：" + wireDto.startComponentId + ":" + wireDto.startTerminalId +
+                            " -> " + wireDto.endComponentId + ":" + wireDto.endTerminalId;
                     return false;
                 }
 
@@ -595,6 +658,12 @@ namespace ElectricalSim.Spice.Workspace
                             " -> " + wireDto.endComponentId + ":" + wireDto.endTerminalId;
                     return false;
                 }
+
+                if (isV2 && !wireIdentitySet.Add(BuildNormalizedWireIdentity(wireDto, visualState)))
+                {
+                    error = "图纸中包含重复导线。";
+                    return false;
+                }
             }
 
             // 第三阶段：恢复编号分配器
@@ -602,6 +671,66 @@ namespace ElectricalSim.Spice.Workspace
 
             model = tempModel;
             return true;
+        }
+
+        private static bool TryParseAnalysis(SpiceAnalysisDto analysis, out SpiceAnalysisMode mode, out double frequencyHz, out string error)
+        {
+            mode = SpiceAnalysisMode.DcOperatingPoint;
+            frequencyHz = SpiceAnalysisLimits.DefaultFrequencyHz;
+            error = null;
+            if (analysis == null || string.IsNullOrWhiteSpace(analysis.mode) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(analysis.mode, SpiceDrawingLimits.MaxStringLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(analysis.frequencyHz, SpiceDrawingLimits.MaxStringLength))
+            {
+                error = "V2 图纸缺少或包含无效的分析配置。";
+                return false;
+            }
+            if (!Enum.TryParse(analysis.mode, out mode) || !Enum.IsDefined(typeof(SpiceAnalysisMode), mode))
+            {
+                error = "未知分析模式：" + analysis.mode;
+                return false;
+            }
+            if (!TryParseFiniteNumber(analysis.frequencyHz, "频率", out frequencyHz, out error) || !SpiceAnalysisLimits.IsValidFrequency(frequencyHz))
+            {
+                if (string.IsNullOrEmpty(error)) error = "频率必须是允许范围内的有限数值。";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool TryParseFiniteNumber(string text, string fieldName, out double value, out string error)
+        {
+            value = 0d;
+            error = null;
+            if (string.IsNullOrWhiteSpace(text) || !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
+                !SpiceAnalysisLimits.IsFinite(value))
+            {
+                error = fieldName + "必须是有限数值。";
+                return false;
+            }
+            return true;
+        }
+
+        private static string BuildNormalizedWireIdentity(SpiceWireDto wireDto, SpiceWireVisualState visualState)
+        {
+            var swapped = string.Compare(wireDto.startComponentId, wireDto.endComponentId, StringComparison.Ordinal) > 0 ||
+                (string.Equals(wireDto.startComponentId, wireDto.endComponentId, StringComparison.Ordinal) &&
+                 string.Compare(wireDto.startTerminalId, wireDto.endTerminalId, StringComparison.Ordinal) > 0);
+            var startComponentId = swapped ? wireDto.endComponentId : wireDto.startComponentId;
+            var startTerminalId = swapped ? wireDto.endTerminalId : wireDto.startTerminalId;
+            var endComponentId = swapped ? wireDto.startComponentId : wireDto.endComponentId;
+            var endTerminalId = swapped ? wireDto.startTerminalId : wireDto.endTerminalId;
+            var builder = new StringBuilder(startComponentId).Append('|').Append(startTerminalId).Append('|')
+                .Append(endComponentId).Append('|').Append(endTerminalId).Append('|').Append(visualState.RouteMode);
+            if (visualState.RouteMode == SpiceWireRouteMode.Manual)
+            {
+                for (var i = 0; i < visualState.Waypoints.Count; i++)
+                {
+                    var point = visualState.Waypoints[swapped ? visualState.Waypoints.Count - 1 - i : i];
+                    builder.Append('|').Append(FormatFiniteNumber(point.x)).Append(',').Append(FormatFiniteNumber(point.y));
+                }
+            }
+            return builder.ToString();
         }
 
         /// <summary>
@@ -640,6 +769,7 @@ namespace ElectricalSim.Spice.Workspace
             if (!SpiceDrawingLimits.IsStringLengthSupported(componentDto.instanceId, SpiceDrawingLimits.MaxInstanceIdLength) ||
                 !SpiceDrawingLimits.IsStringLengthSupported(componentDto.componentType, SpiceDrawingLimits.MaxStringLength) ||
                 !SpiceDrawingLimits.IsStringLengthSupported(componentDto.siValueText, SpiceDrawingLimits.MaxStringLength) ||
+                !SpiceDrawingLimits.IsStringLengthSupported(componentDto.phaseDegrees, SpiceDrawingLimits.MaxStringLength) ||
                 (componentDto.position != null &&
                     (!SpiceDrawingLimits.IsStringLengthSupported(componentDto.position.x, SpiceDrawingLimits.MaxStringLength) ||
                      !SpiceDrawingLimits.IsStringLengthSupported(componentDto.position.y, SpiceDrawingLimits.MaxStringLength))))

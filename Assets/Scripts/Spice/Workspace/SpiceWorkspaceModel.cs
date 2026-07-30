@@ -39,7 +39,7 @@ namespace ElectricalSim.Spice.Workspace
         /// 按指定 InstanceId 和旋转创建组件，供导入保留文件内原始身份使用。
         /// 不推进 nextInstanceNumbers；导入完成后应调用 RestoreInstanceNumbersFromExisting 恢复下一编号。
         /// </summary>
-        public SpiceWorkspaceComponentData AddComponentWithIdentity(SpiceComponentKind kind, string instanceId, Vector2 position, double siValue, int rotationQuarterTurns)
+        public SpiceWorkspaceComponentData AddComponentWithIdentity(SpiceComponentKind kind, string instanceId, Vector2 position, double siValue, int rotationQuarterTurns, double acPhaseDegrees = 0d)
         {
             if (string.IsNullOrEmpty(instanceId)) throw new ArgumentException("InstanceId is required.", nameof(instanceId));
             if (FindComponent(instanceId) != null) throw new InvalidOperationException("Duplicate InstanceId: " + instanceId);
@@ -47,7 +47,7 @@ namespace ElectricalSim.Spice.Workspace
             var effectiveValue = HasUserParameter(kind) ? siValue : DefaultValue(kind);
             if (HasUserParameter(kind) && !IsValidParameter(kind, siValue)) throw new ArgumentOutOfRangeException(nameof(siValue), "Parameter is invalid for " + kind + ".");
             var clampedRotation = ((rotationQuarterTurns % 4) + 4) % 4;
-            var component = new SpiceWorkspaceComponentData(instanceId, kind, position, effectiveValue, clampedRotation);
+            var component = new SpiceWorkspaceComponentData(instanceId, kind, position, effectiveValue, clampedRotation, acPhaseDegrees);
             components.Add(component);
             Changed?.Invoke(SpiceWorkspaceChange.Topology);
             return component;
