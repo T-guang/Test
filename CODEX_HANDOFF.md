@@ -5,7 +5,7 @@
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
 - Unity：`2022.3.57f1c1`
 - 分支：`feature/spice-t4a-dc-host-integration`
-- Player UI 几何与参数区修复代码基线：`51dcec9 fix(spice): resolve analysis panel overlap`
+- Player UI 几何与参数编辑代码基线：`0eacd3d fix(spice): streamline ac source parameter editing`
 - 文档 HEAD：本文件对应的最终前向提交；以 `git rev-parse HEAD` 为准。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`。Q2 未修改场景、ProjectSettings、控制模式、数值语义、图纸格式、接线/路由或 Player Harness。
 
@@ -64,15 +64,13 @@
 - 同步契约：`Content = Viewport × 3`；Grid、WireLayer、ComponentLayer、OverlayLayer Stretch 到 Content；Grid 标记重绘；ViewController 仅重新夹紧平移。同步不改 Model、不推进 electrical revision、不使结果 Stale，也不改元件逻辑坐标。
 - 几何未就绪时，新增元件、元件池落点和元件拖动均不会对零尺寸 Content 应用 Clamp；激活后恢复正式交互。
 - 不再创建全宽 `AnalysisControls` 或调用 `ReserveTopSpace`。分析模式改为工具栏“重置视图”后的单一切换按钮：`分析：DC` / `分析：单频 AC`，仍经 `TrySetAnalysisMode` 进入正式 revision、Stale 和元件池兼容矩阵路径。
-- AC 频率移入右侧 `AcAnalysisSettings`。DC 隐藏该区域；AC 下即使未选择元件、选择普通器件、交流源或理想运放，均保留正式频率输入；运行中仍禁用。
-- `7115800 test(spice): cover standalone grid and component dragging`：T3 Windows Player Harness 实际验证激活后几何、网格、工具栏、模式切换和右侧频率，并通过 `SpiceWorkspaceComponentView.OnBeginDrag/OnDrag/OnEndDrag` 覆盖横向、纵向和缩放后拖动。它不进入正式 Demo Player。
-- 最新 Editor 全量日志：`E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-204934\unity-editor-layout.log`。最新 T3 Windows Player Harness：`E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-205011\T3Harness`；真实 Player 记录 `Screen=1422x693`、`CanvasScale=0.689372`，并验证 Content/图层尺寸契约与横纵拖动。
-- `51dcec9 fix(spice): resolve analysis panel overlap`：分析模式按钮复用标准 ToolbarButton 的圆角、边框和文字层级；状态文本从该按钮右侧开始。右侧参数卡将 AC 分析频率、元件提示、幅值、相位和应用动作安排为独立行，并扩大参数卡高度，避免窄面板和 Canvas 缩放下的重叠或横向溢出。
-- 最新 UI 修复 Editor 日志：`E:\Builds\ElectricalSimulation2D\SpicePlayerUiPolish\20260731-212327\unity-editor-ui-polish.log`；最新 T3 Standalone Harness：`E:\Builds\ElectricalSimulation2D\SpiceT31-EmbeddedHost\run_20260731_132433`。正式 Demo-only Player 从 `51dcec9` 构建至 `E:\Builds\ElectricalSimulation2D\SpiceFinalPlayerUiPolish\20260731-212622`。
+- `0eacd3d fix(spice): streamline ac source parameter editing`：右侧参数卡恢复紧凑，仅保留所选交流源的 AC 小信号幅值；不再创建 `AcAnalysisSettings`、右侧相位输入或右侧频率输入。双击画布中的交流电压源会打开加大的参数弹窗，统一编辑“AC 小信号幅值”“相位”和“分析频率”，并在全部文本验证通过后经 Controller 正式入口提交。弹窗标题明确为“编辑交流电压源参数”，避免被错误标注为电感。
+- `7115800 test(spice): cover standalone grid and component dragging`：T3 Windows Player Harness 实际验证激活后几何、网格、工具栏、模式切换和交流源参数弹窗，并通过 `SpiceWorkspaceComponentView.OnBeginDrag/OnDrag/OnEndDrag` 覆盖横向、纵向和缩放后拖动。它不进入正式 Demo Player。
+- 最新 Editor 全量日志：`E:\Builds\ElectricalSimulation2D\SpicePlayerUiDialogFix\20260731-09\unity-dialog-fix-final.log`；最新 T3 Standalone Harness：`E:\Builds\ElectricalSimulation2D\SpiceT31-EmbeddedHost\run_20260731_140447`。该 Harness 实测交流源弹窗提交 `2 V`、`30°` 和 `2000 Hz`，同时验证网格、横纵拖动、模式切换与工具栏契约。
 
 ## 仍延期的工作
 
-Windows Player 自动验证已经通过：T1 Player 验证日志位于 `E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-205059\T1Harness\unity-t1-player.log`，T3 Player 几何与 UI 验证见上节。正式 Demo-only Player 已从 `51dcec9` 构建至 `E:\Builds\ElectricalSimulation2D\SpiceFinalPlayerUiPolish\20260731-212622`，构建日志为同目录 `unity-build.log`，并附带 `RELEASE_FILE_MANIFEST.txt`、`RELEASE_SHA256SUMS.txt`。1366×768 客户区已按实际窗口尺寸采集主界面与 Player.log；当前自动化运行桌面的物理显示上限为 1536×864，无法在同一桌面获得完整 1920×1080 或 3840×2160 客户区和可见 SPICE 页截图，因此这些材料仍须在具备对应显示空间的人工验收环境补齐。自动检查不能替代视觉验收。下一步唯一为：Windows Player 三分辨率人工验收；不得自动创建冻结 Tag。
+Windows Player 自动验证已经通过：T1 Player 验证日志位于 `E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-205059\T1Harness\unity-t1-player.log`，最新 T3 Player 几何、拖动和交流源参数弹窗验证见上节。本次 `0eacd3d` 后尚未构建新的正式 Demo-only Player，因此旧正式包仅可作为历史材料，不能替代本次手动验收。1366×768 客户区已按实际窗口尺寸采集主界面与 Player.log；当前自动化运行桌面的物理显示上限为 1536×864，无法在同一桌面获得完整 1920×1080 或 3840×2160 客户区和可见 SPICE 页截图，因此这些材料仍须在具备对应显示空间的人工验收环境补齐。自动检查不能替代视觉验收。下一步唯一为：基于 `0eacd3d` 的 Windows Player Build 与三分辨率人工验收；不得自动创建冻结 Tag。
 
 ## 历史里程碑
 
