@@ -5,7 +5,7 @@
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
 - Unity：`2022.3.57f1c1`
 - 分支：`feature/spice-t4a-dc-host-integration`
-- Q2.1 代码基线：`1769e95 test(spice): correct q2 quality evidence`
+- Q2.1.1 代码基线：`f1c47cf chore(spice): complete pre-player comment cleanup`
 - 文档 HEAD：本文件的最终前向提交；以 `git rev-parse HEAD` 为准。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`。Q2 未修改场景、ProjectSettings、控制模式、数值语义、图纸格式、接线/路由或 Player Harness。
 
@@ -41,15 +41,16 @@
 - Q2 保持完整类型名、访问修饰符、字段、UI GameObject 名称、`AddComponent<T>` 目标和 ViewBindings 序列化字段不变。初始 Scene/Prefab/Asset 引用扫描未发现被移动类型的序列化脚本引用。
 - Q2 的定向去重仅包含左右锚点工具栏按钮的共同样式，以及 ResultState 改变时原本完全相同的三个控件刷新；未将网表、结果或其他 Refresh 收进万能入口。
 - Q2.1 已将文件按钮、事务式导入、分析设置、运行中导入和统一电气编辑防线的说明重新关联到正式方法；`DiscardOutdatedCalculation` 保持原有的分析控件与参数区刷新边界。
+- Q2.1.1 已清除 partial 拆分残留的文件按钮错位注释，并由静态证据确认 `SelectComponent` 前不再出现“文件按钮回调”；`SimulationModeOptionVisual` 的摘要为中文。项目自有英文自然语言设计注释已完成逐项复核；技术标识、API 名称、错误码和第三方原文继续保留。
 - `RefreshResultStateDependentControls()` 仅有 3 个正式调用点（进入 Running、离开 Running、SetResultStateForTesting），且仅刷新文件操作、分析控件和参数区。
 - `SpiceT3WorkspaceValidation` 的 9 个 partial 中，编译生效 Validate 声明为 109、RunPureChecks 直接调用为 109、重复方法名为 0、未调用活动 Validate 为 0；`#if false` 历史入口探针为 8、内部 Validate helper 为 2。
 - 项目自有自然语言注释已中文化；保留的中英混合仅为类名、方法名、字段名、枚举/状态值、错误码、JSON 字段和 ngspice 原始技术标识。
 
 ## 自动回归
 
-最终 Q2.1 原始 batch 日志：
+最终 Q2.1.1 原始 batch 日志：
 
-`E:\Builds\ElectricalSimulation2D\SpiceFinalQualityQ21\20260731-183254\unity-q21-final.log`
+`E:\Builds\ElectricalSimulation2D\SpiceQ211Player\20260731-185111\unity-q2111-editor-final.log`
 
 - C#：0 error；T1：PASS；T2：`Fixtures=22`；T3：PASS。
 - AC：`14/14`；AC-C1、OpAmp `4/4`、AC-D 全部专项：PASS。
@@ -58,7 +59,7 @@
 
 ## 仍延期的工作
 
-下一步唯一为：Windows Player Build，以及 3840×2160 / 1920×1080 / 1366×768 三分辨率人工验收。不得自动构建 Player 或开始人工验收。
+Windows Player 自动验证和正式 Demo Player 构建已完成：T1/T3 验证均通过，正式包位于 `E:\Builds\ElectricalSimulation2D\SpiceFinalPlayer\20260731-185539`，并已校验 ngspice StreamingAssets。三分辨率启动截图与日志已准备在其 `manual-evidence` 目录；当前桌面物理分辨率限制使其不能替代视觉验收，SPICE DC/AC、运放参数和结果区域仍须由用户手工补拍并裁决。下一步唯一为：Windows Player 三分辨率人工验收；不得自动创建冻结 Tag。
 
 ## 历史里程碑
 
