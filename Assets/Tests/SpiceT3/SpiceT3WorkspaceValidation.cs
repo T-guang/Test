@@ -74,7 +74,7 @@ namespace ElectricalSim.Spice.T3
             ValidateIdealOperationalAmplifierV1FileBoundary();
             Debug.Log("[Spice][OpAmp] V1/V2 文件边界：通过");
             // 复制结果验证：在 Failed 状态下验证复制资格、文本正确性、按钮交互状态和非变性。
-            // Current 状态需要 ngspice 求解，在 batchmode 中 RunCalculationAsync 会因
+            // 有效结果状态需要 ngspice 求解；在 batchmode 中 RunCalculationAsync 会因
             // UnitySynchronizationContext 死锁而无法同步等待。Current 路径的 lastOutcomeText
             // 赋值与 SetResultText 使用同一变量，文本一致性由构造保证。
             ValidateCopyableOutcomeFailedState();
@@ -167,6 +167,8 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("[Spice][Quality-Q2] UI 层级契约：通过");
             ValidateQualityQ2DirectedDeduplication();
             Debug.Log("[Spice][Quality-Q2] 定向去重：通过");
+            AssertQualityQ21Evidence();
+            Debug.Log("[Spice][Quality-Q2.1] 注释关联、去重与统计证据：通过");
             var model = new SpiceWorkspaceModel();
             var source = model.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
             var resistor = model.AddComponent(SpiceComponentKind.Resistor, Vector2.right);

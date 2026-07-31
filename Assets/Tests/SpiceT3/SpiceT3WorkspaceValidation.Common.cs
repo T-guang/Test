@@ -209,13 +209,199 @@ namespace ElectricalSim.Spice.T3
         {
             var workspaceRoot = Path.GetDirectoryName(Application.dataPath);
             var directory = Path.Combine(workspaceRoot, "Assets", "Scripts", "Spice", "Workspace");
-            var adapter = File.ReadAllText(Path.Combine(directory, "SpiceWorkspacePresentationAdapter.cs"));
-            var presentation = File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Presentation.cs"));
-            if (adapter.IndexOf("ApplyToolbarButtonStyle", StringComparison.Ordinal) < 0 ||
-                presentation.IndexOf("RefreshResultStateDependentControls", StringComparison.Ordinal) < 0)
+            var adapter = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, "SpiceWorkspacePresentationAdapter.cs")));
+            var presentation = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Presentation.cs")));
+            var simulation = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Simulation.cs")));
+            var persistence = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Persistence.cs")));
+            if (adapter.IndexOf("ApplyToolbarButtonStyle", StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException("Q2 定向去重入口缺失。");
-            if (presentation.IndexOf("RefreshNetlistUi();\r\n            RefreshCopyResultButton();\r\n            RefreshResultStateDependentControls();", StringComparison.Ordinal) >= 0)
-                throw new InvalidOperationException("Q2 定向去重意外纳入了结果文本或网表刷新。");
+
+            var helperBody = ExtractMethodBody(presentation, "RefreshResultStateDependentControls");
+            var helperCalls = System.Text.RegularExpressions.Regex.Matches(helperBody, @"(?m)^\s*(Refresh\w+)\s*\(\s*\)\s*;")
+                .Cast<System.Text.RegularExpressions.Match>()
+                .Select(match => match.Groups[1].Value)
+                .ToArray();
+            var expectedHelperCalls = new[]
+            {
+                "RefreshFileOperationButtonsAvailability",
+                "RefreshAnalysisControls",
+                "RefreshParameterPanel"
+            };
+            if (!helperCalls.SequenceEqual(expectedHelperCalls, StringComparer.Ordinal) ||
+                helperBody.IndexOf("RefreshNetlistUi", StringComparison.Ordinal) >= 0 ||
+                helperBody.IndexOf("RefreshCopyResultButton", StringComparison.Ordinal) >= 0 ||
+                helperBody.IndexOf("SetResultText", StringComparison.Ordinal) >= 0 ||
+                helperBody.IndexOf("SetDiagnosticText", StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("Q2 定向去重意外纳入了结果、网表或诊断刷新。");
+
+            var allControllerPartials = presentation + "\n" + simulation + "\n" + persistence;
+            var helperOccurrences = System.Text.RegularExpressions.Regex.Matches(allControllerPartials, @"\bRefreshResultStateDependentControls\s*\(")
+                .Count - 1;
+            if (helperOccurrences != 3)
+                throw new InvalidOperationException("Q2 定向去重的正式调用点数量应为 3，实际为 " + helperOccurrences + "。");
+
+            var discardBody = ExtractMethodBody(simulation, "DiscardOutdatedCalculation");
+            if (discardBody.IndexOf("RefreshResultStateDependentControls", StringComparison.Ordinal) >= 0 ||
+                discardBody.IndexOf("RefreshAnalysisControls();", StringComparison.Ordinal) < 0 ||
+                discardBody.IndexOf("RefreshParameterPanel();", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("过期计算丢弃路径必须保留原有的分析控件和参数区刷新边界。");
+        }
+
+        // Q2.1 以源代码静态清单确认 partial 拆分后注释仍与正式方法相邻，
+        // 并以预处理后的活动源码统计测试入口，避免把 #if false 的历史探针误计入回归执行集合。
+        private static void AssertQualityQ21Evidence()
+        {
+            var workspaceRoot = Path.GetDirectoryName(Application.dataPath);
+            var testDirectory = Path.Combine(workspaceRoot, "Assets", "Tests", "SpiceT3");
+            var partialFiles = Directory.GetFiles(testDirectory, "SpiceT3WorkspaceValidation*.cs", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray();
+            if (partialFiles.Length != 9)
+                throw new InvalidOperationException("Q2.1 测试统计未读取全部 9 个 partial 文件。");
+
+            var activeSources = partialFiles.Select(path => RemoveFalseConditionalRegions(NormalizeSourceNewlines(File.ReadAllText(path)))).ToArray();
+            var activeDeclarations = activeSources
+                .SelectMany(FindValidateDeclarations)
+                .ToArray();
+            var activeNames = activeDeclarations.Select(declaration => declaration.Name).ToArray();
+            if (activeNames.Length != 109 || activeNames.GroupBy(name => name, StringComparer.Ordinal).Any(group => group.Count() != 1))
+                throw new InvalidOperationException("Q2.1 编译生效 Validate 声明数量或重复名称不符合 109/0 契约。");
+
+            var mainPath = partialFiles.Single(path => Path.GetFileName(path) == "SpiceT3WorkspaceValidation.cs");
+            var runPureChecksBody = ExtractMethodBody(RemoveFalseConditionalRegions(NormalizeSourceNewlines(File.ReadAllText(mainPath))), "RunPureChecks");
+            var directCalls = System.Text.RegularExpressions.Regex.Matches(runPureChecksBody, @"(?m)^\s*(Validate\w+)\s*\(")
+                .Cast<System.Text.RegularExpressions.Match>()
+                .Select(match => match.Groups[1].Value)
+                .ToArray();
+            if (directCalls.Length != 109 || directCalls.Distinct(StringComparer.Ordinal).Count() != 109 ||
+                activeNames.Except(directCalls, StringComparer.Ordinal).Any())
+                throw new InvalidOperationException("Q2.1 RunPureChecks 直接调用或活动测试覆盖不符合 109/0 契约。");
+
+            var inactiveDeclarations = partialFiles
+                .SelectMany(path => FindValidateDeclarations(ExtractFalseConditionalRegions(NormalizeSourceNewlines(File.ReadAllText(path)))))
+                .ToArray();
+            var inactiveHelpers = inactiveDeclarations.Count(declaration => declaration.ParameterCount > 0);
+            var inactiveEntryProbes = inactiveDeclarations.Length - inactiveHelpers;
+            if (inactiveEntryProbes != 8 || inactiveHelpers != 2)
+                throw new InvalidOperationException("Q2.1 #if false 历史探针或内部 helper 数量不符合 8/2 契约。");
+
+            var controllerDirectory = Path.Combine(workspaceRoot, "Assets", "Scripts", "Spice", "Workspace");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Interaction.cs", "CreateComponent", "保留给验证 Harness 的固定位置创建入口");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Interaction.cs", "TrySetAnalysisMode", "分析设置必须通过 Model 变更");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Persistence.cs", "HandleSaveButtonClicked", "文件按钮回调");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Persistence.cs", "TryImportDrawingJson", "事务式导入图纸 JSON");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Persistence.cs", "CanImportDrawing", "判定当前是否允许导入图纸");
+            AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Simulation.cs", "CanModifyElectricalModel", "统一电气编辑的 Running 防线");
+        }
+
+        private static string NormalizeSourceNewlines(string source)
+        {
+            return (source ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
+        }
+
+        private static string ExtractMethodBody(string source, string methodName)
+        {
+            var signature = System.Text.RegularExpressions.Regex.Match(source,
+                @"(?:public|private|internal)\s+(?:static\s+)?(?:async\s+)?[\w<>\[\], ?]+\s+" +
+                System.Text.RegularExpressions.Regex.Escape(methodName) + @"\s*\(");
+            if (!signature.Success)
+                throw new InvalidOperationException("未找到方法：" + methodName + "。");
+            var openBraceIndex = source.IndexOf('{', signature.Index + signature.Length);
+            if (openBraceIndex < 0)
+                throw new InvalidOperationException("未找到方法体开始：" + methodName + "。");
+
+            var depth = 0;
+            for (var index = openBraceIndex; index < source.Length; index++)
+            {
+                if (source[index] == '{') depth++;
+                else if (source[index] == '}' && --depth == 0)
+                    return source.Substring(openBraceIndex + 1, index - openBraceIndex - 1);
+            }
+            throw new InvalidOperationException("未找到方法体结束：" + methodName + "。");
+        }
+
+        private static System.Collections.Generic.IEnumerable<ValidateDeclaration> FindValidateDeclarations(string source)
+        {
+            return System.Text.RegularExpressions.Regex.Matches(source,
+                    @"(?:public|private|internal)\s+static\s+(?:async\s+)?[\w<>\[\], ?]+\s+(Validate\w+)\s*\(([^)]*)\)")
+                .Cast<System.Text.RegularExpressions.Match>()
+                .Select(match => new ValidateDeclaration(match.Groups[1].Value, match.Groups[2].Value));
+        }
+
+        private static string RemoveFalseConditionalRegions(string source)
+        {
+            return ProcessConditionalRegions(source, includeInactive: false);
+        }
+
+        private static string ExtractFalseConditionalRegions(string source)
+        {
+            return ProcessConditionalRegions(source, includeInactive: true);
+        }
+
+        private static string ProcessConditionalRegions(string source, bool includeInactive)
+        {
+            var result = new System.Text.StringBuilder();
+            var states = new System.Collections.Generic.Stack<bool>();
+            var active = true;
+            foreach (var line in source.Split('\n'))
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("#if false", StringComparison.Ordinal))
+                {
+                    states.Push(active);
+                    active = false;
+                    continue;
+                }
+                if (trimmed.StartsWith("#if", StringComparison.Ordinal))
+                {
+                    states.Push(active);
+                    continue;
+                }
+                if (trimmed.StartsWith("#else", StringComparison.Ordinal))
+                {
+                    if (states.Count == 0) throw new InvalidOperationException("Q2.1 条件编译指令不成对。");
+                    active = states.Peek() && !active;
+                    continue;
+                }
+                if (trimmed.StartsWith("#endif", StringComparison.Ordinal))
+                {
+                    if (states.Count == 0) throw new InvalidOperationException("Q2.1 条件编译指令不成对。");
+                    active = states.Pop();
+                    continue;
+                }
+                if (active != includeInactive)
+                    result.AppendLine(line);
+            }
+            if (states.Count != 0) throw new InvalidOperationException("Q2.1 条件编译指令未闭合。");
+            return result.ToString();
+        }
+
+        private static void AssertMethodSummary(string directory, string fileName, string methodName, string expectedFirstSentence)
+        {
+            var source = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, fileName)));
+            var signature = System.Text.RegularExpressions.Regex.Match(source,
+                @"(?:public|private|internal)\s+(?:static\s+)?(?:async\s+)?[\w<>\[\], ?]+\s+" +
+                System.Text.RegularExpressions.Regex.Escape(methodName) + @"\s*\(");
+            if (!signature.Success)
+                throw new InvalidOperationException("Q2.1 未找到方法签名：" + fileName + " / " + methodName + "。");
+            var methodIndex = signature.Index;
+            var summaryStart = source.LastIndexOf("/// <summary>", methodIndex, StringComparison.Ordinal);
+            var summaryEnd = source.IndexOf("</summary>", summaryStart, StringComparison.Ordinal);
+            if (summaryStart < 0 || summaryEnd < summaryStart || summaryEnd > methodIndex ||
+                source.Substring(summaryStart, summaryEnd - summaryStart).IndexOf(expectedFirstSentence, StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Q2.1 方法摘要关联错误：" + fileName + " / " + methodName + "。");
+        }
+
+        private readonly struct ValidateDeclaration
+        {
+            public ValidateDeclaration(string name, string parameters)
+            {
+                Name = name;
+                ParameterCount = string.IsNullOrWhiteSpace(parameters) ? 0 : parameters.Split(',').Length;
+            }
+
+            public string Name { get; }
+            public int ParameterCount { get; }
         }
 
         private static string CreateUniqueTempDir(string label)
