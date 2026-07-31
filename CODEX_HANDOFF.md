@@ -1,5 +1,7 @@
 # Codex Handoff: ElectricalSimulation2D SPICE
 
+> 后续项目级电工仿真完善请以 `PROJECT_HANDOFF_ELECTRICAL_POLISH_20260731.md` 为唯一权威入口。本文件仅保留 SPICE 冻结前的历史技术交接与证据索引；不得再在顶部叠加电工阶段临时状态。
+
 ## 当前基线
 
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
