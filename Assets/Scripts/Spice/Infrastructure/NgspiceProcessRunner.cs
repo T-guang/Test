@@ -295,7 +295,7 @@ namespace ElectricalSim.Spice.Infrastructure
             }
             catch
             {
-                // Diagnostics are supplemental and must not hide the original ngspice result.
+                // 诊断信息仅作补充，不能遮蔽 ngspice 的原始结果。
             }
         }
 

@@ -95,7 +95,7 @@ namespace ElectricalSim.Spice.Netlist
 
         private static string GetElementName(SpiceComponentModel component, string graphName)
         {
-            // The manual switch is represented by a deterministic RON/ROFF resistor.
+            // 手动开关以确定性的 RON/ROFF 电阻模型表示。
             return component.Kind == SpiceComponentKind.IdealSwitch ? "R" + graphName : graphName;
         }
 

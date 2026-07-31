@@ -163,7 +163,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // NeverRun / Failed / Clear 状态的复制资格和按钮交互验证。
+        // 未运行、失败、清空状态的复制资格和按钮交互验证。
         // Running / Stale 状态需要 ngspice 求解或 Current 前置，在 batchmode 中无法同步等待
         // （RunCalculationAsync 的 await 会捕获 UnitySynchronizationContext 导致死锁）。
         // Running 路径在 RunCalculationAsync 入口即设 lastOutcomeText = null（L324），
@@ -178,7 +178,7 @@ namespace ElectricalSim.Spice.T3
                 if (copyButton == null)
                     throw new InvalidOperationException("SPICE copy result button was not created.");
 
-                // NeverRun：刚初始化，未运行，不可复制
+                // 未运行：刚初始化，尚未计算，不可复制。
                 if (workspace.TryGetCopyableOutcomeText(out _))
                     throw new InvalidOperationException("SPICE workspace was copyable before any calculation ran.");
                 if (copyButton.interactable)
@@ -204,7 +204,7 @@ namespace ElectricalSim.Spice.T3
                 if (copyButton.interactable)
                     throw new InvalidOperationException("SPICE copy result button stayed interactable after diagnostics became stale.");
 
-                // Clear：清空后不可复制
+                // 清空：清空后不可复制。
                 workspace.ClearWorkspace();
                 if (workspace.TryGetCopyableOutcomeText(out _))
                     throw new InvalidOperationException("SPICE cleared workspace was eligible for copy.");

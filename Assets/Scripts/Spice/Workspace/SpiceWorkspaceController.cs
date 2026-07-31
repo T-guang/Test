@@ -113,7 +113,7 @@ namespace ElectricalSim.Spice.Workspace
         public event Action<SpiceWorkspaceComponentData> ParameterDialogRequested;
 
         // 文件工作流 文件操作事件：Host 订阅后负责打开 Windows 文件对话框、替换确认和用户反馈。
-        // Controller 只在按钮点击且未运行中时触发，不直接调用 正式工作流 文件 API。
+        // Controller 只在按钮点击且未运行中时触发，不直接调用文件工作流 API。
         public event Action SaveRequested;
         public event Action SaveAsRequested;
         public event Action ImportRequested;

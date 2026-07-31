@@ -7,8 +7,8 @@ using ElectricalSim.Spice.Core;
 namespace ElectricalSim.Spice.Results
 {
     /// <summary>
-    /// Presentation-only formatter for a completed single-frequency AC result.
-    /// It deliberately consumes the immutable simulation snapshot rather than workspace state.
+    /// 已完成单频 AC 结果的纯展示格式化器。
+    /// 它刻意只读取不可变仿真快照，而不读取可变的工作区状态。
     /// </summary>
     public static class SpiceAcResultFormatter
     {

@@ -1087,7 +1087,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test A: 成功导入包含十类器件的完整电路，验证所有字段恢复正确。
+        // 场景 A：成功导入包含十类器件的完整电路，验证所有字段恢复正确。
         private static void ValidateDrawingImportSuccessFullCircuit()
         {
             var canvasRoot = new GameObject("SpiceImportSuccessValidation", typeof(RectTransform), typeof(Canvas));
@@ -1196,7 +1196,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test B: 无效导入完全不破坏当前 Workspace。
+        // 场景 B：无效导入完全不破坏当前 Workspace。
         private static void ValidateDrawingImportFailurePreservesWorkspace()
         {
             var canvasRoot = new GameObject("SpiceImportFailureValidation", typeof(RectTransform), typeof(Canvas));
@@ -1262,7 +1262,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test C: 连续成功导入，最终只有第二次导入的内容。
+        // 场景 C：连续成功导入，最终只有第二次导入的内容。
         private static void ValidateDrawingImportConsecutiveSuccess()
         {
             var canvasRoot = new GameObject("SpiceImportConsecutiveValidation", typeof(RectTransform), typeof(Canvas));
@@ -1321,7 +1321,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test D: 空图纸导入，画布清空，编号从 1 开始。
+        // 场景 D：空图纸导入，画布清空，编号从 1 开始。
         private static void ValidateDrawingImportEmptyDrawing()
         {
             var canvasRoot = new GameObject("SpiceImportEmptyValidation", typeof(RectTransform), typeof(Canvas));
@@ -1359,7 +1359,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test E: 仿真计算进行中（Running）禁止导入，保留当前计算和状态。
+        // 场景 E：仿真计算进行中（Running）禁止导入，保留当前计算和状态。
         private static void ValidateDrawingImportRejectedWhileRunning()
         {
             var canvasRoot = new GameObject("SpiceImportRunningGuardValidation", typeof(RectTransform), typeof(Canvas));
@@ -1413,7 +1413,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // Test F: 真实 JSON 缺失 position 必须被 TryFromJson 拒绝。
+        // 场景 F：真实 JSON 缺失 position 必须被 TryFromJson 拒绝。
         // 覆盖：缺失完整 position、缺失 x、缺失 y、显式 (0,0) 成功、DTO null position 继续拒绝。
         private static void ValidateDrawingImportMissingPositionRejected()
         {

@@ -9,7 +9,7 @@ namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
     /// 正式 Wire 的 UGUI 视图。电气事实仍只有两个端点；Auto 路由每次按端点重算，
-    /// Manual 路由保留用户折点，并只在端点变化时补充临时正交连接段。
+    /// 手动路由保留用户折点，并只在端点变化时补充临时正交连接段。
     /// </summary>
     public sealed class SpiceWorkspaceWireView
     {

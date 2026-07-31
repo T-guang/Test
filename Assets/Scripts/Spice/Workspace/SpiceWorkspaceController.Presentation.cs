@@ -92,7 +92,7 @@ namespace ElectricalSim.Spice.Workspace
             OverlayLayer = bindings.OverlayLayer;
             // BlankClick 仍挂在 Viewport 上，负责空白点击和右键撤点
             workspace.gameObject.AddComponent<SpiceWorkspaceBlankClick>().Initialize(this);
-            // ViewController owns view-only zoom and navigation input.
+            // ViewController 负责仅影响视图的缩放和导航输入。
             viewController = workspace.gameObject.AddComponent<SpiceWorkspaceViewController>();
 
             palettePreview = SpiceWorkspaceUi.CreateImage(OverlayLayer, "PaletteDragPreview", new Color(0.15f, 0.39f, 0.92f, 0.22f));
@@ -405,7 +405,7 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Stretch(text.rectTransform, new Vector2(14f, 0f), new Vector2(-14f, 0f));
         }
 
-        // Each assistant section owns an independent standard UGUI scroll hierarchy.
+        // 每个助手分区各自拥有独立的标准 UGUI 滚动层级。
         private static SpiceScrollableTextView CreateScrollableTextView(RectTransform panel, string scrollName, string textName, int fontSize, Color color, float topInset)
         {
             var scroll = new GameObject(scrollName, typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<ScrollRect>();

@@ -24,7 +24,7 @@ namespace ElectricalSim.Spice.Workspace
         /// <summary>当前会话的图纸文件路径。保存或导入成功后更新；清空画布后清除；为空时表示尚未绑定文件。</summary>
         public string CurrentSpiceFilePath => currentSpiceFilePath;
 
-        /// <summary>是否已绑定当前会话文件路径。文件工作流 的“保存”按钮据此决定是否改走“另存为”。</summary>
+        /// <summary>是否已绑定当前会话文件路径。文件工作流的“保存”按钮据此决定是否改走“另存为”。</summary>
         public bool HasCurrentSpiceFilePath => !string.IsNullOrEmpty(currentSpiceFilePath);
 
         /// <summary>
@@ -35,7 +35,7 @@ namespace ElectricalSim.Spice.Workspace
         public static string DefaultDirectory => Path.Combine(Application.persistentDataPath, "SavedSpiceDrawings");
 
         /// <summary>
-        /// 确保 SPICE 默认目录存在。仅在 文件工作流 文件对话框打开前调用；
+        /// 确保 SPICE 默认目录存在。仅在文件工作流的文件对话框打开前调用；
         /// 失败不抛异常，返回 false 由调用方决定是否仍打开对话框（Windows 也会自行处理路径）。
         /// 不写日志：本方法是 UI 前置准备，文件级错误仍由 TrySaveUtf8Atomically/TryReadUtf8File 负责。
         /// </summary>

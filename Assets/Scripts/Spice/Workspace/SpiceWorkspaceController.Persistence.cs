@@ -17,6 +17,10 @@ namespace ElectricalSim.Spice.Workspace
     // 保存、导入及文件会话状态；不改变 Serializer/FileService 的格式与写入语义。
     public sealed partial class SpiceWorkspaceController
     {
+        /// <summary>
+        /// 文件按钮回调：每次点击都二次校验 Running，避免任何路径在仿真中被触发。
+        /// 不直接调用文件 API；仅触发事件，由 Host 协调对话框与确认。
+        /// </summary>
         private void HandleSaveButtonClicked()
         {
             if (ResultState == SpiceWorkspaceResultState.Running)
@@ -103,8 +107,11 @@ namespace ElectricalSim.Spice.Workspace
         internal void InvokeSaveButtonForTesting() => HandleSaveButtonClicked();
         internal void InvokeSaveAsButtonForTesting() => HandleSaveAsButtonClicked();
         internal void InvokeImportButtonForTesting() => HandleImportButtonClicked();
-
-
+        /// <summary>
+        /// 事务式导入图纸 JSON。先在临时模型上完整解析和校验，成功后才替换当前工作区。
+        /// 失败时不修改任何当前状态（画布、元件、Wire、选择、结果、网表、编号）。
+        /// 仿真计算进行中时拒绝导入，以避免旧电路异步结果覆盖刚导入电路的结果和网表。
+        /// </summary>
         public bool TryImportDrawingJson(string json, out string error)
         {
             EnsureInitialized();
@@ -123,10 +130,9 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 分析设置必须通过 Model 变更，以便 D1 revision 保护使在途计算结果失效。
-        /// 工作区 UI 只转发此正式入口，不能直接修改模型字段或重复推进 revision。
+        /// 判定当前是否允许导入图纸。仿真计算进行中时拒绝，保留计算结果完整性。
+        /// 不取消当前 ngspice，不等待 Task，不修改任何状态。
         /// </summary>
-
         internal bool CanImportDrawing(out string reason)
         {
             if (ResultState == SpiceWorkspaceResultState.Running)
@@ -141,7 +147,7 @@ namespace ElectricalSim.Spice.Workspace
         /// <summary>
         /// 仅供 T3 测试受控设置 ResultState，以验证 Running 等状态下的导入保护。
         /// 不在生产路径调用；不触发 ngspice，不修改视图或结果文本。
-        /// 同时刷新 文件工作流 文件操作按钮可用性，便于测试验证 Running 时按钮禁用。
+        /// 同时刷新文件操作按钮可用性，便于测试验证 Running 时按钮禁用。
         /// </summary>
         internal void SetResultStateForTesting(SpiceWorkspaceResultState state)
         {
@@ -170,7 +176,7 @@ namespace ElectricalSim.Spice.Workspace
         /// <summary>当前会话的图纸文件路径。保存或导入成功后更新；清空画布后清除。</summary>
         public string CurrentSpiceFilePath => fileService.CurrentSpiceFilePath;
 
-        /// <summary>是否已绑定当前会话文件路径。文件工作流 的“保存”按钮据此决定是否改走“另存为”。</summary>
+        /// <summary>是否已绑定当前会话文件路径。文件工作流的“保存”按钮据此决定是否改走“另存为”。</summary>
         public bool HasCurrentSpiceFilePath => fileService.HasCurrentSpiceFilePath;
 
         /// <summary>
@@ -208,7 +214,7 @@ namespace ElectricalSim.Spice.Workspace
             fileService.SetCurrentSpiceFilePath(normalizedPath);
             // 保存是现有 Model 的持久化快照，不是电气修改；成功后只清除 dirty，不推进 revision 或使结果过期。
             isDirty = false;
-            // 正式工作流 不写成功 UI 文案；文件工作流 将根据 CurrentSpiceFilePath 显示“已保存：<文件名>”。
+            // Controller 不直接显示保存成功提示；Host 根据 CurrentSpiceFilePath 显示“已保存：<文件名>”。
             return true;
         }
 
@@ -259,7 +265,7 @@ namespace ElectricalSim.Spice.Workspace
             }
             // 导入成功：更新当前路径（导入路径不规范化扩展名，保持用户传入的路径）。
             fileService.SetCurrentSpiceFilePath(path);
-            // 正式工作流 不写成功 UI 文案；文件工作流 将根据 CurrentSpiceFilePath 显示“已导入：<文件名>”。
+            // Controller 不直接显示导入成功提示；Host 根据 CurrentSpiceFilePath 显示“已导入：<文件名>”。
             return true;
         }
 

@@ -8,8 +8,8 @@ using UnityEngine.UI;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// Reusable presentation for editing one SPICE component value. It delegates
-    /// parsing, SI conversion, validation, and model writes to the workspace.
+    /// 编辑单个 SPICE 元件数值的可复用展示层。
+    /// 解析、SI 换算、校验和模型写入均委托给工作区。
     /// </summary>
     public sealed class SpiceComponentParameterDialog : MonoBehaviour
     {

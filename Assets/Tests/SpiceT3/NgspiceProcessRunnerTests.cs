@@ -39,7 +39,7 @@ namespace ElectricalSim.Tests.SpiceT3
                 }
                 catch (OperationCanceledException)
                 {
-                    // Pass
+                    // 通过。
                 }
             }
         }

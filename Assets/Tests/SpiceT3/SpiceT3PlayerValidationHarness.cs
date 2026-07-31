@@ -176,8 +176,8 @@ namespace ElectricalSim.Spice.T3
                 if (workspace.CreateComponent(SpiceComponentKind.Capacitor, Vector2.zero) != null)
                     throw new InvalidOperationException("D1 rejected component creation was accepted while Running.");
 
-                // The production guards reject UI mutations. This controlled model mutation proves
-                // the second layer still discards an outdated request if a future path bypasses them.
+                // 生产防线会拒绝 UI 修改。此处受控的 Model 修改用于证明：
+                // 即使未来路径绕过第一层，第二层仍会丢弃过期请求。
                 if (!workspace.Model.TrySetParameter(resistor.InstanceId, 4000d))
                     throw new InvalidOperationException("D1 controlled model mutation failed.");
 

@@ -182,8 +182,8 @@ namespace ElectricalSim.Spice.Topology
             int groundedRoot,
             SpiceCircuitGraph graph)
         {
-            // Union-Find represents wire-only electrical nodes. Components are node-graph edges,
-            // so traversal from the ground root can reject a complete but ungrounded subcircuit.
+            // Union-Find 只表示由 Wire 形成的电气节点；元件则是节点图的边。
+            // 因此从接地根遍历时，可以拒绝拓扑完整但未接地的独立子电路。
             var neighbors = roots.ToDictionary(group => group.Root, group => new HashSet<int>());
             var componentIdsByRoot = roots.ToDictionary(group => group.Root, group => new HashSet<string>(StringComparer.Ordinal));
             foreach (var component in components.Values.Where(component => component.Kind != SpiceComponentKind.Ground && component.Kind != SpiceComponentKind.VoltageProbe))

@@ -31,7 +31,7 @@ namespace ElectricalSim.Spice.Netlist
     }
 
     /// <summary>
-    /// Builds a deterministic, one-point ngspice AC netlist. DC netlist generation remains isolated.
+    /// 构建确定性的单点 ngspice AC 网表；DC 网表生成继续保持独立。
     /// </summary>
     public static class SpiceAcNetlistBuilder
     {

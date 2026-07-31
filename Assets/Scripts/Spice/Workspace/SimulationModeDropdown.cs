@@ -159,7 +159,7 @@ namespace ElectricalSim.Spice.Workspace
             menuRect.anchorMax = new Vector2(.5f, .5f);
             menuRect.pivot = new Vector2(0f, 1f);
 
-            // The popup owns its own Canvas, so this conversion remains correct for every CanvasScaler size.
+            // 弹出层拥有自己的 Canvas，因此该转换对任意 CanvasScaler 尺寸都保持正确。
             var desiredPosition = localPoint + new Vector2(0f, -5f);
             var popupRect = popupLayer.rect;
             var menuSize = menuRect.sizeDelta;

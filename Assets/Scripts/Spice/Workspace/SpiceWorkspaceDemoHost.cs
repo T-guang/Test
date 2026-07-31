@@ -26,7 +26,7 @@ namespace ElectricalSim.Spice.Workspace
         private bool initialized;
         private SimulationModeController modeController;
         private SpiceComponentParameterDialog parameterDialog;
-        // 文件工作流 文件工作流：替换确认弹窗 + 待导入候选路径
+        // 文件工作流：替换确认弹窗与待导入候选路径。
         private SpiceDrawingReplaceConfirmationDialog replaceConfirmationDialog;
         private string pendingImportPath;
 
@@ -72,7 +72,7 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 文件工作流 文件工作流初始化：创建替换确认弹窗并订阅 Controller 的文件操作事件。
+        /// 文件工作流初始化：创建替换确认弹窗并订阅 Controller 的文件操作事件。
         /// 生产路径由 Start() 调用；T3 测试通过 InitializeFileWorkflowForTesting 直接调用，
         /// 无需 SimulationModeController，便于验证 Host 协调逻辑。
         /// </summary>
@@ -91,7 +91,7 @@ namespace ElectricalSim.Spice.Workspace
             workspaceController.ImportRequested += HandleImportRequested;
         }
 
-        /// <summary>仅供 T3 测试在不依赖 SimulationModeController 的情况下初始化 文件工作流 文件工作流。</summary>
+        /// <summary>仅供 T3 测试在不依赖 SimulationModeController 的情况下初始化文件工作流。</summary>
         internal void InitializeFileWorkflowForTesting(RectTransform popupLayer)
         {
             InitializeFileWorkflow(popupLayer);
@@ -139,9 +139,9 @@ namespace ElectricalSim.Spice.Workspace
             }
         }
 
-        // ============ 文件工作流 文件工作流：保存 / 另存为 / 导入 ============
+        // ============ 文件工作流：保存 / 另存为 / 导入 ============
         // Host 负责 Windows 文件对话框、替换确认和用户反馈。
-        // 所有文件读写均复用 正式工作流 的 TrySaveWorkspaceToPath / TrySaveCurrentWorkspace / TryImportWorkspaceFromPath，
+        // 所有文件读写均复用 Controller 的 TrySaveWorkspaceToPath / TrySaveCurrentWorkspace / TryImportWorkspaceFromPath，
         // 不重写或绕过 正式工作流/事务式导入 的原子写入、UTF-8 严格读取、事务导入与路径会话状态。
 
         private void HandleSaveRequested()

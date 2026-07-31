@@ -9,7 +9,7 @@ namespace ElectricalSim.Spice.Core
     }
 
     /// <summary>
-    /// Single source of truth for the pure-model limits used by single-frequency AC analysis.
+    /// 单频 AC 分析所用纯模型限制的唯一权威来源。
     /// </summary>
     public static class SpiceAnalysisLimits
     {
@@ -45,9 +45,8 @@ namespace ElectricalSim.Spice.Core
     }
 
     /// <summary>
-    /// Immutable analysis configuration copied by value into each circuit snapshot.
-    /// Workspace mutation APIs enforce the valid AC frequency range; the graph builder
-    /// additionally validates this object defensively for externally constructed circuits.
+    /// 会按值复制到每个电路快照的不可变分析配置。
+    /// 工作区修改 API 负责约束有效 AC 频率范围；GraphBuilder 还会为外部构造的电路防御性校验该对象。
     /// </summary>
     public sealed class SpiceAnalysisSettings
     {

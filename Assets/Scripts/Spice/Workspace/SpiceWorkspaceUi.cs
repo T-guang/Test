@@ -57,8 +57,8 @@ namespace ElectricalSim.Spice.Workspace
             if (text.text == value) return false;
 
             text.text = value;
-            // Result content is authoritative; a temporarily unavailable scroll view must not hide diagnostics.
-            // Hidden diagnostic sinks carry data only and must not force UGUI layout work during lifecycle changes.
+            // 结果内容才是权威数据；暂时不可用的滚动视图不能隐藏诊断信息。
+            // 隐藏的诊断接收端只承载数据，不能在生命周期切换期间强制触发 UGUI 布局。
             if (scrollRect == null || scrollRect.content == null || !scrollRect.isActiveAndEnabled || !scrollRect.content.gameObject.activeInHierarchy) return true;
             LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
             if (!resetToTop) return true;

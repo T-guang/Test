@@ -594,9 +594,9 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // 成功路径级操作不得写入 statusText：保存成功、导入成功后验证 正式文件工作流 没有写“已保存到：绝对路径”或“已从以下路径导入：绝对路径”。
-        // 注意：事务式导入 的 CommitImportedModel 在导入提交阶段会合法地把 statusText 重置为“未计算”（清空旧结果），
-        // 这不属于 正式文件工作流 的成功 UI 文案。本测试只验证 正式文件工作流 没有写入“已保存到”/“已从以下路径导入”/完整路径三类成功提示。
+        // Controller 的成功路径不得直接写入 statusText：保存成功、导入成功后，Host 才负责显示文件名提示。
+        // 注意：事务式导入的 CommitImportedModel 在导入提交阶段会合法地把 statusText 重置为“未计算”（清空旧结果），
+        // 这不属于成功文件提示。本测试只验证 Controller 没有写入“已保存到”/“已从以下路径导入”/完整路径三类成功提示。
         private static void ValidateDrawingFileSuccessDoesNotWriteStatusText()
         {
             var tempDir = CreateUniqueTempDir("NoStatusText");
@@ -650,7 +650,7 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
-        // 校验 statusText 不包含 正式文件工作流 的成功 UI 文案：“已保存到”、“已从以下路径导入”、或完整绝对路径本身。
+        // 校验 statusText 不包含 Controller 写入的成功文件文案：“已保存到”、“已从以下路径导入”、或完整绝对路径本身。
         private static void AssertNoSuccessUiText(string statusText, string fullPath, string operation)
         {
             if (statusText == null) return;
@@ -1475,8 +1475,8 @@ namespace ElectricalSim.Spice.T3
         // 无扩展名 → 追加 .spicejson；已有小写/大写 .spicejson → 不重复；已有重复 → 去重为一个。
         private static void ValidateSpiceJsonExtensionNormalization()
         {
-            // 正式文件工作流 的 NormalizeExtension：无扩展名追加，已有 .spicejson（任意大小写）不追加。
-            // 的 StripTrailingDuplicateSpiceJson：去除末尾重复的 .spicejson.spicejson。
+            // SpiceDrawingFileService.NormalizeExtension：无扩展名追加，已有 .spicejson（任意大小写）不追加。
+            // WindowsFileDialog.StripTrailingDuplicateSpiceJson：去除末尾重复的 .spicejson.spicejson。
             // 组合后：无扩展名 → .spicejson；已有小写 → .spicejson；已大写 → .SPICEJSON（保持）；
             // 已有重复 → 去重为一个 .spicejson。
 

@@ -17,6 +17,7 @@ namespace ElectricalSim.Spice.Workspace
     // 元件、选择、拖放、接线与画布交互；不承担求解、持久化或 UI 构建。
     public sealed partial class SpiceWorkspaceController
     {
+        /// <summary>保留给验证 Harness 的固定位置创建入口；元件池交互改由拖放入口使用。</summary>
         public SpiceWorkspaceComponentData CreateComponent(SpiceComponentKind kind)
         {
             EnsureInitialized();
@@ -400,11 +401,9 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 事务式导入图纸 JSON。先在临时模型上完整解析和校验，成功后才替换当前工作区。
-        /// 失败时不修改任何当前状态（画布、元件、Wire、选择、结果、网表、编号）。
-        /// 仿真计算进行中时拒绝导入，以避免旧电路异步结果覆盖刚导入电路的结果和网表。
+        /// 分析设置必须通过 Model 变更，以便 D1 revision 保护使在途计算结果失效。
+        /// 工作区 UI 只转发此正式入口，不能直接修改模型字段或重复推进 revision。
         /// </summary>
-
         public bool TrySetAnalysisMode(SpiceAnalysisMode mode)
         {
             EnsureInitialized();

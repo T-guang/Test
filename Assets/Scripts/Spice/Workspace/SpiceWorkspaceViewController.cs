@@ -47,7 +47,7 @@ namespace ElectricalSim.Spice.Workspace
 
         private void Update()
         {
-            // Navigation is view-only; the matching click is suppressed after a pan ends.
+            // 导航仅改变视图；平移结束后会抑制与其对应的点击事件。
             if (!isPanning)
             {
                 if (!IsPointerOverViewportContent()) return;

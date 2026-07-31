@@ -168,8 +168,8 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// Clears only the per-kind naming counters after a successful workspace clear.
-        /// Existing component instance IDs are never renumbered or reused by single deletion.
+        /// 仅在工作区成功清空后重置按器件种类维护的编号计数器。
+        /// 已存在元件的 InstanceId 不会因单个删除而重新编号或复用。
         /// </summary>
         public void ResetInstanceNaming()
         {
@@ -307,7 +307,7 @@ namespace ElectricalSim.Spice.Workspace
         public double SiValue { get; private set; }
         public double AcPhaseDegrees { get; private set; }
 
-        // Parameter writes are model-owned so every electrical change can raise Changed exactly once.
+        // 参数写入由 Model 负责，确保每次电气变更只触发一次 Changed。
         internal void ApplySiValueFromModel(double value)
         {
             SiValue = value;

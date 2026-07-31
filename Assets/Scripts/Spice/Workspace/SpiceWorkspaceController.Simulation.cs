@@ -146,10 +146,9 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 判定当前是否允许导入图纸。仿真计算进行中时拒绝，保留计算结果完整性。
-        /// 不取消当前 ngspice，不等待 Task，不修改任何状态。
+        /// 统一电气编辑的 Running 防线。新增、删除、接线和参数写入均先经过此处，
+        /// 防止在途求解读取到中途变化的模型；文件会话操作使用独立的 CanImportDrawing 防线。
         /// </summary>
-
         private bool CanModifyElectricalModel()
         {
             if (ResultState != SpiceWorkspaceResultState.Running) return true;
@@ -187,7 +186,8 @@ namespace ElectricalSim.Spice.Workspace
             if (statusText != null) statusText.text = StateMessage();
             RefreshNetlistUi();
             RefreshCopyResultButton();
-            RefreshResultStateDependentControls();
+            RefreshAnalysisControls();
+            RefreshParameterPanel();
         }
 
         private Task<SpiceSimulationResult> SimulateCircuitAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken)

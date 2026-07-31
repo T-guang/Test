@@ -145,7 +145,7 @@ namespace ElectricalSim.EditorTools.SpiceT1
                     }
                     catch
                     {
-                        // The timeout failure remains the primary diagnostic.
+                        // 超时失败仍然是首要诊断信息。
                     }
 
                     throw new TimeoutException("Spice T1 player validation did not exit within 60 seconds.");
