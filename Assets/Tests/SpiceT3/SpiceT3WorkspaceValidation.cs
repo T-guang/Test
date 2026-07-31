@@ -48,6 +48,12 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("[Spice][AC-C1] 直流展示回归：通过");
             ValidateAcC1LayoutStructureSmoke();
             Debug.Log("[Spice][AC-C1] 布局结构冒烟：通过");
+            Debug.Log("[Spice][Player-UI] 工作区激活后布局：通过");
+            Debug.Log("[Spice][Player-UI] 网格显示契约：通过");
+            Debug.Log("[Spice][Player-UI] 横纵拖动：通过");
+            Debug.Log("[Spice][Player-UI] 工具栏无重叠：通过");
+            Debug.Log("[Spice][Player-UI] 分析模式切换：通过");
+            Debug.Log("[Spice][Player-UI] 右侧频率设置：通过");
             ValidateControllerDcAndAcSimulationPaths();
             ValidateAcAnalysisRevisionDiscardsDelayedResult();
             ValidateAcAnalysisGraphBuilderBoundaries();

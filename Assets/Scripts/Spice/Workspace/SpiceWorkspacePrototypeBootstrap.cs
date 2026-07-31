@@ -60,6 +60,12 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(palette, Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(286f, -64f));
             var viewport = CreatePanel(host, "SpiceWorkspaceViewport", new Color(0.96f, 0.98f, 1f));
             SpiceWorkspaceUi.Anchor(viewport, Vector2.zero, Vector2.one, new Vector2(302f, 16f), new Vector2(-384f, -80f));
+            // 验证场景也使用与正式工作区相同的非交互网格层，确保 Player 几何检查覆盖
+            // Grid/Content 的实际父子关系和重建通知，而不是只验证空的 RectTransform。
+            var grid = new GameObject("SpiceWorkspaceGrid", typeof(RectTransform), typeof(CanvasRenderer)).GetComponent<RectTransform>();
+            grid.SetParent(viewport, false);
+            SpiceWorkspaceUi.Stretch(grid, Vector2.zero, Vector2.zero);
+            grid.gameObject.AddComponent<WorkspaceGrid>().raycastTarget = false;
             var wires = CreateLayer(viewport, "SpiceWireLayer"); wires.SetAsFirstSibling();
             var components = CreateLayer(viewport, "SpiceComponentLayer");
             var overlay = CreateLayer(viewport, "SpiceOverlayLayer");

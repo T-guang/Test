@@ -6,6 +6,7 @@ using ElectricalSim.Spice.Core;
 using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace ElectricalSim.Spice.T3
 {
@@ -20,6 +21,14 @@ namespace ElectricalSim.Spice.T3
         public bool d3ClearStatePassed;
         public bool d3NetlistRevisionPassed;
         public bool unexpectedErrorSanitizationPassed;
+        public bool workspaceGeometryPassed;
+        public bool gridGeometryPassed;
+        public bool horizontalDraggingPassed;
+        public bool verticalDraggingPassed;
+        public bool zoomDraggingPassed;
+        public bool toolbarLayoutPassed;
+        public bool analysisModeTogglePassed;
+        public bool acFrequencySettingsPassed;
         public string failure;
     }
 
@@ -42,10 +51,13 @@ namespace ElectricalSim.Spice.T3
                 if (workspace == null)
                     throw new InvalidOperationException("Spice workspace was not initialized by Bootstrap.Awake.");
                 workspace.ValidateAssistantPanelLayout();
+                ValidateWorkspaceGeometry(workspace, report);
+                ValidateWorkspaceUiControls(workspace, report);
                 var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
                 var ground = workspace.CreateComponent(SpiceComponentKind.Ground, new Vector2(0f, -140f));
                 SpiceT3WorkspaceValidation.ConnectSingleResistor(workspace, source.InstanceId, resistor.InstanceId, ground.InstanceId);
+                ValidateComponentDragging(workspace, resistor, report);
                 var first = await workspace.RunCalculationAsync();
                 if (first == null || !first.Success || Math.Abs(first.ComponentResults[resistor.InstanceId].Current - 0.01d) > 1e-8d) throw new InvalidOperationException("Single-resistor Player flow failed.");
                 report.firstCurrent = first.ComponentResults[resistor.InstanceId].Current;
@@ -88,7 +100,9 @@ namespace ElectricalSim.Spice.T3
                 if (invalid == null || invalid.Success || workspace.ResultState != SpiceWorkspaceResultState.Failed) throw new InvalidOperationException("Invalid Player topology was incorrectly marked current.");
 
                 report.unexpectedErrorSanitizationPassed = await ValidateUnexpectedErrorSanitization(workspace);
-                if (!report.d1StaleDiscardPassed || !report.d2ImportLimitsPassed ||
+                if (!report.workspaceGeometryPassed || !report.gridGeometryPassed || !report.horizontalDraggingPassed ||
+                    !report.verticalDraggingPassed || !report.zoomDraggingPassed || !report.toolbarLayoutPassed ||
+                    !report.analysisModeTogglePassed || !report.acFrequencySettingsPassed || !report.d1StaleDiscardPassed || !report.d2ImportLimitsPassed ||
                     !report.d3ClearStatePassed || !report.d3NetlistRevisionPassed ||
                     !report.unexpectedErrorSanitizationPassed)
                     throw new InvalidOperationException("One or more stabilization Player checks did not pass.");
@@ -104,6 +118,132 @@ namespace ElectricalSim.Spice.T3
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("[Spice][T3] Player 验证报告：" + path);
             Application.Quit(report.success ? 0 : 1);
+        }
+
+        private static void ValidateWorkspaceUiControls(SpiceWorkspaceController workspace, SpiceT3PlayerValidationReport report)
+        {
+            var modeButton = workspace.GetAnalysisModeToggleButtonForTesting();
+            var toolbar = modeButton != null ? modeButton.transform.parent as RectTransform : null;
+            if (modeButton == null || toolbar == null || toolbar.Find("AnalysisControls") != null)
+                throw new InvalidOperationException("Player 工作区未使用单一工具栏分析模式切换按钮。");
+            var buttons = toolbar.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+            for (var index = 0; index < buttons.Length; index++)
+            {
+                if (!buttons[index].gameObject.activeInHierarchy || !Contains(toolbar, buttons[index].GetComponent<RectTransform>()))
+                    throw new InvalidOperationException("Player 工具栏按钮超出工具栏边界。");
+                for (var next = index + 1; next < buttons.Length; next++)
+                    if (buttons[next].gameObject.activeInHierarchy && Overlaps(buttons[index].GetComponent<RectTransform>(), buttons[next].GetComponent<RectTransform>()))
+                        throw new InvalidOperationException("Player 工具栏按钮发生重叠。");
+            }
+            report.toolbarLayoutPassed = true;
+            Debug.Log("[Spice][Player-UI] 工具栏无重叠：通过");
+
+            var revision = workspace.ElectricalRevisionForTesting;
+            modeButton.onClick.Invoke();
+            if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.ElectricalRevisionForTesting != revision + 1 ||
+                modeButton.GetComponentInChildren<UnityEngine.UI.Text>().text != "分析：单频 AC")
+                throw new InvalidOperationException("Player 分析模式切换没有走正式 Controller 路径。");
+            report.analysisModeTogglePassed = true;
+            Debug.Log("[Spice][Player-UI] 分析模式切换：通过");
+
+            var frequencyRoot = workspace.GetAcAnalysisSettingsRootForTesting();
+            if (frequencyRoot == null || !frequencyRoot.gameObject.activeSelf || !workspace.GetAcFrequencyInputForTesting().interactable ||
+                !workspace.GetApplyAcFrequencyButtonForTesting().interactable)
+                throw new InvalidOperationException("Player AC 右侧频率设置不可用。");
+            report.acFrequencySettingsPassed = true;
+            Debug.Log("[Spice][Player-UI] 右侧频率设置：通过");
+            modeButton.onClick.Invoke();
+            if (workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || frequencyRoot.gameObject.activeSelf)
+                throw new InvalidOperationException("Player 切回 DC 后未隐藏右侧频率设置。");
+        }
+
+        /// <summary>
+        /// Player 中记录一次实际屏幕、Canvas 和工作区尺寸，并用 Controller 的同一几何契约验证
+        /// Content 为 Viewport 三倍且所有图层共享 Content 尺寸。正式 Release 不会持续输出这些验证日志。
+        /// </summary>
+        private static void ValidateWorkspaceGeometry(SpiceWorkspaceController workspace, SpiceT3PlayerValidationReport report)
+        {
+            if (!workspace.ValidateWorkspaceGeometryForTesting(out var error))
+                throw new InvalidOperationException("Player 工作区几何验证失败：" + error + " " + workspace.GetWorkspaceGeometryDiagnosticsForTesting());
+            report.workspaceGeometryPassed = true;
+            report.gridGeometryPassed = true;
+            Debug.Log("[Spice][Player-UI] 工作区几何初始化：通过 " + workspace.GetWorkspaceGeometryDiagnosticsForTesting());
+            Debug.Log("[Spice][Player-UI] 网格几何：通过");
+            Debug.Log("[Spice][Player-UI] 工作区激活后布局：通过");
+            Debug.Log("[Spice][Player-UI] 网格显示契约：通过");
+        }
+
+        /// <summary>
+        /// 通过正式 ComponentView 指针回调覆盖 Screen→Workspace local→Clamp→Controller→Model→Wire 刷新链。
+        /// 不直接写 Model.Position，确保纵向位移不会被错误 Content 边界压成零或固定值。
+        /// </summary>
+        private static void ValidateComponentDragging(SpiceWorkspaceController workspace, SpiceWorkspaceComponentData component, SpiceT3PlayerValidationReport report)
+        {
+            var view = workspace.GetComponentViewForTesting(component.InstanceId);
+            if (view == null || EventSystem.current == null)
+                throw new InvalidOperationException("Player 拖动验证缺少元件视图或 EventSystem。");
+
+            var initial = component.Position;
+            DragView(view, new Vector2(200f, 0f));
+            var afterHorizontal = component.Position;
+            if (afterHorizontal.x - initial.x < 100f || Mathf.Abs(afterHorizontal.y - initial.y) > 1f)
+                throw new InvalidOperationException("Player 横向拖动未沿正式路径更新模型位置。");
+            report.horizontalDraggingPassed = true;
+            Debug.Log("[Spice][Player-UI] 元件横向拖动：通过");
+
+            DragView(view, new Vector2(0f, 200f));
+            var afterVertical = component.Position;
+            if (afterVertical.y - afterHorizontal.y < 100f || Mathf.Abs(afterVertical.y) >= workspace.WorkspaceRect.rect.height * 0.5f)
+                throw new InvalidOperationException("Player 纵向拖动被无效工作区边界压缩。");
+            report.verticalDraggingPassed = true;
+            Debug.Log("[Spice][Player-UI] 元件纵向拖动：通过");
+
+            workspace.ViewController.ZoomIn();
+            DragView(view, new Vector2(-160f, -160f));
+            var afterZoom = component.Position;
+            if (Mathf.Abs(afterZoom.x - afterVertical.x) < 50f || Mathf.Abs(afterZoom.y - afterVertical.y) < 50f)
+                throw new InvalidOperationException("Player 缩放后拖动未更新两个坐标轴。");
+            report.zoomDraggingPassed = true;
+            Debug.Log("[Spice][Player-UI] 缩放后拖动：通过");
+            Debug.Log("[Spice][Player-UI] 横纵拖动：通过");
+        }
+
+        private static void DragView(SpiceWorkspaceComponentView view, Vector2 screenDelta)
+        {
+            var start = RectTransformUtility.WorldToScreenPoint(null, view.transform.position);
+            var eventData = new PointerEventData(EventSystem.current)
+            {
+                button = PointerEventData.InputButton.Left,
+                position = start,
+                pressPosition = start
+            };
+            view.OnBeginDrag(eventData);
+            eventData.position = start + screenDelta;
+            view.OnDrag(eventData);
+            view.OnEndDrag(eventData);
+        }
+
+        private static bool Contains(RectTransform outer, RectTransform inner)
+        {
+            GetBounds(outer, out var outerMin, out var outerMax);
+            GetBounds(inner, out var innerMin, out var innerMax);
+            return innerMin.x >= outerMin.x - 0.1f && innerMax.x <= outerMax.x + 0.1f &&
+                innerMin.y >= outerMin.y - 0.1f && innerMax.y <= outerMax.y + 0.1f;
+        }
+
+        private static bool Overlaps(RectTransform left, RectTransform right)
+        {
+            GetBounds(left, out var leftMin, out var leftMax);
+            GetBounds(right, out var rightMin, out var rightMax);
+            return leftMin.x < rightMax.x && leftMax.x > rightMin.x && leftMin.y < rightMax.y && leftMax.y > rightMin.y;
+        }
+
+        private static void GetBounds(RectTransform rect, out Vector2 min, out Vector2 max)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            min = corners[0];
+            max = corners[2];
         }
 
         private static bool ValidateD2PathImportLimit(SpiceWorkspaceController workspace)
