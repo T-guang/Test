@@ -22,6 +22,12 @@ namespace ElectricalSim.Spice.Workspace
         private Text parameterLabel;
         private InputField input;
         private Outline inputOutline;
+        private Text phaseLabel;
+        private InputField phaseInput;
+        private Outline phaseInputOutline;
+        private Text frequencyLabel;
+        private InputField frequencyInput;
+        private Outline frequencyInputOutline;
         private Button unitButton;
         private Text unitLabel;
         private Text errorLabel;
@@ -34,6 +40,10 @@ namespace ElectricalSim.Spice.Workspace
         private bool initialized;
         private bool applying;
         private bool switchState;
+        private bool editingAcVoltageSource;
+
+        private static readonly Vector2 StandardPanelSize = new Vector2(404f, 224f);
+        private static readonly Vector2 AcSourcePanelSize = new Vector2(440f, 340f);
 
         public bool IsOpen => panel != null && panel.gameObject.activeSelf;
 
@@ -55,8 +65,9 @@ namespace ElectricalSim.Spice.Workspace
             }
 
             currentComponent = component;
+            editingAcVoltageSource = component.Kind == SpiceComponentKind.AcVoltageSource;
             switchState = component.Kind == SpiceComponentKind.IdealSwitch && component.SiValue > 0.5d;
-            units = SpiceParameterUnits.UnitsFor(component.Kind);
+            units = editingAcVoltageSource ? new[] { "V" } : SpiceParameterUnits.UnitsFor(component.Kind);
             if (component.Kind == SpiceComponentKind.IdealSwitch) units = new[] { "状态" };
             if (units.Length == 0) return;
 
@@ -64,6 +75,7 @@ namespace ElectricalSim.Spice.Workspace
             title.text = DialogTitle(component.Kind);
             componentLabel.text = "元件：" + component.InstanceId;
             parameterLabel.text = ParameterName(component.Kind);
+            ConfigureAcSourceFields(component);
             unitLabel.text = component.Kind == SpiceComponentKind.IdealSwitch ? (switchState ? "闭合" : "断开") : units[unitIndex];
             input.gameObject.SetActive(component.Kind != SpiceComponentKind.IdealSwitch);
             input.text = component.Kind == SpiceComponentKind.IdealSwitch ? string.Empty : SpiceParameterUnits.FromSi(component.Kind, component.SiValue, units[unitIndex]).ToString("G6", CultureInfo.InvariantCulture);
@@ -84,6 +96,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             currentComponent = null;
             applying = false;
+            editingAcVoltageSource = false;
             if (panel != null) panel.gameObject.SetActive(false);
             if (blocker != null) blocker.gameObject.SetActive(false);
         }
@@ -125,7 +138,7 @@ namespace ElectricalSim.Spice.Workspace
             panel.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             panel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             panel.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            panel.rectTransform.sizeDelta = new Vector2(404f, 224f);
+            panel.rectTransform.sizeDelta = StandardPanelSize;
             panel.rectTransform.anchoredPosition = Vector2.zero;
             var outline = gameObject.AddComponent<Outline>();
             outline.effectColor = MainUiTheme.Divider;
@@ -158,6 +171,24 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-98f, -152f), new Vector2(-20f, -120f));
             unitLabel = unitButton.GetComponentInChildren<Text>();
 
+            phaseLabel = SpiceWorkspaceUi.CreateText(transform, "PhaseLabel", "相位", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(phaseLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -182f), new Vector2(-20f, -158f));
+            phaseInput = SpiceWorkspaceUi.CreateInput(transform, "PhaseInput");
+            SpiceWorkspaceUi.Anchor(phaseInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -222f), new Vector2(-106f, -190f));
+            phaseInput.lineType = InputField.LineType.SingleLine;
+            phaseInputOutline = phaseInput.GetComponent<Outline>();
+            var phaseUnit = SpiceWorkspaceUi.CreateText(transform, "PhaseUnit", "°", 13, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(phaseUnit.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-98f, -222f), new Vector2(-20f, -190f));
+
+            frequencyLabel = SpiceWorkspaceUi.CreateText(transform, "FrequencyLabel", "分析频率", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(frequencyLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -252f), new Vector2(-20f, -228f));
+            frequencyInput = SpiceWorkspaceUi.CreateInput(transform, "FrequencyInput");
+            SpiceWorkspaceUi.Anchor(frequencyInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -292f), new Vector2(-106f, -260f));
+            frequencyInput.lineType = InputField.LineType.SingleLine;
+            frequencyInputOutline = frequencyInput.GetComponent<Outline>();
+            var frequencyUnit = SpiceWorkspaceUi.CreateText(transform, "FrequencyUnit", "Hz", 13, FontStyle.Bold, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(frequencyUnit.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-98f, -292f), new Vector2(-20f, -260f));
+
             errorLabel = SpiceWorkspaceUi.CreateText(transform, "Error", string.Empty, 12, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.DangerRed);
             SpiceWorkspaceUi.Anchor(errorLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -178f), new Vector2(-20f, -154f));
 
@@ -169,9 +200,39 @@ namespace ElectricalSim.Spice.Workspace
             ConfigureButtonColors(applyButton, true);
         }
 
+        /// <summary>
+        /// 交流源的幅值、相位和单频分析频率属于同一次用户编辑。
+        /// 先在弹窗内完整校验三项文本，避免任何一项非法时只提交其中一部分电气状态。
+        /// </summary>
+        private void ConfigureAcSourceFields(SpiceWorkspaceComponentData component)
+        {
+            var visible = editingAcVoltageSource;
+            panel.rectTransform.sizeDelta = visible ? AcSourcePanelSize : StandardPanelSize;
+            phaseLabel.gameObject.SetActive(visible);
+            phaseInput.gameObject.SetActive(visible);
+            frequencyLabel.gameObject.SetActive(visible);
+            frequencyInput.gameObject.SetActive(visible);
+            transform.Find("PhaseUnit").gameObject.SetActive(visible);
+            transform.Find("FrequencyUnit").gameObject.SetActive(visible);
+            unitButton.interactable = !visible;
+
+            if (!visible)
+            {
+                SpiceWorkspaceUi.Anchor(errorLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(20f, -178f), new Vector2(-20f, -154f));
+                return;
+            }
+
+            parameterLabel.text = "AC 小信号幅值";
+            input.text = component.SiValue.ToString("G6", CultureInfo.InvariantCulture);
+            phaseInput.text = component.AcPhaseDegrees.ToString("G6", CultureInfo.InvariantCulture);
+            frequencyInput.text = workspace.Model.AcFrequencyHz.ToString("G9", CultureInfo.InvariantCulture);
+            SpiceWorkspaceUi.Anchor(errorLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(20f, 16f), new Vector2(-210f, 48f));
+        }
+
         private void CycleUnit()
         {
             if (currentComponent == null || units.Length == 0) return;
+            if (editingAcVoltageSource) return;
             if (currentComponent.Kind == SpiceComponentKind.IdealSwitch)
             {
                 switchState = !switchState;
@@ -199,6 +260,27 @@ namespace ElectricalSim.Spice.Workspace
                 CloseWithoutApply();
                 return;
             }
+            if (editingAcVoltageSource)
+            {
+                if (!TryParseAcSourceFields(out var magnitude, out var phaseDegrees, out var frequencyHz, out var acError))
+                {
+                    applying = false;
+                    SetError(acError);
+                    return;
+                }
+
+                // Controller 仍是唯一的 Model 写入入口；三项均已验证后才按正式 API 提交。
+                if (!workspace.TrySetAcVoltageSourceParameters(currentComponent.InstanceId, magnitude, phaseDegrees) ||
+                    !workspace.TrySetAcFrequency(frequencyHz))
+                {
+                    applying = false;
+                    SetError("交流源参数或分析频率未能更新。");
+                    return;
+                }
+
+                CloseWithoutApply();
+                return;
+            }
             if (!workspace.TryApplyParameterText(currentComponent.InstanceId, input.text, units[unitIndex], out var error))
             {
                 applying = false;
@@ -214,7 +296,46 @@ namespace ElectricalSim.Spice.Workspace
             var hasError = !string.IsNullOrWhiteSpace(value);
             errorLabel.text = value ?? string.Empty;
             inputOutline.effectColor = hasError ? MainUiTheme.DangerRed : MainUiTheme.Divider;
+            if (phaseInputOutline != null) phaseInputOutline.effectColor = hasError ? MainUiTheme.DangerRed : MainUiTheme.Divider;
+            if (frequencyInputOutline != null) frequencyInputOutline.effectColor = hasError ? MainUiTheme.DangerRed : MainUiTheme.Divider;
         }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
+        private bool TryParseAcSourceFields(out double magnitude, out double phaseDegrees, out double frequencyHz, out string error)
+        {
+            magnitude = 0d;
+            phaseDegrees = 0d;
+            frequencyHz = 0d;
+            error = null;
+            if (!double.TryParse(input.text, NumberStyles.Float, CultureInfo.InvariantCulture, out magnitude) || !IsFinite(magnitude) || magnitude <= 0d)
+            {
+                error = "交流源幅值必须是有限的正数。";
+                return false;
+            }
+            if (!double.TryParse(phaseInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out phaseDegrees) || !IsFinite(phaseDegrees))
+            {
+                error = "相位必须是有限数值。";
+                return false;
+            }
+            if (!double.TryParse(frequencyInput.text, NumberStyles.Float, CultureInfo.InvariantCulture, out frequencyHz) || !SpiceAnalysisLimits.IsValidFrequency(frequencyHz))
+            {
+                error = "频率必须是 0.001 Hz～10000000 Hz 范围内的有限数值。";
+                return false;
+            }
+            return true;
+        }
+
+        internal InputField GetMagnitudeInputForTesting() => input;
+        internal InputField GetPhaseInputForTesting() => phaseInput;
+        internal InputField GetFrequencyInputForTesting() => frequencyInput;
+        internal Button GetApplyButtonForTesting() => applyButton;
+        internal bool IsEditingAcVoltageSourceForTesting => editingAcVoltageSource;
+        internal string GetTitleForTesting() => title.text;
+        internal string GetParameterLabelForTesting() => parameterLabel.text;
 
         private static void ConfigureButtonColors(Button button, bool primary)
         {
@@ -230,6 +351,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "编辑直流电压源参数" :
                 kind == SpiceComponentKind.DcCurrentSource ? "编辑直流电流源参数" :
+                kind == SpiceComponentKind.AcVoltageSource ? "编辑交流电压源参数" :
                 kind == SpiceComponentKind.IdealSwitch ? "编辑理想开关状态" :
                 kind == SpiceComponentKind.Resistor ? "编辑电阻参数" :
                 kind == SpiceComponentKind.Capacitor ? "编辑电容参数" : "编辑电感参数";
@@ -239,6 +361,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             return kind == SpiceComponentKind.DcVoltageSource ? "电压" :
                 kind == SpiceComponentKind.DcCurrentSource ? "电流" :
+                kind == SpiceComponentKind.AcVoltageSource ? "AC 小信号幅值" :
                 kind == SpiceComponentKind.IdealSwitch ? "状态" :
                 kind == SpiceComponentKind.Resistor ? "阻值" :
                 kind == SpiceComponentKind.Capacitor ? "电容量" : "电感量";

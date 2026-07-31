@@ -68,16 +68,23 @@ namespace ElectricalSim.Spice.T3
                 var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
                 if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
                     throw new InvalidOperationException("AC-C1 frequency setup could not enter AC mode.");
-                var input = workspace.GetAcFrequencyInputForTesting();
-                var apply = workspace.GetApplyAcFrequencyButtonForTesting();
-                if (workspace.GetAcAnalysisSettingsRootForTesting() == null || !workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf ||
-                    input == null || apply == null || !input.interactable || !apply.interactable)
-                    throw new InvalidOperationException("AC-C1 frequency control was not enabled in AC mode.");
+                var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                var dialogObject = new GameObject("SpiceAcC1FrequencyDialog", typeof(RectTransform), typeof(SpiceComponentParameterDialog));
+                dialogObject.transform.SetParent(canvasRoot.transform, false);
+                var dialog = dialogObject.GetComponent<SpiceComponentParameterDialog>();
+                dialog.Initialize(canvasRoot.GetComponent<RectTransform>(), workspace);
 
                 foreach (var accepted in new[] { "1000", "1e3", SpiceAnalysisLimits.MinFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture), SpiceAnalysisLimits.MaxFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture) })
                 {
-                    input.text = accepted;
-                    apply.onClick.Invoke();
+                    dialog.Open(source);
+                    if (!dialog.IsEditingAcVoltageSourceForTesting || !dialog.GetMagnitudeInputForTesting().interactable ||
+                        !dialog.GetPhaseInputForTesting().gameObject.activeSelf || !dialog.GetFrequencyInputForTesting().gameObject.activeSelf ||
+                        dialog.GetTitleForTesting() != "编辑交流电压源参数" || dialog.GetParameterLabelForTesting() != "AC 小信号幅值")
+                        throw new InvalidOperationException("AC-C1 AC source dialog did not expose the compact frequency and phase fields.");
+                    dialog.GetMagnitudeInputForTesting().text = "1";
+                    dialog.GetPhaseInputForTesting().text = "30";
+                    dialog.GetFrequencyInputForTesting().text = accepted;
+                    dialog.GetApplyButtonForTesting().onClick.Invoke();
                 }
                 if (Math.Abs(workspace.Model.AcFrequencyHz - SpiceAnalysisLimits.MaxFrequencyHz) > 1e-9d)
                     throw new InvalidOperationException("AC-C1 frequency input did not accept a valid boundary value.");
@@ -86,18 +93,24 @@ namespace ElectricalSim.Spice.T3
                 var frequency = workspace.Model.AcFrequencyHz;
                 foreach (var rejected in new[] { string.Empty, "not-a-number", "0", "-1", "NaN", "Infinity", "0.0001", "10000001" })
                 {
-                    input.text = rejected;
-                    apply.onClick.Invoke();
+                    dialog.Open(source);
+                    dialog.GetMagnitudeInputForTesting().text = "1";
+                    dialog.GetPhaseInputForTesting().text = "30";
+                    dialog.GetFrequencyInputForTesting().text = rejected;
+                    dialog.GetApplyButtonForTesting().onClick.Invoke();
                     if (workspace.Model.AcFrequencyHz != frequency || workspace.ElectricalRevisionForTesting != revision)
                         throw new InvalidOperationException("AC-C1 invalid frequency changed the formal model.");
                 }
 
-                input.text = frequency.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
-                apply.onClick.Invoke();
+                dialog.Open(source);
+                dialog.GetMagnitudeInputForTesting().text = "1";
+                dialog.GetPhaseInputForTesting().text = "30";
+                dialog.GetFrequencyInputForTesting().text = frequency.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+                dialog.GetApplyButtonForTesting().onClick.Invoke();
                 if (workspace.ElectricalRevisionForTesting != revision)
                     throw new InvalidOperationException("AC-C1 equivalent frequency advanced the electrical revision.");
                 workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
-                if (input.interactable || apply.interactable || workspace.TrySetAcFrequency(500d))
+                if (workspace.TrySetAcFrequency(500d))
                     throw new InvalidOperationException("AC-C1 running calculation allowed a frequency update.");
             }
             finally
@@ -152,43 +165,57 @@ namespace ElectricalSim.Spice.T3
                 var changes = 0;
                 workspace.Model.Changed += _ => changes++;
                 var revision = workspace.ElectricalRevisionForTesting;
-                workspace.GetAcPhaseInputForTesting().text = "30";
-                var parameterInput = view.transform.parent.GetComponentInChildren<InputField>();
-                var allInputs = workspace.GetAcPhaseInputForTesting().transform.parent.GetComponentsInChildren<InputField>(true);
-                var magnitudeInput = allInputs.First(input => input.name == "ParameterInput");
+                var magnitudeInput = workspace.GetParameterInputForTesting();
                 magnitudeInput.text = "2";
                 workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
-                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d || changes != 1 || workspace.ElectricalRevisionForTesting != revision + 1)
-                    throw new InvalidOperationException("AC-C1 AC source parameters were not atomically applied once.");
+                if (source.SiValue != 2d || source.AcPhaseDegrees != 0d || changes != 1 || workspace.ElectricalRevisionForTesting != revision + 1)
+                    throw new InvalidOperationException("AC-C1 right-side AC source magnitude editor did not preserve the phase.");
 
-                magnitudeInput.text = "0";
-                workspace.GetAcPhaseInputForTesting().text = "45";
-                workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
-                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d)
-                    throw new InvalidOperationException("AC-C1 invalid magnitude partially updated AC source parameters.");
-                magnitudeInput.text = "3";
-                workspace.GetAcPhaseInputForTesting().text = "bad";
-                workspace.GetParameterApplyButtonForTesting().onClick.Invoke();
-                if (source.SiValue != 2d || source.AcPhaseDegrees != 30d)
-                    throw new InvalidOperationException("AC-C1 invalid phase partially updated AC source parameters.");
+                var dialogObject = new GameObject("SpiceAcC1SourceDialog", typeof(RectTransform), typeof(SpiceComponentParameterDialog));
+                dialogObject.transform.SetParent(canvasRoot.transform, false);
+                var dialog = dialogObject.GetComponent<SpiceComponentParameterDialog>();
+                dialog.Initialize(canvasRoot.GetComponent<RectTransform>(), workspace);
+                dialog.Open(source);
+                dialog.GetMagnitudeInputForTesting().text = "3";
+                dialog.GetPhaseInputForTesting().text = "30";
+                dialog.GetFrequencyInputForTesting().text = "2000";
+                dialog.GetApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 3d || source.AcPhaseDegrees != 30d)
+                    throw new InvalidOperationException("AC-C1 AC source dialog did not apply magnitude and phase.");
 
-                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 2d, -170d))
+                revision = workspace.ElectricalRevisionForTesting;
+                dialog.Open(source);
+                dialog.GetMagnitudeInputForTesting().text = "0";
+                dialog.GetPhaseInputForTesting().text = "45";
+                dialog.GetFrequencyInputForTesting().text = "1000";
+                dialog.GetApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 3d || source.AcPhaseDegrees != 30d || workspace.ElectricalRevisionForTesting != revision)
+                    throw new InvalidOperationException("AC-C1 invalid dialog magnitude partially updated AC source parameters.");
+                dialog.Open(source);
+                dialog.GetMagnitudeInputForTesting().text = "3";
+                dialog.GetPhaseInputForTesting().text = "bad";
+                dialog.GetFrequencyInputForTesting().text = "1000";
+                dialog.GetApplyButtonForTesting().onClick.Invoke();
+                if (source.SiValue != 3d || source.AcPhaseDegrees != 30d || workspace.ElectricalRevisionForTesting != revision)
+                    throw new InvalidOperationException("AC-C1 invalid dialog phase partially updated AC source parameters.");
+
+                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 3d, -170d))
                     throw new InvalidOperationException("AC-C1 phase equivalence setup failed.");
                 revision = workspace.ElectricalRevisionForTesting;
-                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 2d, 190d) || workspace.ElectricalRevisionForTesting != revision)
+                if (!workspace.TrySetAcVoltageSourceParameters(source.InstanceId, 3d, 190d) || workspace.ElectricalRevisionForTesting != revision)
                     throw new InvalidOperationException("AC-C1 equivalent normalized phase advanced revision.");
 
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 60f);
                 workspace.SelectComponent(workspace.GetComponentViewForTesting(resistor.InstanceId));
-                if (workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
-                    throw new InvalidOperationException("AC-C1 phase field leaked into a normal parameter editor.");
+                if (workspace.GetParameterInputForTesting().gameObject.activeSelf == false)
+                    throw new InvalidOperationException("AC-C1 normal parameter editor was hidden unexpectedly.");
                 workspace.SelectComponent(view);
-                if (!workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
-                    throw new InvalidOperationException("AC-C1 phase field did not return for an AC source.");
+                if (workspace.GetParameterInputForTesting().gameObject.activeSelf == false)
+                    throw new InvalidOperationException("AC-C1 AC source magnitude editor did not return.");
                 var ground = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 60f);
                 workspace.SelectComponent(workspace.GetComponentViewForTesting(ground.InstanceId));
-                if (workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
-                    throw new InvalidOperationException("AC-C1 phase field leaked into ground selection.");
+                if (workspace.GetParameterApplyButtonForTesting().interactable)
+                    throw new InvalidOperationException("AC-C1 ground selection unexpectedly enabled parameter application.");
             }
             finally
             {
@@ -270,8 +297,7 @@ namespace ElectricalSim.Spice.T3
                     var toolbar = bindings.RunButton.transform.parent as RectTransform;
                     var modeToggle = workspace.GetAnalysisModeToggleButtonForTesting();
                     if (toolbar == null || toolbar.Find("AnalysisControls") != null || modeToggle == null || modeToggle.transform.parent != toolbar ||
-                        bindings.PaletteRoot.Find("AcVoltageSourceCard") == null || bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null ||
-                        workspace.GetAcFrequencyInputForTesting() == null || workspace.GetApplyAcFrequencyButtonForTesting() == null)
+                        bindings.PaletteRoot.Find("AcVoltageSourceCard") == null || bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null)
                         throw new InvalidOperationException("AC-C1 layout structure smoke did not create required controls at " + size + ".");
                     var buttons = toolbar.GetComponentsInChildren<Button>(true).Where(button => button.gameObject.activeInHierarchy).ToArray();
                     if (buttons.Any(button => !ContainsRect(toolbar, button.GetComponent<RectTransform>())) ||
@@ -282,28 +308,21 @@ namespace ElectricalSim.Spice.T3
                         throw new InvalidOperationException("AC-C1 toolbar overlaps a workspace region at " + size + ".");
                     if (!ContainsRect(workspace.GetGridLayerForTesting(), bindings.WorkspaceViewport))
                         throw new InvalidOperationException("AC-C1 grid no longer covers the viewport's visible top edge at " + size + ".");
-                    if (workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf)
-                        throw new InvalidOperationException("AC-C1 DC mode must hide the right-side frequency settings.");
                     workspace.GetAnalysisModeToggleButtonForTesting().onClick.Invoke();
-                    if (!workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf)
-                        throw new InvalidOperationException("AC-C1 AC mode must show the right-side frequency settings.");
+                    if (bindings.ParameterRoot.Find("AcAnalysisSettings") != null)
+                        throw new InvalidOperationException("AC-C1 compact right-side parameter panel unexpectedly recreated analysis settings.");
                     var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
                     var parameterInput = workspace.GetParameterInputForTesting();
-                    var phaseInput = workspace.GetAcPhaseInputForTesting();
                     var unit = workspace.GetUnitButtonForTesting();
                     var apply = workspace.GetParameterApplyButtonForTesting();
-                    var frequencyInput = workspace.GetAcFrequencyInputForTesting();
-                    var frequencyApply = workspace.GetApplyAcFrequencyButtonForTesting();
                     var parameterElements = new[]
                     {
-                        parameterInput.GetComponent<RectTransform>(), phaseInput.GetComponent<RectTransform>(),
-                        unit.GetComponent<RectTransform>(), apply.GetComponent<RectTransform>(),
-                        frequencyInput.GetComponent<RectTransform>(), frequencyApply.GetComponent<RectTransform>()
+                        parameterInput.GetComponent<RectTransform>(), unit.GetComponent<RectTransform>(), apply.GetComponent<RectTransform>()
                     };
                     if (source == null || parameterElements.Any(element => !ContainsRect(bindings.ParameterRoot, element)) ||
                         parameterElements.SelectMany((left, index) => parameterElements.Skip(index + 1)
                             .Select(right => new { left, right })).Any(pair => Overlaps(pair.left, pair.right)))
-                        throw new InvalidOperationException("AC-C1 AC frequency and component parameter controls overlap at " + size + ".");
+                        throw new InvalidOperationException("AC-C1 compact component parameter controls overlap at " + size + ".");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
             }

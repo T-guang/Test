@@ -64,7 +64,7 @@ namespace ElectricalSim.Spice.T3
                 workspace.SelectComponent(view);
                 if (workspace.GetOpAmpInfoForTesting() == null || !workspace.GetOpAmpInfoForTesting().gameObject.activeSelf ||
                     workspace.GetParameterInputForTesting().gameObject.activeSelf || workspace.GetUnitButtonForTesting().gameObject.activeSelf ||
-                    workspace.GetParameterApplyButtonForTesting().gameObject.activeSelf || workspace.GetAcPhaseInputForTesting().gameObject.activeSelf)
+                    workspace.GetParameterApplyButtonForTesting().gameObject.activeSelf)
                     throw new InvalidOperationException("Ideal operational amplifier parameter panel must be read-only without ordinary apply controls.");
                 var card = workspace.GetPaletteCardForTesting(SpiceComponentKind.IdealOperationalAmplifier);
                 if (card == null || !card.interactable || !workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) ||

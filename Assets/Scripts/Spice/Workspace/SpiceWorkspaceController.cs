@@ -50,15 +50,10 @@ namespace ElectricalSim.Spice.Workspace
         private Text parameterTitle;
         private Text opAmpInfoText;
         private InputField parameterInput;
-        private Text acPhaseLabel;
-        private InputField acPhaseInput;
         private Button parameterApplyButton;
         private Button unitButton;
         private Text unitLabel;
         private Button analysisModeToggleButton;
-        private InputField acFrequencyInput;
-        private Button applyAcFrequencyButton;
-        private RectTransform analysisSettingsRoot;
         private readonly Dictionary<SpiceComponentKind, CanvasGroup> paletteCardGroups = new Dictionary<SpiceComponentKind, CanvasGroup>();
         private Button runButton;
         private Button rotateButton;

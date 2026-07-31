@@ -89,11 +89,7 @@ namespace ElectricalSim.Spice.Workspace
         internal Button GetSaveAsFileButtonForTesting() => saveAsFileButton;
         internal Button GetImportFileButtonForTesting() => importFileButton;
         internal Button GetAnalysisModeToggleButtonForTesting() => analysisModeToggleButton;
-        internal InputField GetAcFrequencyInputForTesting() => acFrequencyInput;
-        internal Button GetApplyAcFrequencyButtonForTesting() => applyAcFrequencyButton;
-        internal RectTransform GetAcAnalysisSettingsRootForTesting() => analysisSettingsRoot;
         internal CanvasGroup GetPaletteCardForTesting(SpiceComponentKind kind) => paletteCardGroups.TryGetValue(kind, out var group) ? group : null;
-        internal InputField GetAcPhaseInputForTesting() => acPhaseInput;
         internal InputField GetParameterInputForTesting() => parameterInput;
         internal Button GetUnitButtonForTesting() => unitButton;
         internal Text GetOpAmpInfoForTesting() => opAmpInfoText;

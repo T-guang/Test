@@ -146,15 +146,29 @@ namespace ElectricalSim.Spice.T3
             report.analysisModeTogglePassed = true;
             Debug.Log("[Spice][Player-UI] 分析模式切换：通过");
 
-            var frequencyRoot = workspace.GetAcAnalysisSettingsRootForTesting();
-            if (frequencyRoot == null || !frequencyRoot.gameObject.activeSelf || !workspace.GetAcFrequencyInputForTesting().interactable ||
-                !workspace.GetApplyAcFrequencyButtonForTesting().interactable)
-                throw new InvalidOperationException("Player AC 右侧频率设置不可用。");
+            var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+            var dialogObject = new GameObject("SpicePlayerAcParameterDialog", typeof(RectTransform), typeof(SpiceComponentParameterDialog));
+            dialogObject.transform.SetParent(workspace.OverlayLayer, false);
+            var dialog = dialogObject.GetComponent<SpiceComponentParameterDialog>();
+            dialog.Initialize(workspace.OverlayLayer, workspace);
+            dialog.Open(source);
+            if (!dialog.IsEditingAcVoltageSourceForTesting || !dialog.GetMagnitudeInputForTesting().interactable ||
+                !dialog.GetPhaseInputForTesting().gameObject.activeSelf || !dialog.GetFrequencyInputForTesting().gameObject.activeSelf)
+                throw new InvalidOperationException("Player 交流源参数弹窗未提供频率和相位设置。");
+            dialog.GetMagnitudeInputForTesting().text = "2";
+            dialog.GetPhaseInputForTesting().text = "30";
+            dialog.GetFrequencyInputForTesting().text = "2000";
+            dialog.GetApplyButtonForTesting().onClick.Invoke();
+            if (source.SiValue != 2d || source.AcPhaseDegrees != 30d || Math.Abs(workspace.Model.AcFrequencyHz - 2000d) > 1e-9d)
+                throw new InvalidOperationException("Player 交流源参数弹窗没有通过正式 Controller 路径提交设置。");
             report.acFrequencySettingsPassed = true;
-            Debug.Log("[Spice][Player-UI] 右侧频率设置：通过");
+            Debug.Log("[Spice][Player-UI] 交流源参数设置：通过");
+            dialog.Dispose();
+            Destroy(dialogObject);
+            workspace.ClearWorkspace();
             modeButton.onClick.Invoke();
-            if (workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || frequencyRoot.gameObject.activeSelf)
-                throw new InvalidOperationException("Player 切回 DC 后未隐藏右侧频率设置。");
+            if (workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint)
+                throw new InvalidOperationException("Player 切回 DC 后分析模式不正确。");
         }
 
         /// <summary>
