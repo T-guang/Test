@@ -241,7 +241,7 @@ namespace ElectricalSim.Spice.Workspace
         }
     }
 
-    /// <summary>Visual-only interaction feedback for an explicitly bound mode option.</summary>
+    /// <summary>为显式绑定的模式选项提供仅影响视觉的交互反馈。</summary>
     internal sealed class SimulationModeOptionVisual : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
     {
         private Image background;

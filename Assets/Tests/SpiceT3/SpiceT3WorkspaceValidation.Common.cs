@@ -292,6 +292,9 @@ namespace ElectricalSim.Spice.T3
             AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Persistence.cs", "TryImportDrawingJson", "事务式导入图纸 JSON");
             AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Persistence.cs", "CanImportDrawing", "判定当前是否允许导入图纸");
             AssertMethodSummary(controllerDirectory, "SpiceWorkspaceController.Simulation.cs", "CanModifyElectricalModel", "统一电气编辑的 Running 防线");
+            AssertNoForbiddenCommentResidues(workspaceRoot);
+            AssertSelectComponentHasNoFileButtonComment(controllerDirectory);
+            AssertTypeSummary(controllerDirectory, "SimulationModeDropdown.cs", "SimulationModeOptionVisual", "为显式绑定的模式选项提供仅影响视觉的交互反馈");
         }
 
         private static string NormalizeSourceNewlines(string source)
@@ -390,6 +393,64 @@ namespace ElectricalSim.Spice.T3
             if (summaryStart < 0 || summaryEnd < summaryStart || summaryEnd > methodIndex ||
                 source.Substring(summaryStart, summaryEnd - summaryStart).IndexOf(expectedFirstSentence, StringComparison.Ordinal) < 0)
                 throw new InvalidOperationException("Q2.1 方法摘要关联错误：" + fileName + " / " + methodName + "。");
+        }
+
+        private static void AssertNoForbiddenCommentResidues(string workspaceRoot)
+        {
+            var sourceDirectories = new[]
+            {
+                Path.Combine(workspaceRoot, "Assets", "Scripts", "Spice"),
+                Path.Combine(workspaceRoot, "Assets", "Editor", "SpiceT1"),
+                Path.Combine(workspaceRoot, "Assets", "Editor", "SpiceT2"),
+                Path.Combine(workspaceRoot, "Assets", "Editor", "SpiceT3"),
+                Path.Combine(workspaceRoot, "Assets", "Tests", "SpiceT3")
+            };
+            var forbidden = new[]
+            {
+                "文件工作流 " + "文件工作流",
+                "文件工作流 " + "专属",
+                "正式工作流 " + "文件",
+                "不直接调用 " + "正式工作流",
+                "/" + "/ ：",
+                "Visual-only interaction " + "feedback"
+            };
+
+            foreach (var path in sourceDirectories.SelectMany(directory => Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)))
+            {
+                var commentText = string.Join("\n", NormalizeSourceNewlines(File.ReadAllText(path))
+                    .Split('\n')
+                    .Where(line => line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+                var residue = forbidden.FirstOrDefault(text => commentText.IndexOf(text, StringComparison.Ordinal) >= 0);
+                if (residue != null)
+                    throw new InvalidOperationException("Q2.1 仍存在禁止的注释残留：" + residue + " / " + path);
+            }
+        }
+
+        private static void AssertSelectComponentHasNoFileButtonComment(string directory)
+        {
+            var source = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, "SpiceWorkspaceController.Interaction.cs")));
+            var signature = System.Text.RegularExpressions.Regex.Match(source, @"public\s+void\s+SelectComponent\s*\(");
+            if (!signature.Success)
+                throw new InvalidOperationException("Q2.1 未找到 SelectComponent。");
+
+            var preceding = source.Substring(Math.Max(0, signature.Index - 400), Math.Min(400, signature.Index));
+            if (preceding.IndexOf("文件按钮回调", StringComparison.Ordinal) >= 0)
+                throw new InvalidOperationException("Q2.1 文件按钮回调注释仍错误关联到 SelectComponent。");
+        }
+
+        private static void AssertTypeSummary(string directory, string fileName, string typeName, string expectedFirstSentence)
+        {
+            var source = NormalizeSourceNewlines(File.ReadAllText(Path.Combine(directory, fileName)));
+            var declaration = System.Text.RegularExpressions.Regex.Match(source,
+                @"(?:public|internal|private)\s+(?:sealed\s+)?class\s+" + System.Text.RegularExpressions.Regex.Escape(typeName) + @"\b");
+            if (!declaration.Success)
+                throw new InvalidOperationException("Q2.1 未找到类型声明：" + fileName + " / " + typeName + "。");
+
+            var summaryStart = source.LastIndexOf("/// <summary>", declaration.Index, StringComparison.Ordinal);
+            var summaryEnd = source.IndexOf("</summary>", summaryStart, StringComparison.Ordinal);
+            if (summaryStart < 0 || summaryEnd < summaryStart || summaryEnd > declaration.Index ||
+                source.Substring(summaryStart, summaryEnd - summaryStart).IndexOf(expectedFirstSentence, StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("Q2.1 类型摘要关联错误：" + fileName + " / " + typeName + "。");
         }
 
         private readonly struct ValidateDeclaration

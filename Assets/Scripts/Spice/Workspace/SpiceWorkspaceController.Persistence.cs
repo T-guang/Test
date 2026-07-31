@@ -58,7 +58,7 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 文件工作流 专属：显示文件操作的成功/失败/提示消息。仅由 Host 在文件工作流完成后调用。
+        /// 文件操作状态提示：显示保存、导入等操作的成功、失败或提示消息。仅由 Host 在文件操作完成后调用。
         /// 不覆盖运行计算、参数更新、接线提示或事务式导入成功后的“未计算”等已有状态时机
         /// （Host 负责仅在合适时机调用本方法）。
         /// </summary>
@@ -71,7 +71,7 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 文件工作流 专属：根据 ResultState 刷新保存/另存为/导入按钮的 interactable。
+        /// 文件操作按钮可用性：根据 ResultState 刷新保存、另存为和导入按钮的 interactable。
         /// 仅在进入 Running 和离开 Running 时由 RunCalculationAsync 调用一次，
         /// 不依赖全局 Update 轮询。
         /// </summary>
@@ -156,7 +156,7 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
-        /// 仅供 T3 测试读取当前状态栏文本，以验证 正式工作流 文件操作成功后未写入 UI 文案。
+        /// 仅供 T3 测试读取当前状态栏文本，以验证 Controller 不直接写入保存成功提示。
         /// 不在生产路径调用。
         /// </summary>
         internal string GetStatusTextForTesting()

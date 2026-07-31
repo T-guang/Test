@@ -165,10 +165,6 @@ namespace ElectricalSim.Spice.Workspace
 
         public void RotateSelection() => RotateSelectedComponent();
         public void ClearAll() => ClearWorkspace();
-
-        // 文件工作流 文件操作按钮回调：每次点击都二次校验 Running，避免任何路径在仿真中被触发。
-        // 不直接调用 正式工作流 文件 API；仅触发事件由 Host 协调对话框与确认。
-
         public void SelectComponent(SpiceWorkspaceComponentView component)
         {
             if (pendingComponent != null && pendingComponent != component) CancelPendingWire();
