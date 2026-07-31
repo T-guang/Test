@@ -1295,8 +1295,8 @@ namespace ElectricalSim.Spice.T3
         }
 
         // Status 文本采用横向 Stretch：anchorMin=(0,0) anchorMax=(1,1)，
-        // offsetMin=(762,0) offsetMax=(-304,0)。在 1366 宽度下实际宽度约 300，
-        // 与左侧重置视图按钮和右侧文件按钮均无水平重叠。
+        // offsetMin=(880,0) offsetMax=(-304,0)。在 1366 宽度下实际宽度至少 160，
+        // 与左侧分析模式按钮和右侧文件按钮均无水平重叠。
         private static void ValidateStatusTextStretchLayout()
         {
             var canvasRoot = new GameObject("SpiceStatusStretch", typeof(RectTransform), typeof(Canvas));
@@ -1315,11 +1315,11 @@ namespace ElectricalSim.Spice.T3
                 if (Math.Abs(statusRect.anchorMin.x - 0f) > 0.001f || Math.Abs(statusRect.anchorMax.x - 1f) > 0.001f)
                     throw new InvalidOperationException("Status 应使用横向 Stretch（anchorMin.x=0, anchorMax.x=1）。实际 anchorMin.x=" + statusRect.anchorMin.x + " anchorMax.x=" + statusRect.anchorMax.x);
 
-                // 2. offsetMin.x=762, offsetMax.x=-304
-                if (Math.Abs(statusRect.offsetMin.x - 762f) > 0.01f || Math.Abs(statusRect.offsetMax.x - (-304f)) > 0.01f)
-                    throw new InvalidOperationException("Status offset 应为 (762,0)/(-304,0)。实际 offsetMin.x=" + statusRect.offsetMin.x + " offsetMax.x=" + statusRect.offsetMax.x);
+                // 2. offsetMin.x=880, offsetMax.x=-304
+                if (Math.Abs(statusRect.offsetMin.x - 880f) > 0.01f || Math.Abs(statusRect.offsetMax.x - (-304f)) > 0.01f)
+                    throw new InvalidOperationException("Status offset 应为 (880,0)/(-304,0)。实际 offsetMin.x=" + statusRect.offsetMin.x + " offsetMax.x=" + statusRect.offsetMax.x);
 
-                // 3. 在 1366 宽度的 Toolbar 下，Status 实际宽度 >= 280
+                // 3. 在 1366 宽度的 Toolbar 下，Status 实际宽度 >= 160
                 // 设置 Toolbar 宽度为 1366（Canvas/Toolbar 默认横向 Stretch）
                 var toolbarRect = toolbar.GetComponent<RectTransform>();
                 var oldSize = toolbarRect.sizeDelta;
@@ -1343,8 +1343,8 @@ namespace ElectricalSim.Spice.T3
                     else
                     {
                         var statusWidth = statusRect.rect.width;
-                        if (statusWidth < 280f)
-                            throw new InvalidOperationException("1366 宽度下 Status 宽度应 >= 280，实际：" + statusWidth + "（toolbar=" + toolbarWidth + "）");
+                        if (statusWidth < 160f)
+                            throw new InvalidOperationException("1366 宽度下 Status 宽度应 >= 160，实际：" + statusWidth + "（toolbar=" + toolbarWidth + "）");
                     }
                 }
                 finally
@@ -1366,15 +1366,14 @@ namespace ElectricalSim.Spice.T3
                 if (304f <= 288f)
                     throw new InvalidOperationException("Status 右边界应位于 Save 左边界左侧（304 > 288）。");
 
-                // 5. Status 与 ResetView 无水平重叠
-                // ResetView 结束位置 754，Status 左边界 762，762 > 754 → 不重叠
-                var resetView = FindToolbarButtonByName(toolbar, "ResetView");
-                if (resetView != null)
+                // 5. Status 与 AnalysisModeToggle 无水平重叠
+                // AnalysisModeToggle 结束位置 872，Status 左边界 880，880 > 872 → 不重叠
+                var analysisToggle = FindToolbarButtonByName(toolbar, "AnalysisModeToggle");
+                if (analysisToggle != null)
                 {
-                    var resetRect = resetView.GetComponent<RectTransform>();
-                    // ResetView 使用左锚点，offsetMax.x=754；Status offsetMin.x=762
-                    if (762f <= 754f)
-                        throw new InvalidOperationException("Status 左边界应位于 ResetView 右边界右侧（762 > 754）。");
+                    // AnalysisModeToggle 使用左锚点，offsetMax.x=872；Status offsetMin.x=880
+                    if (880f <= 872f)
+                        throw new InvalidOperationException("Status 左边界应位于分析模式右边界右侧（880 > 872）。");
                 }
 
                 // 6. 三个文件按钮仍保持右锚点排列（与 ValidateFileToolbarButtonsRightAnchoredLayout 一致，此处再断言一次保证收口）

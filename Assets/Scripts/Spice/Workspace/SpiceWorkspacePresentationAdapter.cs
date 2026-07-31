@@ -18,12 +18,13 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
         private const float AssistantSectionHeaderHeight = 42f;
-        private const float ParameterSectionHeight = 166f;
+        // AC 分析频率、普通参数和交流源相位必须各占独立行。右侧窄面板不能把这些控件强行压到同一横排，
+        // 否则在正式 Player 的 Canvas 缩放下会发生重叠或按钮溢出。
+        private const float ParameterSectionHeight = 288f;
         private const float NetlistSectionHeight = 180f;
         private const float AssistantSectionGap = 8f;
         private const float ParameterInputWidth = 130f;
         private const float ParameterUnitWidth = 60f;
-        private const float ParameterApplyButtonWidth = 62f;
         private const float ParameterControlHeight = 32f;
 
         public static void Apply(SpiceWorkspaceViewBindings bindings)
@@ -38,6 +39,8 @@ namespace ElectricalSim.Spice.Workspace
             StyleToolbarButton(FindToolbarButton(bindings, "ZoomIn"), "＋", false, false, 564f, 598f);
             StyleToolbarButton(FindToolbarButton(bindings, "FitAll"), "适配全部", false, false, 606f, 676f);
             StyleToolbarButton(FindToolbarButton(bindings, "ResetView"), "重置视图", false, false, 684f, 754f);
+            // 分析模式属于工具栏命令，必须复用同一圆角、边框和文字层级；Controller 只负责其当前模式的选中颜色。
+            StyleToolbarButton(FindToolbarButton(bindings, "AnalysisModeToggle"), null, true, false, 762f, 872f);
             // 文件工作流 文件操作工具栏按钮：保存 / 另存为 / 导入，使用右锚点布局，从右到左排列。
             // 导入最靠右（右边距 24，宽 80），另存为和保存依次向左，按钮间距 12。
             StyleToolbarButtonRightAnchored(FindToolbarButton(bindings, "ImportFile"), "导入", false, false, 24f, 104f);
@@ -92,7 +95,7 @@ namespace ElectricalSim.Spice.Workspace
             var text = button.GetComponentInChildren<Text>();
             if (text != null)
             {
-                text.text = label;
+                if (label != null) text.text = label;
                 MainUiTheme.ApplyTextRole(text, primary ? MainUiTheme.UiTextRole.ToolbarPrimaryButton : danger ? MainUiTheme.UiTextRole.ToolbarDangerButton : MainUiTheme.UiTextRole.ToolbarButton);
                 text.color = primary ? Color.white : danger ? MainUiTheme.DangerRed : MainUiTheme.NormalText;
                 Stretch(text.rectTransform, Vector2.zero, Vector2.zero);
@@ -137,10 +140,10 @@ namespace ElectricalSim.Spice.Workspace
             var toolbar = bindings.RunButton.transform.parent;
             var statusTransform = toolbar.Find("Status");
             if (statusTransform == null) return;
-            // 横向 Stretch：左侧避开"重置视图"结束位置 754（留 8 间距），
+            // 横向 Stretch：左侧避开“分析模式”结束位置 872（留 8 间距），
             // 右侧避开保存按钮左边界（距右 288，留 16 间距 → offsetMax.x=-304）。
-            // 1366 宽度下实际宽度约 300，与左侧工具栏按钮和右侧文件按钮均不重叠。
-            Anchor(statusTransform as RectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(762f, 0f), new Vector2(-304f, 0f));
+            // 1366 宽度下仍保留至少 160 的有效状态文本空间，并与两侧按钮均不重叠。
+            Anchor(statusTransform as RectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(880f, 0f), new Vector2(-304f, 0f));
         }
 
         private static void StyleZoomLabel(SpiceWorkspaceViewBindings bindings)
@@ -406,7 +409,9 @@ namespace ElectricalSim.Spice.Workspace
             }
 
             var subtitle = EnsureText(section, "ParameterSubtitle", "请选择画布中的元件以编辑参数", MainUiTheme.MutedText, MainUiTheme.UiTextRole.InspectorBody);
-            Anchor(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -80f), new Vector2(-14f, -48f));
+            StyleAcAnalysisSettings(section.Find("AcAnalysisSettings") as RectTransform);
+            // 分析设置结束后再显示元件说明，保证未选中元件时的提示不会压住频率行。
+            Anchor(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -154f), new Vector2(-14f, -122f));
 
             var input = section.Find("ParameterInput") as RectTransform;
             var unit = section.Find("Unit") as RectTransform;
@@ -416,37 +421,70 @@ namespace ElectricalSim.Spice.Workspace
             var apply = section.Find("Apply") as RectTransform;
             if (input != null)
             {
-                Anchor(input, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -112f), new Vector2(14f + ParameterInputWidth, -112f + ParameterControlHeight));
+                Anchor(input, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -194f), new Vector2(14f + ParameterInputWidth, -194f + ParameterControlHeight));
                 StyleInput(input.GetComponent<InputField>());
             }
             if (unit != null)
             {
                 var unitLeft = 14f + ParameterInputWidth + AssistantSectionGap;
-                Anchor(unit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(unitLeft, -112f), new Vector2(unitLeft + ParameterUnitWidth, -112f + ParameterControlHeight));
+                Anchor(unit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(unitLeft, -194f), new Vector2(unitLeft + ParameterUnitWidth, -194f + ParameterControlHeight));
                 StyleSmallButton(unit.GetComponent<Button>(), false);
             }
             if (phaseLabel != null)
             {
-                Anchor(phaseLabel, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -152f), new Vector2(70f, -120f));
+                Anchor(phaseLabel, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -234f), new Vector2(70f, -202f));
             }
             if (phaseInput != null)
             {
-                Anchor(phaseInput, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(74f, -152f), new Vector2(14f + ParameterInputWidth, -120f));
+                Anchor(phaseInput, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(74f, -234f), new Vector2(14f + ParameterInputWidth, -202f));
                 StyleInput(phaseInput.GetComponent<InputField>());
             }
             if (phaseUnit != null)
             {
-                Anchor(phaseUnit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap, -152f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth, -120f));
+                Anchor(phaseUnit, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap, -234f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth, -202f));
             }
             if (apply != null)
             {
-                var applyLeft = 14f + ParameterInputWidth + AssistantSectionGap + ParameterUnitWidth + AssistantSectionGap;
-                Anchor(apply, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(applyLeft, -152f), new Vector2(applyLeft + ParameterApplyButtonWidth, -120f));
+                Anchor(apply, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -278f), new Vector2(-14f, -246f));
                 StyleSmallButton(apply.GetComponent<Button>(), true, "应用");
             }
 
             var presenter = section.GetComponent<SpiceAssistantParameterPresentation>() ?? section.gameObject.AddComponent<SpiceAssistantParameterPresentation>();
             presenter.Initialize(title != null ? title.GetComponent<Text>() : null, subtitle, input != null ? input.GetComponent<InputField>() : null, unit != null ? unit.GetComponent<Button>() : null, apply != null ? apply.gameObject : null);
+        }
+
+        private static void StyleAcAnalysisSettings(RectTransform section)
+        {
+            if (section == null) return;
+
+            // 分析频率是工作区设置而非选中元件的参数。它在 AC 模式保持可见，布局也不能随元件选择而变化。
+            Anchor(section, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -116f), new Vector2(-14f, -48f));
+            var title = section.Find("Title") as RectTransform;
+            if (title != null)
+                Anchor(title, new Vector2(0f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(0f, -22f));
+
+            var label = section.Find("FrequencyLabel") as RectTransform;
+            if (label != null)
+                Anchor(label, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(64f, 32f));
+
+            var input = section.Find("AcFrequencyInput") as RectTransform;
+            if (input != null)
+            {
+                Anchor(input, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(68f, -2f), new Vector2(14f + ParameterInputWidth, 32f));
+                StyleInput(input.GetComponent<InputField>());
+            }
+
+            var unit = section.Find("FrequencyUnit") as RectTransform;
+            if (unit != null)
+                Anchor(unit, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap, 0f), new Vector2(14f + ParameterInputWidth + AssistantSectionGap + 26f, 32f));
+
+            var apply = section.Find("ApplyAcFrequency") as RectTransform;
+            if (apply != null)
+            {
+                var applyLeft = 14f + ParameterInputWidth + AssistantSectionGap + 30f;
+                Anchor(apply, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(applyLeft, -2f), new Vector2(0f, 32f));
+                StyleSmallButton(apply.GetComponent<Button>(), true, "应用");
+            }
         }
 
         private static void StyleResultCopyButton(RectTransform resultRoot)

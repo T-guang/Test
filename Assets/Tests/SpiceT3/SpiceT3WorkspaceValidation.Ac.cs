@@ -26,13 +26,17 @@ namespace ElectricalSim.Spice.T3
             {
                 var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
                 var toggle = workspace.GetAnalysisModeToggleButtonForTesting();
-                if (toggle == null || !toggle.interactable || toggle.GetComponentInChildren<Text>().text != "分析：DC")
+                var toggleImage = toggle != null ? toggle.GetComponent<Image>() : null;
+                if (toggle == null || !toggle.interactable || toggle.GetComponentInChildren<Text>().text != "分析：DC" ||
+                    toggleImage == null || toggleImage.sprite == null || toggleImage.type != Image.Type.Sliced ||
+                    toggleImage.color != MainUiTheme.PrimaryBlue)
                     throw new InvalidOperationException("AC-C1 default DC analysis mode toggle state is incorrect.");
 
                 var beforeAc = workspace.ElectricalRevisionForTesting;
                 toggle.onClick.Invoke();
                 if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.ElectricalRevisionForTesting != beforeAc + 1 ||
-                    !toggle.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun || toggle.GetComponentInChildren<Text>().text != "分析：单频 AC")
+                    !toggle.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun || toggle.GetComponentInChildren<Text>().text != "分析：单频 AC" ||
+                    toggle.GetComponent<Image>().color != MainUiTheme.PrimaryBlue)
                     throw new InvalidOperationException("AC-C1 DC to AC mode control did not use the formal controller path.");
 
                 var sameModeRevision = workspace.ElectricalRevisionForTesting;
@@ -47,7 +51,7 @@ namespace ElectricalSim.Spice.T3
                 workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
                 if (toggle.interactable || workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
                     throw new InvalidOperationException("AC-C1 running calculation allowed an analysis-mode change.");
-                if (toggle.GetComponentInChildren<Text>().text != "分析：DC")
+                if (toggle.GetComponentInChildren<Text>().text != "分析：DC" || toggle.GetComponent<Image>().color != MainUiTheme.PrimaryBlue)
                     throw new InvalidOperationException("AC-C1 running state lost the current analysis mode label.");
             }
             finally
@@ -288,14 +292,17 @@ namespace ElectricalSim.Spice.T3
                     var phaseInput = workspace.GetAcPhaseInputForTesting();
                     var unit = workspace.GetUnitButtonForTesting();
                     var apply = workspace.GetParameterApplyButtonForTesting();
+                    var frequencyInput = workspace.GetAcFrequencyInputForTesting();
+                    var frequencyApply = workspace.GetApplyAcFrequencyButtonForTesting();
                     var parameterElements = new[]
                     {
                         parameterInput.GetComponent<RectTransform>(), phaseInput.GetComponent<RectTransform>(),
-                        unit.GetComponent<RectTransform>(), apply.GetComponent<RectTransform>()
+                        unit.GetComponent<RectTransform>(), apply.GetComponent<RectTransform>(),
+                        frequencyInput.GetComponent<RectTransform>(), frequencyApply.GetComponent<RectTransform>()
                     };
                     if (source == null || parameterElements.Any(element => !ContainsRect(bindings.ParameterRoot, element)) ||
-                        Overlaps(parameterElements[0], parameterElements[1]) || Overlaps(parameterElements[0], parameterElements[2]) ||
-                        Overlaps(parameterElements[1], parameterElements[3]))
+                        parameterElements.SelectMany((left, index) => parameterElements.Skip(index + 1)
+                            .Select(right => new { left, right })).Any(pair => Overlaps(pair.left, pair.right)))
                         throw new InvalidOperationException("AC-C1 AC frequency and component parameter controls overlap at " + size + ".");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
