@@ -5,7 +5,7 @@
 - 项目：`E:\Projects\Unity\ElectricalSimulation2D_SpiceT2`
 - Unity：`2022.3.57f1c1`
 - 分支：`feature/spice-t4a-dc-host-integration`
-- Player UI 几何与参数编辑代码基线：`0eacd3d fix(spice): streamline ac source parameter editing`
+- Player UI、参数编辑与分析模式兼容诊断代码基线：`b6f8e2c fix(spice): clarify analysis mode incompatibilities`
 - 文档 HEAD：本文件对应的最终前向提交；以 `git rev-parse HEAD` 为准。
 - 正式场景仍为 `Assets/Scenes/Demo.unity`。Q2 未修改场景、ProjectSettings、控制模式、数值语义、图纸格式、接线/路由或 Player Harness。
 
@@ -43,7 +43,7 @@
 - Q2.1 已将文件按钮、事务式导入、分析设置、运行中导入和统一电气编辑防线的说明重新关联到正式方法；`DiscardOutdatedCalculation` 保持原有的分析控件与参数区刷新边界。
 - Q2.1.1 已清除 partial 拆分残留的文件按钮错位注释，并由静态证据确认 `SelectComponent` 前不再出现“文件按钮回调”；`SimulationModeOptionVisual` 的摘要为中文。项目自有英文自然语言设计注释已完成逐项复核；技术标识、API 名称、错误码和第三方原文继续保留。
 - `RefreshResultStateDependentControls()` 仅有 3 个正式调用点（进入 Running、离开 Running、SetResultStateForTesting），且仅刷新文件操作、分析控件和参数区。
-- `SpiceT3WorkspaceValidation` 的 9 个 partial 中，编译生效 Validate 声明为 109、RunPureChecks 直接调用为 109、重复方法名为 0、未调用活动 Validate 为 0；`#if false` 历史入口探针为 8、内部 Validate helper 为 2。
+- `SpiceT3WorkspaceValidation` 的 9 个 partial 中，编译生效 Validate 声明为 110、RunPureChecks 直接调用为 110、重复方法名为 0、未调用活动 Validate 为 0；`#if false` 历史入口探针为 8、内部 Validate helper 为 2。
 - 项目自有自然语言注释已中文化；保留的中英混合仅为类名、方法名、字段名、枚举/状态值、错误码、JSON 字段和 ngspice 原始技术标识。
 
 ## 自动回归
@@ -66,11 +66,12 @@
 - 不再创建全宽 `AnalysisControls` 或调用 `ReserveTopSpace`。分析模式改为工具栏“重置视图”后的单一切换按钮：`分析：DC` / `分析：单频 AC`，仍经 `TrySetAnalysisMode` 进入正式 revision、Stale 和元件池兼容矩阵路径。
 - `0eacd3d fix(spice): streamline ac source parameter editing`：右侧参数卡恢复紧凑，仅保留所选交流源的 AC 小信号幅值；不再创建 `AcAnalysisSettings`、右侧相位输入或右侧频率输入。双击画布中的交流电压源会打开加大的参数弹窗，统一编辑“AC 小信号幅值”“相位”和“分析频率”，并在全部文本验证通过后经 Controller 正式入口提交。弹窗标题明确为“编辑交流电压源参数”，避免被错误标注为电感。
 - `7115800 test(spice): cover standalone grid and component dragging`：T3 Windows Player Harness 实际验证激活后几何、网格、工具栏、模式切换和交流源参数弹窗，并通过 `SpiceWorkspaceComponentView.OnBeginDrag/OnDrag/OnEndDrag` 覆盖横向、纵向和缩放后拖动。它不进入正式 Demo Player。
-- 最新 Editor 全量日志：`E:\Builds\ElectricalSimulation2D\SpicePlayerUiDialogFix\20260731-09\unity-dialog-fix-final.log`；最新 T3 Standalone Harness：`E:\Builds\ElectricalSimulation2D\SpiceT31-EmbeddedHost\run_20260731_140447`。该 Harness 实测交流源弹窗提交 `2 V`、`30°` 和 `2000 Hz`，同时验证网格、横纵拖动、模式切换与工具栏契约。
+- `b6f8e2c fix(spice): clarify analysis mode incompatibilities`：元件池与运行前预检共用 `IsComponentKindSupportedInCurrentAnalysis`。DC 仅阻断交流电压源；单频 AC 仅阻断直流电压源、直流电流源和硅二极管。预检在 `GraphBuilder`、`SimulationService` 与 ngspice 之前返回，状态栏和仿真助手按确定性顺序列出中文器件名称与 `InstanceId`；不会删除、转换、保存过滤或导入拒绝这些图纸状态，也不会改变 revision、dirty、结果或网表复制状态。
+- 最新 Editor 全量日志：`E:\Builds\ElectricalSimulation2D\SpiceModeCompatibility\20260731-03\unity-mode-compatibility-final.log`；最新 T3 Standalone Harness：`E:\Builds\ElectricalSimulation2D\SpiceT31-EmbeddedHost\run_20260731_145301`。该 Harness 额外确认模式不兼容诊断不进入求解服务，且保留画布、结果状态、dirty 与 revision。
 
 ## 仍延期的工作
 
-Windows Player 自动验证已经通过：T1 Player 验证日志位于 `E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-205059\T1Harness\unity-t1-player.log`，最新 T3 Player 几何、拖动和交流源参数弹窗验证见上节。本次 `0eacd3d` 后尚未构建新的正式 Demo-only Player，因此旧正式包仅可作为历史材料，不能替代本次手动验收。1366×768 客户区已按实际窗口尺寸采集主界面与 Player.log；当前自动化运行桌面的物理显示上限为 1536×864，无法在同一桌面获得完整 1920×1080 或 3840×2160 客户区和可见 SPICE 页截图，因此这些材料仍须在具备对应显示空间的人工验收环境补齐。自动检查不能替代视觉验收。下一步唯一为：基于 `0eacd3d` 的 Windows Player Build 与三分辨率人工验收；不得自动创建冻结 Tag。
+Windows Player 自动验证已经通过：T1 Player 验证日志位于 `E:\Builds\ElectricalSimulation2D\SpicePlayerUiFix\20260731-205059\T1Harness\unity-t1-player.log`，最新 T3 Player 几何、拖动、交流源参数弹窗与模式不兼容诊断验证见上节。本次 `b6f8e2c` 后尚未构建新的正式 Demo-only Player，因此旧正式包仅可作为历史材料，不能替代本次手动验收。1366×768 客户区已按实际窗口尺寸采集主界面与 Player.log；当前自动化运行桌面的物理显示上限为 1536×864，无法在同一桌面获得完整 1920×1080 或 3840×2160 客户区和可见 SPICE 页截图，因此这些材料仍须在具备对应显示空间的人工验收环境补齐。自动检查不能替代视觉验收。下一步唯一为：基于 `b6f8e2c` 的 Windows Player Build 与三分辨率人工验收；不得自动创建冻结 Tag。
 
 ## 历史里程碑
 
