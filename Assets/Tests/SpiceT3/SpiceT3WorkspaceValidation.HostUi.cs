@@ -132,6 +132,9 @@ namespace ElectricalSim.Spice.T3
         {
             var rect = new GameObject("BindingRoot", typeof(RectTransform)).GetComponent<RectTransform>();
             rect.SetParent(parent, false);
+            // 编辑器纯验证没有正式场景的布局系统；提供有效尺寸后再激活根节点，
+            // 以覆盖生产路径的“激活后提交工作区几何”而不接受零尺寸伪边界。
+            rect.sizeDelta = new Vector2(900f, 600f);
             return rect;
         }
 

@@ -108,21 +108,37 @@ namespace ElectricalSim.Spice.T3
         private static SpiceWorkspaceController CreateInitializedWorkspaceForCopy(Transform parent, out SpiceWorkspaceViewBindings bindings)
         {
             var spiceRoot = CreateRoot(parent);
+            var spiceRootRect = spiceRoot.GetComponent<RectTransform>();
+            var parentRect = parent as RectTransform;
+            spiceRootRect.anchorMin = new Vector2(0.5f, 0.5f);
+            spiceRootRect.anchorMax = new Vector2(0.5f, 0.5f);
+            spiceRootRect.sizeDelta = parentRect != null && parentRect.sizeDelta.x >= 1000f && parentRect.sizeDelta.y >= 700f
+                ? parentRect.sizeDelta
+                : new Vector2(1920f, 1080f);
             spiceRoot.SetActive(false);
             bindings = spiceRoot.AddComponent<SpiceWorkspaceViewBindings>();
             var workspace = spiceRoot.AddComponent<SpiceWorkspaceController>();
+            var toolbar = CreateRect(spiceRoot.transform);
+            SpiceWorkspaceUi.Anchor(toolbar, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -64f), Vector2.zero);
             var palette = CreateRect(spiceRoot.transform);
+            SpiceWorkspaceUi.Anchor(palette, Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(286f, -64f));
             var viewport = CreateRect(spiceRoot.transform);
+            SpiceWorkspaceUi.Anchor(viewport, Vector2.zero, Vector2.one, new Vector2(302f, 16f), new Vector2(-384f, -80f));
+            var grid = new GameObject("WorkspaceGrid", typeof(RectTransform), typeof(CanvasRenderer)).GetComponent<RectTransform>();
+            grid.SetParent(viewport, false);
+            SpiceWorkspaceUi.Stretch(grid, Vector2.zero, Vector2.zero);
+            grid.gameObject.AddComponent<WorkspaceGrid>().raycastTarget = false;
             var wires = CreateRect(viewport);
             var components = CreateRect(viewport);
             var overlay = CreateRect(viewport);
             var assistant = CreateRect(spiceRoot.transform);
+            SpiceWorkspaceUi.Anchor(assistant, new Vector2(1f, 0f), Vector2.one, new Vector2(-368f, 0f), new Vector2(0f, -64f));
             var parameters = CreateRect(assistant);
             var results = CreateRect(assistant);
             var netlist = CreateRect(assistant);
             var diagnostics = CreateRect(assistant);
             bindings.Bind(palette, viewport, wires, components, overlay, assistant, parameters, results, netlist, diagnostics,
-                CreateButton(parent), CreateButton(parent), CreateButton(parent), CreateButton(parent));
+                CreateButton(toolbar), CreateButton(toolbar), CreateButton(toolbar), CreateButton(toolbar));
 
             var hostRoot = CreateRoot(parent);
             hostRoot.SetActive(false);
@@ -131,6 +147,11 @@ namespace ElectricalSim.Spice.T3
             host.Initialize();
             spiceRoot.SetActive(true);
             hostRoot.SetActive(true);
+            // 纯编辑器验证不加载正式场景布局；为激活后的几何同步提供明确的有效 Viewport，
+            // 使测试走与 Player 相同的 Content 尺寸提交路径，而不是依赖未布局 Rect 的默认值。
+            Canvas.ForceUpdateCanvases();
+            if (!workspace.SynchronizeWorkspaceGeometryForTesting())
+                throw new InvalidOperationException("测试工作区未能在激活后完成几何同步：" + workspace.GetWorkspaceGeometryDiagnosticsForTesting());
             return workspace;
         }
 

@@ -28,7 +28,9 @@ namespace ElectricalSim.Spice.Workspace
         public SpiceWorkspaceComponentData CreateComponent(SpiceComponentKind kind, Vector2 position)
         {
             EnsureInitialized();
-            if (!CanModifyElectricalModel()) return null;
+            // 未激活根节点下的 Content 尚未同步到真实 Viewport。此时拒绝落点，
+            // 避免 Clamp 把新元件错误写到零尺寸画布的伪边界。
+            if ((!workspaceGeometryReady && !SynchronizeWorkspaceGeometry()) || !CanModifyElectricalModel()) return null;
             var data = Model.AddComponent(kind, ClampToWorkspace(kind, position));
             CreateComponentView(data);
             SelectComponent(componentViews[data.InstanceId]);
@@ -45,7 +47,7 @@ namespace ElectricalSim.Spice.Workspace
         public void BeginPaletteDrag(SpiceComponentKind kind, Vector2 screenPosition, Camera eventCamera)
         {
             EnsureInitialized();
-            if (!CanModifyElectricalModel() || !IsPaletteKindAvailable(kind)) return;
+            if ((!workspaceGeometryReady && !SynchronizeWorkspaceGeometry()) || !CanModifyElectricalModel() || !IsPaletteKindAvailable(kind)) return;
             CancelPendingWire();
             CancelPaletteDrag();
             paletteKind = kind;
@@ -57,7 +59,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void UpdatePaletteDrag(Vector2 screenPosition, Camera eventCamera)
         {
-            if (!paletteDragActive) return;
+            if (!workspaceGeometryReady || !paletteDragActive) return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(WorkspaceRect, screenPosition, eventCamera, out var local);
             palettePreview.rectTransform.anchoredPosition = local;
             palettePreview.color = IsPointerInsideViewport(screenPosition, eventCamera)
@@ -77,6 +79,11 @@ namespace ElectricalSim.Spice.Workspace
 
         public bool TryScreenToWorkspace(Vector2 screenPosition, Camera eventCamera, out Vector2 localPosition)
         {
+            if (!workspaceGeometryReady)
+            {
+                localPosition = Vector2.zero;
+                return false;
+            }
             return RectTransformUtility.ScreenPointToLocalPointInRectangle(WorkspaceRect, screenPosition, eventCamera, out localPosition);
         }
 

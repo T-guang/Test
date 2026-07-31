@@ -188,11 +188,12 @@ namespace ElectricalSim.Spice.T3
             {
                 var workspace = CreateInitializedWorkspaceForCopy(root.transform, out var bindings);
                 if (bindings.RunButton == null || bindings.PaletteRoot == null || bindings.WorkspaceViewport == null || bindings.AssistantRoot == null ||
-                    workspace.GetDcAnalysisModeButtonForTesting() == null || workspace.GetAcAnalysisModeButtonForTesting() == null ||
+                    workspace.GetAnalysisModeToggleButtonForTesting() == null ||
                     workspace.GetAcFrequencyInputForTesting() == null || workspace.GetApplyAcFrequencyButtonForTesting() == null ||
                     workspace.GetPaletteCardForTesting(SpiceComponentKind.AcVoltageSource) == null)
                     throw new InvalidOperationException("Q2 UI 层级契约缺少既有工作区控件。");
-                if (workspace.GetDcAnalysisModeButtonForTesting().name != "DcAnalysisMode" || workspace.GetAcAnalysisModeButtonForTesting().name != "AcAnalysisMode")
+                if (workspace.GetAnalysisModeToggleButtonForTesting().name != "AnalysisModeToggle" ||
+                    workspace.GetAnalysisModeToggleButtonForTesting().transform.parent != bindings.RunButton.transform.parent)
                     throw new InvalidOperationException("Q2 UI 层级契约中的分析按钮名称发生变化。");
             }
             finally

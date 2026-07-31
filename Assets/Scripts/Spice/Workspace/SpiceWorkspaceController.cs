@@ -55,10 +55,10 @@ namespace ElectricalSim.Spice.Workspace
         private Button parameterApplyButton;
         private Button unitButton;
         private Text unitLabel;
-        private Button dcAnalysisModeButton;
-        private Button acAnalysisModeButton;
+        private Button analysisModeToggleButton;
         private InputField acFrequencyInput;
         private Button applyAcFrequencyButton;
+        private RectTransform analysisSettingsRoot;
         private readonly Dictionary<SpiceComponentKind, CanvasGroup> paletteCardGroups = new Dictionary<SpiceComponentKind, CanvasGroup>();
         private Button runButton;
         private Button rotateButton;
@@ -83,7 +83,11 @@ namespace ElectricalSim.Spice.Workspace
         private Func<bool> modalInputGuard;
         private RectTransform viewportRect;
         private RectTransform contentRect;
+        private RectTransform gridLayer;
         private SpiceWorkspaceViewController viewController;
+        private Vector2 lastSynchronizedViewportSize = new Vector2(-1f, -1f);
+        private bool workspaceGeometryReady;
+        private bool verifyGeometryOnNextFrame;
         private Text zoomLabel;
         private Button copyResultButton;
         private readonly SpiceDrawingFileService fileService = new SpiceDrawingFileService();
@@ -103,6 +107,7 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform WorkspaceRect { get; private set; }
         public RectTransform ViewportRect => viewportRect;
         public RectTransform ContentRect => contentRect;
+        internal bool IsWorkspaceGeometryReady => workspaceGeometryReady;
         public SpiceWorkspaceViewController ViewController => viewController;
         public RectTransform WireLayer { get; private set; }
         public RectTransform OverlayLayer { get; private set; }
@@ -135,6 +140,22 @@ namespace ElectricalSim.Spice.Workspace
             BuildUi();
             Model.Changed += HandleModelChanged;
             initialized = true;
+            RequestWorkspaceGeometrySynchronization();
+        }
+
+        private void OnEnable()
+        {
+            // Host 会在 SPICE 根节点尚未激活时完成结构绑定。只有根节点真正激活后，
+            // RectTransform 才拥有最终的布局尺寸，因此这里再提交一次工作区几何。
+            RequestWorkspaceGeometrySynchronization();
+        }
+
+        private void OnRectTransformDimensionsChange()
+        {
+            if (initialized)
+            {
+                RequestWorkspaceGeometrySynchronization();
+            }
         }
 
         private void OnDestroy()
@@ -170,6 +191,17 @@ namespace ElectricalSim.Spice.Workspace
 
         private void Update()
         {
+            if (verifyGeometryOnNextFrame)
+            {
+                verifyGeometryOnNextFrame = false;
+                SynchronizeWorkspaceGeometry();
+            }
+
+            if (workspaceGeometryReady && viewportRect != null && !ApproximatelySameSize(viewportRect.rect.size, lastSynchronizedViewportSize))
+            {
+                SynchronizeWorkspaceGeometry();
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelPendingWire();

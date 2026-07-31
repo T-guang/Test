@@ -20,7 +20,6 @@ namespace ElectricalSim.Spice.Workspace
         private void BuildUi()
         {
             var toolbar = bindings.RunButton.transform.parent;
-            CreateAnalysisControls(toolbar as RectTransform);
             runButton = bindings.RunButton;
             rotateButton = bindings.RotateButton;
             runButton.onClick.AddListener(RunFromButton);
@@ -28,7 +27,7 @@ namespace ElectricalSim.Spice.Workspace
             bindings.DeleteButton.onClick.AddListener(DeleteSelection);
             bindings.ClearButton.onClick.AddListener(ClearWorkspace);
             statusText = SpiceWorkspaceUi.CreateText(toolbar.transform, "Status", "未计算", 15, FontStyle.Normal, TextAnchor.MiddleRight, MainUiTheme.MutedText);
-            SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-350f, 0f), new Vector2(-20f, 0f));
+            SpiceWorkspaceUi.Anchor(statusText.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-252f, 0f), new Vector2(-20f, 0f));
 
             // 工具栏新增视图命令按钮：[－] [100%] [＋] [适配全部] [重置视图]
             zoomOutButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ZoomOut", "－", MainUiTheme.ToolbarButton, null);
@@ -43,6 +42,7 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(fitAll.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(606f, -20f), new Vector2(676f, 20f));
             var resetView = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ResetView", "重置视图", MainUiTheme.ToolbarButton, null);
             SpiceWorkspaceUi.Anchor(resetView.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(684f, -20f), new Vector2(754f, 20f));
+            CreateAnalysisModeToggle(toolbar as RectTransform);
 
             var palette = bindings.PaletteRoot;
             var paletteTitle = SpiceWorkspaceUi.CreateText(palette.transform, "Title", "基础元件", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
@@ -71,13 +71,13 @@ namespace ElectricalSim.Spice.Workspace
             contentRect.anchorMin = new Vector2(0.5f, 0.5f);
             contentRect.anchorMax = new Vector2(0.5f, 0.5f);
             contentRect.pivot = new Vector2(0.5f, 0.5f);
-            // 逻辑画布宽高 = Viewport 初始尺寸 × 3
-            var viewportSize = workspace.rect.size;
-            contentRect.sizeDelta = viewportSize * 3f;
+            // 根节点未激活时 Viewport 的尺寸可能为零。结构初始化只创建统一坐标系，
+            // 真正的 Content 尺寸由激活后的 SynchronizeWorkspaceGeometry 统一提交。
+            contentRect.sizeDelta = Vector2.zero;
             contentRect.localScale = Vector3.one;
             contentRect.anchoredPosition = Vector2.zero;
             // 将三层重新挂到 Content 下，保持 WireLayer 在最底
-            var gridLayer = FindDirectGridLayer(workspace);
+            gridLayer = FindDirectGridLayer(workspace);
             ConfigureWorkspaceLayer(gridLayer, contentRect);
             ConfigureWorkspaceLayer(bindings.WireLayer, contentRect);
             ConfigureWorkspaceLayer(bindings.ComponentLayer, contentRect);
@@ -109,23 +109,24 @@ namespace ElectricalSim.Spice.Workspace
             var diagnosticRoot = bindings.DiagnosticRoot;
             var assistantTitle = SpiceWorkspaceUi.CreateText(side.transform, "AssistantTitle", "仿真助手", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(assistantTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -46f), new Vector2(-18f, -8f));
-            ConfigureAssistantPanel(parameterRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -198f), new Vector2(-12f, -54f));
-            ConfigureAssistantPanel(resultRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -396f), new Vector2(-12f, -206f));
-            ConfigureAssistantPanel(netlistRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -564f), new Vector2(-12f, -404f));
-            ConfigureAssistantPanel(diagnosticRoot, Vector2.zero, Vector2.one, new Vector2(12f, 18f), new Vector2(-12f, -572f));
+            ConfigureAssistantPanel(parameterRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -306f), new Vector2(-12f, -54f));
+            ConfigureAssistantPanel(resultRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -496f), new Vector2(-12f, -314f));
+            ConfigureAssistantPanel(netlistRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -648f), new Vector2(-12f, -504f));
+            ConfigureAssistantPanel(diagnosticRoot, Vector2.zero, Vector2.one, new Vector2(12f, 18f), new Vector2(-12f, -656f));
 
             parameterTitle = SpiceWorkspaceUi.CreateText(parameterRoot, "ParameterTitle", "参数设置", 16, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -38f), new Vector2(-14f, -8f));
+            SpiceWorkspaceUi.Anchor(parameterTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -154f), new Vector2(-14f, -126f));
+            CreateAcAnalysisSettings(parameterRoot);
             parameterInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "ParameterInput");
-            SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -82f), new Vector2(-4f, -44f));
+            SpiceWorkspaceUi.Anchor(parameterInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(14f, -198f), new Vector2(-4f, -160f));
             acPhaseLabel = SpiceWorkspaceUi.CreateText(parameterRoot, "AcPhaseLabel", "相位", 13, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(acPhaseLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -120f), new Vector2(70f, -90f));
+            SpiceWorkspaceUi.Anchor(acPhaseLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(14f, -238f), new Vector2(70f, -208f));
             acPhaseInput = SpiceWorkspaceUi.CreateInput(parameterRoot, "AcPhaseInput");
-            SpiceWorkspaceUi.Anchor(acPhaseInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(74f, -122f), new Vector2(-4f, -88f));
+            SpiceWorkspaceUi.Anchor(acPhaseInput.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0.62f, 1f), new Vector2(74f, -242f), new Vector2(-4f, -204f));
             var phaseUnit = SpiceWorkspaceUi.CreateText(parameterRoot, "AcPhaseUnit", "°", 14, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(phaseUnit.rectTransform, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -120f), new Vector2(-14f, -90f));
+            SpiceWorkspaceUi.Anchor(phaseUnit.rectTransform, new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -238f), new Vector2(-14f, -208f));
             unitButton = SpiceWorkspaceUi.CreateButton(parameterRoot, "Unit", "V", MainUiTheme.FilterButton, CycleUnit);
-            SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -82f), new Vector2(-14f, -44f));
+            SpiceWorkspaceUi.Anchor(unitButton.GetComponent<RectTransform>(), new Vector2(0.64f, 1f), new Vector2(1f, 1f), new Vector2(2f, -198f), new Vector2(-14f, -160f));
             unitLabel = unitButton.GetComponentInChildren<Text>();
             var apply = SpiceWorkspaceUi.CreateButton(parameterRoot, "Apply", "应用参数", MainUiTheme.PrimaryBlue, ApplyParameter, true);
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
@@ -180,11 +181,11 @@ namespace ElectricalSim.Spice.Workspace
             // 布局紧随视图命令按钮之后，与右侧 Status 文本之间保持留白，避免 1366×768 下重叠。
             // 按钮宽度对齐既有 ToolbarButton 样式（70f），高度同“旋转/删除”按钮（40f）。
             saveFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "SaveFile", "保存", MainUiTheme.ToolbarButton, HandleSaveButtonClicked);
-            SpiceWorkspaceUi.Anchor(saveFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(762f, -20f), new Vector2(832f, 20f));
+            SpiceWorkspaceUi.Anchor(saveFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(880f, -20f), new Vector2(950f, 20f));
             saveAsFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "SaveAsFile", "另存为", MainUiTheme.ToolbarButton, HandleSaveAsButtonClicked);
-            SpiceWorkspaceUi.Anchor(saveAsFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(840f, -20f), new Vector2(910f, 20f));
+            SpiceWorkspaceUi.Anchor(saveAsFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(958f, -20f), new Vector2(1028f, 20f));
             importFileButton = SpiceWorkspaceUi.CreateButton(toolbar.transform, "ImportFile", "导入", MainUiTheme.ToolbarButton, HandleImportButtonClicked);
-            SpiceWorkspaceUi.Anchor(importFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(918f, -20f), new Vector2(988f, 20f));
+            SpiceWorkspaceUi.Anchor(importFileButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(1036f, -20f), new Vector2(1106f, 20f));
         }
 
         private static RectTransform FindDirectGridLayer(RectTransform workspace)
@@ -216,6 +217,107 @@ namespace ElectricalSim.Spice.Workspace
             layer.sizeDelta = Vector2.zero;
             layer.localScale = Vector3.one;
             layer.localRotation = Quaternion.identity;
+        }
+
+        /// <summary>
+        /// 请求在 SPICE 根节点激活后同步工作区几何。结构初始化可能发生在根节点未激活时，
+        /// 此时读取到的 Viewport 尺寸不具有任何布局意义，不能用它计算逻辑画布边界。
+        /// </summary>
+        private void RequestWorkspaceGeometrySynchronization()
+        {
+            if (!initialized || !gameObject.activeInHierarchy)
+            {
+                return;
+            }
+
+            if (SynchronizeWorkspaceGeometry())
+            {
+                // 先在激活当帧提交，再在下一帧布局稳定后复核一次；两次都只调整视图几何，
+                // 不接触 Model、electrical revision 或结果状态。
+                verifyGeometryOnNextFrame = true;
+            }
+        }
+
+        /// <summary>
+        /// 用已激活 Viewport 的真实尺寸同步 Content 与所有工作区图层。
+        /// 返回 false 表示布局尚未有效，调用方必须延后拖动和新元件落点，而不是把它们夹到伪边界。
+        /// </summary>
+        internal bool SynchronizeWorkspaceGeometry()
+        {
+            if (!initialized || !gameObject.activeInHierarchy || viewportRect == null || contentRect == null)
+            {
+                workspaceGeometryReady = false;
+                return false;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(viewportRect);
+            var viewportSize = viewportRect.rect.size;
+            if (viewportSize.x < 1f || viewportSize.y < 1f)
+            {
+                workspaceGeometryReady = false;
+                return false;
+            }
+
+            contentRect.sizeDelta = viewportSize * 3f;
+            ConfigureWorkspaceLayer(gridLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.WireLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.ComponentLayer, contentRect);
+            ConfigureWorkspaceLayer(bindings.OverlayLayer, contentRect);
+            if (gridLayer != null)
+            {
+                gridLayer.SetSiblingIndex(0);
+                var grid = gridLayer.GetComponent<WorkspaceGrid>();
+                if (grid != null) grid.SetVerticesDirty();
+            }
+            bindings.WireLayer.SetSiblingIndex(1);
+            bindings.ComponentLayer.SetSiblingIndex(2);
+            bindings.OverlayLayer.SetSiblingIndex(3);
+            lastSynchronizedViewportSize = viewportSize;
+            workspaceGeometryReady = true;
+            viewController?.SynchronizeGeometry();
+            return true;
+        }
+
+        private static bool ApproximatelySameSize(Vector2 left, Vector2 right)
+        {
+            return Mathf.Abs(left.x - right.x) <= 0.1f && Mathf.Abs(left.y - right.y) <= 0.1f;
+        }
+
+        internal RectTransform GetGridLayerForTesting() => gridLayer;
+
+        // 纯验证 Host 不经过正式帧循环；显式触发同一几何入口以验证激活后同步契约。
+        internal bool SynchronizeWorkspaceGeometryForTesting() => SynchronizeWorkspaceGeometry();
+
+        internal bool ValidateWorkspaceGeometryForTesting(out string error)
+        {
+            if (!workspaceGeometryReady || viewportRect == null || contentRect == null || gridLayer == null || WireLayer == null || OverlayLayer == null || bindings.ComponentLayer == null)
+            {
+                error = "工作区几何尚未准备完成。";
+                return false;
+            }
+
+            var expected = viewportRect.rect.size * 3f;
+            if (!ApproximatelySameSize(contentRect.rect.size, expected) ||
+                !ApproximatelySameSize(gridLayer.rect.size, contentRect.rect.size) ||
+                !ApproximatelySameSize(bindings.ComponentLayer.rect.size, contentRect.rect.size) ||
+                !ApproximatelySameSize(WireLayer.rect.size, contentRect.rect.size) ||
+                !ApproximatelySameSize(OverlayLayer.rect.size, contentRect.rect.size))
+            {
+                error = "工作区图层尺寸未与 Content 同步。";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        internal string GetWorkspaceGeometryDiagnosticsForTesting()
+        {
+            var canvas = viewportRect != null ? viewportRect.GetComponentInParent<Canvas>() : null;
+            return $"Screen={Screen.width}x{Screen.height}; CanvasScale={canvas?.scaleFactor ?? 0f:G6}; RootActive={gameObject.activeInHierarchy}; " +
+                $"Viewport={viewportRect?.rect.size}; Content={contentRect?.rect.size}; Grid={gridLayer?.rect.size}; " +
+                $"ComponentLayer={bindings?.ComponentLayer?.rect.size}; WireLayer={WireLayer?.rect.size}; OverlayLayer={OverlayLayer?.rect.size}; Workspace={WorkspaceRect?.rect.size}";
         }
 
         private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -268,51 +370,37 @@ namespace ElectricalSim.Spice.Workspace
             RefreshParameterPanel();
         }
 
-        private void CreateAnalysisControls(RectTransform toolbar)
+        private void CreateAnalysisModeToggle(RectTransform toolbar)
         {
-            var root = toolbar != null ? toolbar.parent as RectTransform : null;
-            if (root == null) root = toolbar;
-            if (root == null) return;
-
-            if (root.rect.height >= 500f)
-            {
-                ReserveTopSpace(bindings.PaletteRoot, -102f);
-                ReserveTopSpace(bindings.AssistantRoot, -102f);
-                ReserveTopSpace(bindings.WorkspaceViewport, -118f);
-            }
-
-            var bar = SpiceWorkspaceUi.CreateImage(root, "AnalysisControls", new Color(0.96f, 0.98f, 1f));
-            SpiceWorkspaceUi.Anchor(bar.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -102f), new Vector2(0f, -66f));
-            bar.raycastTarget = true;
-
-            var title = SpiceWorkspaceUi.CreateText(bar.transform, "AnalysisLabel", "分析", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(18f, 0f), new Vector2(54f, 0f));
-            dcAnalysisModeButton = SpiceWorkspaceUi.CreateButton(bar.transform, "DcAnalysisMode", "直流工作点", MainUiTheme.FilterButton, () => SetAnalysisModeFromUi(SpiceAnalysisMode.DcOperatingPoint));
-            SpiceWorkspaceUi.Anchor(dcAnalysisModeButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(58f, 4f), new Vector2(146f, -4f));
-            acAnalysisModeButton = SpiceWorkspaceUi.CreateButton(bar.transform, "AcAnalysisMode", "单频 AC", MainUiTheme.FilterButton, () => SetAnalysisModeFromUi(SpiceAnalysisMode.AcSingleFrequency));
-            SpiceWorkspaceUi.Anchor(acAnalysisModeButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(150f, 4f), new Vector2(224f, -4f));
-
-            var frequencyLabel = SpiceWorkspaceUi.CreateText(bar.transform, "FrequencyLabel", "频率", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(frequencyLabel.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(246f, 0f), new Vector2(286f, 0f));
-            acFrequencyInput = SpiceWorkspaceUi.CreateInput(bar.transform, "AcFrequencyInput");
-            SpiceWorkspaceUi.Anchor(acFrequencyInput.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(290f, 4f), new Vector2(386f, -4f));
-            var frequencyUnit = SpiceWorkspaceUi.CreateText(bar.transform, "FrequencyUnit", "Hz", 13, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(frequencyUnit.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(390f, 0f), new Vector2(414f, 0f));
-            applyAcFrequencyButton = SpiceWorkspaceUi.CreateButton(bar.transform, "ApplyAcFrequency", "应用", MainUiTheme.PrimaryBlue, ApplyAcFrequency);
-            SpiceWorkspaceUi.Anchor(applyAcFrequencyButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(420f, 4f), new Vector2(480f, -4f));
+            if (toolbar == null) return;
+            analysisModeToggleButton = SpiceWorkspaceUi.CreateButton(toolbar, "AnalysisModeToggle", "分析：DC", MainUiTheme.ToolbarButton, ToggleAnalysisMode);
+            SpiceWorkspaceUi.Anchor(analysisModeToggleButton.GetComponent<RectTransform>(), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(762f, -20f), new Vector2(872f, 20f));
         }
 
-        private static void ReserveTopSpace(RectTransform rect, float topOffset)
+        private void CreateAcAnalysisSettings(RectTransform parameterRoot)
         {
-            if (rect == null) return;
-            var offsetMax = rect.offsetMax;
-            offsetMax.y = topOffset;
-            rect.offsetMax = offsetMax;
+            analysisSettingsRoot = new GameObject("AcAnalysisSettings", typeof(RectTransform)).GetComponent<RectTransform>();
+            analysisSettingsRoot.SetParent(parameterRoot, false);
+            SpiceWorkspaceUi.Anchor(analysisSettingsRoot, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -118f), new Vector2(-14f, -10f));
+            var title = SpiceWorkspaceUi.CreateText(analysisSettingsRoot, "Title", "分析设置", 13, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -28f), Vector2.zero);
+            var label = SpiceWorkspaceUi.CreateText(analysisSettingsRoot, "FrequencyLabel", "分析频率", 13, FontStyle.Normal, TextAnchor.MiddleLeft, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(label.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 2f), new Vector2(64f, 34f));
+            acFrequencyInput = SpiceWorkspaceUi.CreateInput(analysisSettingsRoot, "AcFrequencyInput");
+            SpiceWorkspaceUi.Anchor(acFrequencyInput.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.58f, 1f), new Vector2(68f, 0f), new Vector2(-64f, 38f));
+            var unit = SpiceWorkspaceUi.CreateText(analysisSettingsRoot, "FrequencyUnit", "Hz", 13, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.SecondaryText);
+            SpiceWorkspaceUi.Anchor(unit.rectTransform, new Vector2(0.58f, 0f), new Vector2(0.72f, 1f), new Vector2(2f, 2f), new Vector2(-2f, 34f));
+            applyAcFrequencyButton = SpiceWorkspaceUi.CreateButton(analysisSettingsRoot, "ApplyAcFrequency", "应用", MainUiTheme.PrimaryBlue, ApplyAcFrequency);
+            SpiceWorkspaceUi.Anchor(applyAcFrequencyButton.GetComponent<RectTransform>(), new Vector2(0.72f, 0f), new Vector2(1f, 1f), new Vector2(2f, 0f), Vector2.zero);
+            analysisSettingsRoot.gameObject.SetActive(false);
         }
 
-        private void SetAnalysisModeFromUi(SpiceAnalysisMode mode)
+        private void ToggleAnalysisMode()
         {
-            if (!TrySetAnalysisMode(mode) && ResultState != SpiceWorkspaceResultState.Running && statusText != null)
+            var next = Model.AnalysisMode == SpiceAnalysisMode.DcOperatingPoint
+                ? SpiceAnalysisMode.AcSingleFrequency
+                : SpiceAnalysisMode.DcOperatingPoint;
+            if (!TrySetAnalysisMode(next) && ResultState != SpiceWorkspaceResultState.Running && statusText != null)
                 statusText.text = "分析模式未改变。";
             RefreshAnalysisControls();
         }
@@ -335,13 +423,14 @@ namespace ElectricalSim.Spice.Workspace
 
         private void RefreshAnalysisControls()
         {
-            if (dcAnalysisModeButton == null || acAnalysisModeButton == null || acFrequencyInput == null || applyAcFrequencyButton == null) return;
+            if (analysisModeToggleButton == null || acFrequencyInput == null || applyAcFrequencyButton == null) return;
             var isRunning = ResultState == SpiceWorkspaceResultState.Running;
             var isAc = Model.AnalysisMode == SpiceAnalysisMode.AcSingleFrequency;
-            dcAnalysisModeButton.interactable = !isRunning && isAc;
-            acAnalysisModeButton.interactable = !isRunning && !isAc;
-            ApplyAnalysisModeVisual(dcAnalysisModeButton, !isAc);
-            ApplyAnalysisModeVisual(acAnalysisModeButton, isAc);
+            analysisModeToggleButton.interactable = !isRunning;
+            var toggleText = analysisModeToggleButton.GetComponentInChildren<Text>();
+            if (toggleText != null) toggleText.text = isAc ? "分析：单频 AC" : "分析：DC";
+            ApplyAnalysisModeVisual(analysisModeToggleButton, true);
+            if (analysisSettingsRoot != null) analysisSettingsRoot.gameObject.SetActive(isAc);
             acFrequencyInput.interactable = !isRunning && isAc;
             applyAcFrequencyButton.interactable = !isRunning && isAc;
             acFrequencyInput.text = FormatFrequencyInput(Model.AcFrequencyHz);

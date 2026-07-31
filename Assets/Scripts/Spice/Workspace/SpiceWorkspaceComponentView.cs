@@ -145,7 +145,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (owner.IsViewNavigationActive)
+            if (owner.IsViewNavigationActive || !owner.IsWorkspaceGeometryReady)
             {
                 dragOccurred = true;
                 return;
@@ -159,7 +159,7 @@ namespace ElectricalSim.Spice.Workspace
 
         public void OnDrag(PointerEventData eventData)
         {
-            if (owner.IsViewNavigationActive) return;
+            if (owner.IsViewNavigationActive || !owner.IsWorkspaceGeometryReady) return;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(owner.WorkspaceRect, eventData.position, eventData.pressEventCamera, out var pointer)) return;
             var half = rectTransform.sizeDelta * 0.5f;
             var bounds = owner.WorkspaceRect.rect;

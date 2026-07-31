@@ -45,6 +45,21 @@ namespace ElectricalSim.Spice.Workspace
             ResetView();
         }
 
+        /// <summary>
+        /// 工作区在根节点激活后才获得可信的 Viewport 尺寸。此入口只重新夹紧当前平移，
+        /// 不重置缩放、不改变元件逻辑坐标，也不参与任何电气状态更新。
+        /// </summary>
+        public void SynchronizeGeometry()
+        {
+            if (viewportRect == null || contentRect == null || viewportRect.rect.width < 1f || viewportRect.rect.height < 1f)
+            {
+                return;
+            }
+
+            ClampContentPosition();
+            UpdateZoomLabel();
+        }
+
         private void Update()
         {
             // 导航仅改变视图；平移结束后会抑制与其对应的点击事件。

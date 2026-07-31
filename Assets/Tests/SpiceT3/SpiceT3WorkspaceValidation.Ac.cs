@@ -9,6 +9,7 @@ using ElectricalSim.Spice.Topology;
 using ElectricalSim.Spice.Workspace;
 using ElectricalSim.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.T3
@@ -24,36 +25,30 @@ namespace ElectricalSim.Spice.T3
             try
             {
                 var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
-                var dc = workspace.GetDcAnalysisModeButtonForTesting();
-                var ac = workspace.GetAcAnalysisModeButtonForTesting();
-                if (dc == null || ac == null || dc.interactable || !ac.interactable)
-                    throw new InvalidOperationException("AC-C1 default DC analysis segmented control state is incorrect.");
-                if (dc.GetComponent<Image>().color != MainUiTheme.PrimaryBlue || dc.GetComponentInChildren<Text>().color != Color.white)
-                    throw new InvalidOperationException("AC-C1 default DC selected visual is missing.");
+                var toggle = workspace.GetAnalysisModeToggleButtonForTesting();
+                if (toggle == null || !toggle.interactable || toggle.GetComponentInChildren<Text>().text != "分析：DC")
+                    throw new InvalidOperationException("AC-C1 default DC analysis mode toggle state is incorrect.");
 
                 var beforeAc = workspace.ElectricalRevisionForTesting;
-                ac.onClick.Invoke();
+                toggle.onClick.Invoke();
                 if (workspace.Model.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency || workspace.ElectricalRevisionForTesting != beforeAc + 1 ||
-                    !dc.interactable || ac.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun)
+                    !toggle.interactable || workspace.ResultState != SpiceWorkspaceResultState.NeverRun || toggle.GetComponentInChildren<Text>().text != "分析：单频 AC")
                     throw new InvalidOperationException("AC-C1 DC to AC mode control did not use the formal controller path.");
-                if (ac.GetComponent<Image>().color != MainUiTheme.PrimaryBlue || ac.GetComponentInChildren<Text>().color != Color.white ||
-                    dc.GetComponent<Image>().color == MainUiTheme.PrimaryBlue)
-                    throw new InvalidOperationException("AC-C1 AC selected visual did not replace DC selected visual.");
 
                 var sameModeRevision = workspace.ElectricalRevisionForTesting;
                 if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.ElectricalRevisionForTesting != sameModeRevision)
                     throw new InvalidOperationException("AC-C1 same analysis mode advanced the electrical revision.");
 
                 workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
-                dc.onClick.Invoke();
+                toggle.onClick.Invoke();
                 if (workspace.Model.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || workspace.ResultState != SpiceWorkspaceResultState.Stale)
                     throw new InvalidOperationException("AC-C1 AC to DC did not stale the previous outcome.");
 
                 workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Running);
-                if (dc.interactable || ac.interactable || workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
+                if (toggle.interactable || workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
                     throw new InvalidOperationException("AC-C1 running calculation allowed an analysis-mode change.");
-                if (dc.GetComponent<Image>().color != MainUiTheme.PrimaryBlue)
-                    throw new InvalidOperationException("AC-C1 running state lost the selected DC visual.");
+                if (toggle.GetComponentInChildren<Text>().text != "分析：DC")
+                    throw new InvalidOperationException("AC-C1 running state lost the current analysis mode label.");
             }
             finally
             {
@@ -71,7 +66,8 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("AC-C1 frequency setup could not enter AC mode.");
                 var input = workspace.GetAcFrequencyInputForTesting();
                 var apply = workspace.GetApplyAcFrequencyButtonForTesting();
-                if (input == null || apply == null || !input.interactable || !apply.interactable)
+                if (workspace.GetAcAnalysisSettingsRootForTesting() == null || !workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf ||
+                    input == null || apply == null || !input.interactable || !apply.interactable)
                     throw new InvalidOperationException("AC-C1 frequency control was not enabled in AC mode.");
 
                 foreach (var accepted in new[] { "1000", "1e3", SpiceAnalysisLimits.MinFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture), SpiceAnalysisLimits.MaxFrequencyHz.ToString("G17", System.Globalization.CultureInfo.InvariantCulture) })
@@ -265,13 +261,68 @@ namespace ElectricalSim.Spice.T3
                     var rect = root.GetComponent<RectTransform>(); rect.sizeDelta = size;
                     var workspace = CreateInitializedWorkspaceForCopy(root.transform, out var bindings);
                     Canvas.ForceUpdateCanvases();
-                    var bar = bindings.RunButton.transform.parent.Find("AnalysisControls") as RectTransform;
-                    if (bar == null || bar.rect.width <= 0f || bar.rect.height <= 0f || bindings.PaletteRoot.Find("AcVoltageSourceCard") == null ||
-                        bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null || workspace.GetDcAnalysisModeButtonForTesting() == null)
+                    if (!workspace.ValidateWorkspaceGeometryForTesting(out var geometryError))
+                        throw new InvalidOperationException("AC-C1 layout geometry contract failed at " + size + ": " + geometryError);
+                    var toolbar = bindings.RunButton.transform.parent as RectTransform;
+                    var modeToggle = workspace.GetAnalysisModeToggleButtonForTesting();
+                    if (toolbar == null || toolbar.Find("AnalysisControls") != null || modeToggle == null || modeToggle.transform.parent != toolbar ||
+                        bindings.PaletteRoot.Find("AcVoltageSourceCard") == null || bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null ||
+                        workspace.GetAcFrequencyInputForTesting() == null || workspace.GetApplyAcFrequencyButtonForTesting() == null)
                         throw new InvalidOperationException("AC-C1 layout structure smoke did not create required controls at " + size + ".");
+                    var buttons = toolbar.GetComponentsInChildren<Button>(true).Where(button => button.gameObject.activeInHierarchy).ToArray();
+                    if (buttons.Any(button => !ContainsRect(toolbar, button.GetComponent<RectTransform>())) ||
+                        buttons.SelectMany((left, index) => buttons.Skip(index + 1).Select(right => new { left, right }))
+                            .Any(pair => Overlaps(pair.left.GetComponent<RectTransform>(), pair.right.GetComponent<RectTransform>())))
+                        throw new InvalidOperationException("AC-C1 toolbar buttons overlap or extend outside the toolbar at " + size + ".");
+                    if (Overlaps(toolbar, bindings.WorkspaceViewport) || Overlaps(toolbar, bindings.PaletteRoot) || Overlaps(toolbar, bindings.AssistantRoot))
+                        throw new InvalidOperationException("AC-C1 toolbar overlaps a workspace region at " + size + ".");
+                    if (!ContainsRect(workspace.GetGridLayerForTesting(), bindings.WorkspaceViewport))
+                        throw new InvalidOperationException("AC-C1 grid no longer covers the viewport's visible top edge at " + size + ".");
+                    if (workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf)
+                        throw new InvalidOperationException("AC-C1 DC mode must hide the right-side frequency settings.");
+                    workspace.GetAnalysisModeToggleButtonForTesting().onClick.Invoke();
+                    if (!workspace.GetAcAnalysisSettingsRootForTesting().gameObject.activeSelf)
+                        throw new InvalidOperationException("AC-C1 AC mode must show the right-side frequency settings.");
+                    var source = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                    var parameterInput = workspace.GetParameterInputForTesting();
+                    var phaseInput = workspace.GetAcPhaseInputForTesting();
+                    var unit = workspace.GetUnitButtonForTesting();
+                    var apply = workspace.GetParameterApplyButtonForTesting();
+                    var parameterElements = new[]
+                    {
+                        parameterInput.GetComponent<RectTransform>(), phaseInput.GetComponent<RectTransform>(),
+                        unit.GetComponent<RectTransform>(), apply.GetComponent<RectTransform>()
+                    };
+                    if (source == null || parameterElements.Any(element => !ContainsRect(bindings.ParameterRoot, element)) ||
+                        Overlaps(parameterElements[0], parameterElements[1]) || Overlaps(parameterElements[0], parameterElements[2]) ||
+                        Overlaps(parameterElements[1], parameterElements[3]))
+                        throw new InvalidOperationException("AC-C1 AC frequency and component parameter controls overlap at " + size + ".");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(root); }
             }
+        }
+
+        private static bool ContainsRect(RectTransform outer, RectTransform inner)
+        {
+            GetWorldBounds(outer, out var outerMin, out var outerMax);
+            GetWorldBounds(inner, out var innerMin, out var innerMax);
+            return innerMin.x >= outerMin.x - 0.1f && innerMax.x <= outerMax.x + 0.1f &&
+                innerMin.y >= outerMin.y - 0.1f && innerMax.y <= outerMax.y + 0.1f;
+        }
+
+        private static bool Overlaps(RectTransform left, RectTransform right)
+        {
+            GetWorldBounds(left, out var leftMin, out var leftMax);
+            GetWorldBounds(right, out var rightMin, out var rightMax);
+            return leftMin.x < rightMax.x && leftMax.x > rightMin.x && leftMin.y < rightMax.y && leftMax.y > rightMin.y;
+        }
+
+        private static void GetWorldBounds(RectTransform rect, out Vector2 min, out Vector2 max)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            min = corners[0];
+            max = corners[2];
         }
 
         private static void ValidateAcAnalysisSettingsAndSnapshot()
