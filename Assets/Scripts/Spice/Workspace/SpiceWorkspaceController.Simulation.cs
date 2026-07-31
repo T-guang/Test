@@ -22,6 +22,15 @@ namespace ElectricalSim.Spice.Workspace
             EnsureInitialized();
             if (ResultState == SpiceWorkspaceResultState.Running) return null;
 
+            // 必须在构建 CircuitModel 之前拦截模式不兼容器件：它们仍是画布和 V2 图纸的合法状态，
+            // 但当前分析没有对应数值语义。预检只写入提示，不触碰结果、网表、revision 或 Model。
+            if (TryGetAnalysisModeIncompatibility(out var statusMessage, out var diagnosticMessage))
+            {
+                if (statusText != null) statusText.text = statusMessage;
+                SetDiagnosticText(diagnosticMessage);
+                return null;
+            }
+
             CancelPendingWire();
             CancelPaletteDrag();
             var previousState = ResultState;
@@ -143,6 +152,40 @@ namespace ElectricalSim.Spice.Workspace
         internal void SetSimulationServiceForTesting(SpiceSimulationService service)
         {
             simulationService = service ?? throw new ArgumentNullException(nameof(service));
+        }
+
+        /// <summary>
+        /// 复用元件池的分析模式支持规则检查既有画布元件。模式切换和图纸导入可以保留不兼容器件，
+        /// 因此只能在运行前阻断；这样既不会误删用户数据，也不会把本应由当前模式解释的元件交给 GraphBuilder。
+        /// </summary>
+        private bool TryGetAnalysisModeIncompatibility(out string statusMessage, out string diagnosticMessage)
+        {
+            var incompatible = Model.Components
+                .Where(component => !IsComponentKindSupportedInCurrentAnalysis(component.Kind))
+                .OrderBy(component => component.InstanceId, StringComparer.Ordinal)
+                .ToArray();
+            if (incompatible.Length == 0)
+            {
+                statusMessage = null;
+                diagnosticMessage = null;
+                return false;
+            }
+
+            var listedComponents = string.Join("、", incompatible.Select(component => AnalysisModeComponentDisplayName(component.Kind) + " " + component.InstanceId));
+            var isDc = Model.AnalysisMode == SpiceAnalysisMode.DcOperatingPoint;
+            statusMessage = "当前模式包含不可计算的器件：" + listedComponents + "。详见诊断。";
+            diagnosticMessage = (isDc ? "当前为直流工作点模式" : "当前为单频 AC 模式") + "，但图纸中包含当前模式不可计算的器件：\n" +
+                listedComponents + "。\n器件已保留，请" + (incompatible.Length == 1 ? "删除该器件" : "删除这些器件") +
+                (isDc ? "或切换到单频 AC。" : "或切换到 DC。");
+            return true;
+        }
+
+        private static string AnalysisModeComponentDisplayName(SpiceComponentKind kind)
+        {
+            return kind == SpiceComponentKind.AcVoltageSource ? "交流电压源" :
+                kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" :
+                kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" :
+                kind == SpiceComponentKind.SiliconDiode ? "硅二极管" : kind.ToString();
         }
 
         /// <summary>

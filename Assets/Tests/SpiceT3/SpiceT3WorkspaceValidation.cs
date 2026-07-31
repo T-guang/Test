@@ -38,6 +38,8 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("[Spice][AC-C1] 频率输入：通过");
             ValidateAcC1PaletteModeMatrix();
             Debug.Log("[Spice][AC-C1] 元件池模式矩阵：通过");
+            ValidateAnalysisModeIncompatibleComponentDiagnostics();
+            Debug.Log("[Spice][Player-UX] 模式不兼容器件诊断：通过");
             ValidateAcC1AcSourceParameterEditing();
             Debug.Log("[Spice][AC-C1] 交流源参数编辑：通过");
             ValidateAcC1ResultPresentation();

@@ -24,7 +24,7 @@ namespace ElectricalSim.Spice.T3
         /// </summary>
         private static void ValidateQualityQ1SuiteSplitIntegrity()
         {
-            const int expectedPreQ2ValidateMethodCount = 104;
+            const int expectedPreQ2ValidateMethodCount = 105;
             const int expectedQ2ValidateMethodCount = 5;
             var validationMethods = typeof(SpiceT3WorkspaceValidation)
                 .GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
@@ -264,8 +264,8 @@ namespace ElectricalSim.Spice.T3
                 .SelectMany(FindValidateDeclarations)
                 .ToArray();
             var activeNames = activeDeclarations.Select(declaration => declaration.Name).ToArray();
-            if (activeNames.Length != 109 || activeNames.GroupBy(name => name, StringComparer.Ordinal).Any(group => group.Count() != 1))
-                throw new InvalidOperationException("Q2.1 编译生效 Validate 声明数量或重复名称不符合 109/0 契约。");
+            if (activeNames.Length != 110 || activeNames.GroupBy(name => name, StringComparer.Ordinal).Any(group => group.Count() != 1))
+                throw new InvalidOperationException("Q2.1 编译生效 Validate 声明数量或重复名称不符合 110/0 契约。");
 
             var mainPath = partialFiles.Single(path => Path.GetFileName(path) == "SpiceT3WorkspaceValidation.cs");
             var runPureChecksBody = ExtractMethodBody(RemoveFalseConditionalRegions(NormalizeSourceNewlines(File.ReadAllText(mainPath))), "RunPureChecks");
@@ -273,9 +273,9 @@ namespace ElectricalSim.Spice.T3
                 .Cast<System.Text.RegularExpressions.Match>()
                 .Select(match => match.Groups[1].Value)
                 .ToArray();
-            if (directCalls.Length != 109 || directCalls.Distinct(StringComparer.Ordinal).Count() != 109 ||
+            if (directCalls.Length != 110 || directCalls.Distinct(StringComparer.Ordinal).Count() != 110 ||
                 activeNames.Except(directCalls, StringComparer.Ordinal).Any())
-                throw new InvalidOperationException("Q2.1 RunPureChecks 直接调用或活动测试覆盖不符合 109/0 契约。");
+                throw new InvalidOperationException("Q2.1 RunPureChecks 直接调用或活动测试覆盖不符合 110/0 契约。");
 
             var inactiveDeclarations = partialFiles
                 .SelectMany(path => FindValidateDeclarations(ExtractFalseConditionalRegions(NormalizeSourceNewlines(File.ReadAllText(path)))))

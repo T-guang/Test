@@ -149,6 +149,100 @@ namespace ElectricalSim.Spice.T3
             }
         }
 
+        /// <summary>
+        /// 分析模式切换只限制新增器件，既有图纸仍可保存、导入和切回原模式后继续计算。
+        /// 本测试确认运行前预检在 GraphBuilder 和求解服务之前返回，并且不会改变电气或结果状态。
+        /// </summary>
+        private static void ValidateAnalysisModeIncompatibleComponentDiagnostics()
+        {
+            var canvasRoot = new GameObject("SpiceAnalysisModeIncompatibility", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
+                var simulationCalls = 0;
+                workspace.SetSimulationServiceForTesting(new SpiceSimulationService(
+                    (circuit, _) =>
+                    {
+                        simulationCalls++;
+                        return System.Threading.Tasks.Task.FromResult(CreateControllerDcResult(circuit));
+                    },
+                    (circuit, _) =>
+                    {
+                        simulationCalls++;
+                        return System.Threading.Tasks.Task.FromResult(CreateControllerAcResult(circuit));
+                    }));
+
+                // DC 电压源和电流源可以共存；这不是模式不兼容，具体电路合法性仍由后续正式路径判断。
+                var dcVoltage = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 80f);
+                var dcCurrent = workspace.CreateComponent(SpiceComponentKind.DcCurrentSource, Vector2.left * 20f);
+                var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                var ground = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 80f);
+                ConnectSingleResistor(workspace, dcVoltage.InstanceId, resistor.InstanceId, ground.InstanceId);
+                if (!workspace.Connect(dcCurrent.InstanceId, SpiceComponentModel.PositiveTerminalId, dcVoltage.InstanceId, SpiceComponentModel.PositiveTerminalId) ||
+                    !workspace.Connect(dcCurrent.InstanceId, SpiceComponentModel.NegativeTerminalId, ground.InstanceId, SpiceComponentModel.GroundTerminalId))
+                    throw new InvalidOperationException("Mode compatibility validation could not connect the DC current source.");
+                if (workspace.RunCalculationAsync().GetAwaiter().GetResult() == null || simulationCalls != 1 ||
+                    workspace.GetVisibleDiagnosticTextForTesting().Contains("当前模式包含不可计算的器件"))
+                    throw new InvalidOperationException("DC voltage and current sources were incorrectly blocked as mode-incompatible.");
+
+                workspace.ClearWorkspace();
+                var acSource = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                var revisionBeforeDcBlock = workspace.ElectricalRevisionForTesting;
+                var dirtyBeforeDcBlock = workspace.IsDirty;
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                if (workspace.RunCalculationAsync().GetAwaiter().GetResult() != null || simulationCalls != 1 ||
+                    workspace.ElectricalRevisionForTesting != revisionBeforeDcBlock || workspace.IsDirty != dirtyBeforeDcBlock ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Current || workspace.Model.FindComponent(acSource.InstanceId) == null ||
+                    !workspace.GetStatusTextForTesting().Contains(acSource.InstanceId) ||
+                    !workspace.GetVisibleDiagnosticTextForTesting().Contains("交流电压源 " + acSource.InstanceId))
+                    throw new InvalidOperationException("DC mode did not preserve and explicitly diagnose an AC source before simulation.");
+
+                // 保留同一个 AC 源并切回原模式后，必须仍能经正式服务继续计算。
+                if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency))
+                    throw new InvalidOperationException("Mode compatibility validation could not return to AC mode.");
+                resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.right * 80f);
+                ground = workspace.CreateComponent(SpiceComponentKind.Ground, Vector2.down * 80f);
+                ConnectSingleResistor(workspace, acSource.InstanceId, resistor.InstanceId, ground.InstanceId);
+                if (workspace.RunCalculationAsync().GetAwaiter().GetResult() == null || simulationCalls != 2)
+                    throw new InvalidOperationException("Returning to the AC source's compatible mode did not resume formal calculation.");
+
+                workspace.ClearWorkspace();
+                var retainedDcSource = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 40f);
+                var retainedDiode = workspace.CreateComponent(SpiceComponentKind.SiliconDiode, Vector2.right * 40f);
+                var revisionBeforeAcBlock = workspace.ElectricalRevisionForTesting;
+                var dirtyBeforeAcBlock = workspace.IsDirty;
+                workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+                if (workspace.RunCalculationAsync().GetAwaiter().GetResult() != null || simulationCalls != 2 ||
+                    workspace.ElectricalRevisionForTesting != revisionBeforeAcBlock || workspace.IsDirty != dirtyBeforeAcBlock ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Current ||
+                    workspace.Model.FindComponent(retainedDcSource.InstanceId) == null || workspace.Model.FindComponent(retainedDiode.InstanceId) == null ||
+                    !workspace.GetVisibleDiagnosticTextForTesting().Contains("直流电压源 " + retainedDcSource.InstanceId) ||
+                    !workspace.GetVisibleDiagnosticTextForTesting().Contains("硅二极管 " + retainedDiode.InstanceId))
+                    throw new InvalidOperationException("AC mode did not preserve and explicitly diagnose DC sources or diodes before simulation.");
+
+                // V2 不承担模式兼容性裁决；往返后必须完整保留这些器件和分析设置。
+                var acDrawing = new SpiceWorkspaceModel();
+                acDrawing.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency);
+                acDrawing.AddComponent(SpiceComponentKind.DcVoltageSource, Vector2.zero);
+                acDrawing.AddComponent(SpiceComponentKind.SiliconDiode, Vector2.right);
+                if (!SpiceDrawingSerializer.TryFromJson(SpiceDrawingSerializer.ToJson(acDrawing), out var restoredAcDrawing, out _) ||
+                    restoredAcDrawing.AnalysisMode != SpiceAnalysisMode.AcSingleFrequency ||
+                    restoredAcDrawing.Components.Count != 2 ||
+                    restoredAcDrawing.Components.Any(component => component.Kind != SpiceComponentKind.DcVoltageSource && component.Kind != SpiceComponentKind.SiliconDiode))
+                    throw new InvalidOperationException("V2 AC drawing round-trip changed mode-incompatible DC components.");
+                var dcDrawing = new SpiceWorkspaceModel();
+                dcDrawing.AddComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+                if (!SpiceDrawingSerializer.TryFromJson(SpiceDrawingSerializer.ToJson(dcDrawing), out var restoredDcDrawing, out _) ||
+                    restoredDcDrawing.AnalysisMode != SpiceAnalysisMode.DcOperatingPoint || restoredDcDrawing.Components.Count != 1 ||
+                    restoredDcDrawing.Components[0].Kind != SpiceComponentKind.AcVoltageSource)
+                    throw new InvalidOperationException("V2 DC drawing round-trip changed a mode-incompatible AC source.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
+        }
+
         private static void ValidateAcC1AcSourceParameterEditing()
         {
             var canvasRoot = new GameObject("SpiceAcC1Parameters", typeof(RectTransform), typeof(Canvas));

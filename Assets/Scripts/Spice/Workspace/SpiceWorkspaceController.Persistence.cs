@@ -95,6 +95,7 @@ namespace ElectricalSim.Spice.Workspace
         internal Text GetOpAmpInfoForTesting() => opAmpInfoText;
         internal Button GetParameterApplyButtonForTesting() => parameterApplyButton;
         internal string GetVisibleResultTextForTesting() => resultText != null ? resultText.text : null;
+        internal string GetVisibleDiagnosticTextForTesting() => diagnosticView != null && diagnosticView.Text != null ? diagnosticView.Text.text : null;
         internal string GetSelectedComponentIdForTesting() => selectedComponent != null ? selectedComponent.InstanceId : null;
         internal int GetComponentViewCountForTesting() => componentViews.Count;
         internal int GetWireViewCountForTesting() => wireViews.Count;

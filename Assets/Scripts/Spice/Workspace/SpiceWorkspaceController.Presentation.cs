@@ -420,6 +420,15 @@ namespace ElectricalSim.Spice.Workspace
 
         private bool IsPaletteKindAvailable(SpiceComponentKind kind)
         {
+            return IsComponentKindSupportedInCurrentAnalysis(kind);
+        }
+
+        /// <summary>
+        /// 元件池和运行前预检必须使用同一分析模式支持矩阵，避免“可以新增却不能求解”或相反的规则漂移。
+        /// 这只约束当前模式能否计算，不会删除、转换或拒绝保存画布中既有元件。
+        /// </summary>
+        private bool IsComponentKindSupportedInCurrentAnalysis(SpiceComponentKind kind)
+        {
             if (Model.AnalysisMode == SpiceAnalysisMode.DcOperatingPoint)
                 return kind != SpiceComponentKind.AcVoltageSource;
             return kind != SpiceComponentKind.DcVoltageSource &&

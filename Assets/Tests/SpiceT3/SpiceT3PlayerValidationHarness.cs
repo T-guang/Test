@@ -29,6 +29,7 @@ namespace ElectricalSim.Spice.T3
         public bool toolbarLayoutPassed;
         public bool analysisModeTogglePassed;
         public bool acFrequencySettingsPassed;
+        public bool modeIncompatibilityDiagnosticPassed;
         public string failure;
     }
 
@@ -88,6 +89,8 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("Player ClearWorkspace did not clear result and netlist state.");
                 report.d3ClearStatePassed = true;
 
+                ValidateAnalysisModeIncompatibility(workspace, report);
+
                 source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
                 ground = workspace.CreateComponent(SpiceComponentKind.Ground, new Vector2(0f, -140f));
@@ -104,7 +107,7 @@ namespace ElectricalSim.Spice.T3
                     !report.verticalDraggingPassed || !report.zoomDraggingPassed || !report.toolbarLayoutPassed ||
                     !report.analysisModeTogglePassed || !report.acFrequencySettingsPassed || !report.d1StaleDiscardPassed || !report.d2ImportLimitsPassed ||
                     !report.d3ClearStatePassed || !report.d3NetlistRevisionPassed ||
-                    !report.unexpectedErrorSanitizationPassed)
+                    !report.unexpectedErrorSanitizationPassed || !report.modeIncompatibilityDiagnosticPassed)
                     throw new InvalidOperationException("One or more stabilization Player checks did not pass.");
                 report.success = true;
             }
@@ -118,6 +121,39 @@ namespace ElectricalSim.Spice.T3
             File.WriteAllText(path, JsonUtility.ToJson(report, true));
             Debug.Log("[Spice][T3] Player 验证报告：" + path);
             Application.Quit(report.success ? 0 : 1);
+        }
+
+        /// <summary>
+        /// Player 中的预检必须在求解服务之前返回。这里通过受控回调计数确认没有进入仿真，
+        /// 同时确认切换模式后遗留的交流源仍留在图纸上，结果状态和 revision 不被清空或推进。
+        /// </summary>
+        private static void ValidateAnalysisModeIncompatibility(SpiceWorkspaceController workspace, SpiceT3PlayerValidationReport report)
+        {
+            var simulationCalls = 0;
+            workspace.SetSimulationOverrideForTesting((_, __) =>
+            {
+                simulationCalls++;
+                return Task.FromResult(new SpiceSimulationResult { Success = true });
+            });
+            var acSource = workspace.CreateComponent(SpiceComponentKind.AcVoltageSource, Vector2.zero);
+            var revision = workspace.ElectricalRevisionForTesting;
+            var dirty = workspace.IsDirty;
+            workspace.SetResultStateForTesting(SpiceWorkspaceResultState.Current);
+            try
+            {
+                if (workspace.RunCalculationAsync().GetAwaiter().GetResult() != null || simulationCalls != 0 ||
+                    workspace.ElectricalRevisionForTesting != revision || workspace.IsDirty != dirty ||
+                    workspace.ResultState != SpiceWorkspaceResultState.Current || workspace.Model.FindComponent(acSource.InstanceId) == null ||
+                    !workspace.GetVisibleDiagnosticTextForTesting().Contains("交流电压源 " + acSource.InstanceId))
+                    throw new InvalidOperationException("Player analysis-mode incompatibility did not block before simulation or preserve the drawing state.");
+                report.modeIncompatibilityDiagnosticPassed = true;
+                Debug.Log("[Spice][Player-UX] 模式不兼容器件诊断：通过");
+            }
+            finally
+            {
+                workspace.SetSimulationOverrideForTesting(null);
+                workspace.ClearWorkspace();
+            }
         }
 
         private static void ValidateWorkspaceUiControls(SpiceWorkspaceController workspace, SpiceT3PlayerValidationReport report)

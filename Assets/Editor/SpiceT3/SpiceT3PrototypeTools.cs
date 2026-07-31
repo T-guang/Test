@@ -195,7 +195,8 @@ namespace ElectricalSim.EditorTools.SpiceT3
                 !result.zoomDraggingPassed ||
                 !result.toolbarLayoutPassed ||
                 !result.analysisModeTogglePassed ||
-                !result.acFrequencySettingsPassed)
+                !result.acFrequencySettingsPassed ||
+                !result.modeIncompatibilityDiagnosticPassed)
                 throw new InvalidOperationException("Spice T3 Player result did not satisfy the D1/D2/D3 stabilization expectations.");
             UnityEngine.Debug.Log("[Spice][T3] Player 验证：通过，Build=" + executable + " Result=" + resultPath + " Log=" + logPath);
         }
