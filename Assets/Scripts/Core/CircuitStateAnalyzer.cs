@@ -1209,6 +1209,10 @@ namespace ElectricalSim.Core
 
                 AddPowerLabel(line, VoltageL, unionFind, rootLabels, rootSources);
                 AddPowerLabel(neutral, VoltageN, unionFind, rootLabels, rootSources);
+                // E4：单相电源的 L2/N2 端子与 L/N 同相位，标记为相同电压标签，
+                // 使分析器能识别经 L2/N2 供电的灯泡并检测 L2-N 短路。
+                AddPowerLabel(component.GetTerminal("L2"), VoltageL, unionFind, rootLabels, rootSources);
+                AddPowerLabel(component.GetTerminal("N2"), VoltageN, unionFind, rootLabels, rootSources);
                 AddPowerLabel(component.GetTerminal("PE"), VoltagePE, unionFind, rootLabels, rootSources);
             }
         }
@@ -2289,8 +2293,17 @@ namespace ElectricalSim.Core
 
             if (line == VoltageN && IsLineOrPhase(neutral))
             {
+                // E4：普通交流灯泡无极性，L/N 端子互换不影响亮灯。仅对灯泡（!isFan）生效，
+                // 风扇仍保留方向检查。不放宽二极管、直流器件或其他有极性器件规则。
+                if (!isFan)
+                {
+                    info.State = runningState;
+                    info.Judgement = loadName + "获得有效 L-N 单相电压，当前亮灯。";
+                    return;
+                }
+
                 info.State = stoppedState;
-                info.Judgement = loadName + "火线和零线接反，不符合规范接线要求，因此不作为正常" + (isFan ? "运行" : "亮灯") + "处理。";
+                info.Judgement = loadName + "火线和零线接反，不符合规范接线要求，因此不作为正常运行处理。";
                 AddComponentWarning(info, result, loadName + "火线和零线接反，不符合规范接线要求。");
                 return;
             }

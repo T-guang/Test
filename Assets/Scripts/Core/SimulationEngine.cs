@@ -463,6 +463,12 @@ namespace ElectricalSim.Core
                 return IsIndicatorEnergized(component);
             }
 
+            // E4：普通交流灯泡无极性，L/N 端子互换不影响亮灯判断。
+            if (component.Definition.kind == ComponentKind.Lamp)
+            {
+                return IsLampEnergized(component, powered, neutral);
+            }
+
             return HasPhaseAndNeutral(component, powered, neutral);
         }
 
@@ -491,6 +497,19 @@ namespace ElectricalSim.Core
         {
             var hasPhase = component.Terminals.Any(t => powered.Contains(t) && t.Role != TerminalRole.Neutral && t.Role != TerminalRole.CoilA2);
             var hasNeutral = component.Terminals.Any(t => neutral.Contains(t) || t.Role == TerminalRole.CoilA2 && neutral.Contains(t));
+            return hasPhase && hasNeutral;
+        }
+
+        /// <summary>
+        /// E4：普通交流灯泡无极性判断。两个工作端子分别落在火线节点和零线节点即可点亮，
+        /// 不区分 L/N 端子方向。不排除 Neutral 角色端子，允许 N 端子落在 powered 集合、
+        /// L 端子落在 neutral 集合时正常亮灯。仅对 ComponentKind.Lamp 生效，不影响风扇、
+        /// 二极管、直流器件或其他有极性器件。
+        /// </summary>
+        private static bool IsLampEnergized(CircuitComponent component, HashSet<TerminalView> powered, HashSet<TerminalView> neutral)
+        {
+            var hasPhase = component.Terminals.Any(t => powered.Contains(t));
+            var hasNeutral = component.Terminals.Any(t => neutral.Contains(t));
             return hasPhase && hasNeutral;
         }
 

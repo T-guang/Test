@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using ElectricalSim.Core;
 using ElectricalSim.Templates;
 
@@ -73,7 +73,7 @@ namespace ElectricalSim.Practice.Netlist
                     continue;
                 }
 
-                if (!student.AreConnected(mappedStart, mappedEnd))
+                if (!AreConnectedWithLampSwap(student, mappedStart, mappedEnd))
                 {
                     var key = mappedStart + "<->" + mappedEnd;
                     if (reported.Add(key))
@@ -106,7 +106,7 @@ namespace ElectricalSim.Practice.Netlist
                     continue;
                 }
 
-                if (!standard.AreConnected(mappedStart, mappedEnd))
+                if (!AreConnectedWithLampSwap(standard, mappedStart, mappedEnd))
                 {
                     var key = connection.GetUndirectedKey();
                     if (reported.Add(key))
@@ -137,7 +137,7 @@ namespace ElectricalSim.Practice.Netlist
                             continue;
                         }
 
-                        if (standard.AreConnected(standardA, standardB))
+                        if (AreConnectedWithLampSwap(standard, standardA, standardB))
                         {
                             continue;
                         }
@@ -162,6 +162,75 @@ namespace ElectricalSim.Practice.Netlist
                     PracticeConnectionIssueKind.Suggestion,
                     standard.DescribeTerminal(connection.StartKey) + " -> " + standard.DescribeTerminal(connection.EndKey)));
             }
+        }
+
+        // E4：普通交流灯泡无极性端子等价。仅对 DefinitionName 包含 "Lamp" 的元件的 L/N 端子允许互换，
+        // 不影响二极管、直流器件、风扇或其他有极性器件。不建立通用端子等价框架，不全局忽略端子 ID。
+
+        private static bool IsNonPolarizedLamp(PracticeNetlist netlist, string componentId)
+        {
+            if (string.IsNullOrEmpty(componentId) || !netlist.Components.TryGetValue(componentId, out var component))
+            {
+                return false;
+            }
+
+            var name = component.DefinitionName;
+            return name != null && name.Contains("Lamp");
+        }
+
+        private static string TryGetLampSwappedTerminalKey(PracticeNetlist netlist, string terminalKey)
+        {
+            ComponentMappingSolver.SplitTerminalKey(terminalKey, out var componentId, out var terminalId);
+            if (string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(terminalId))
+            {
+                return null;
+            }
+
+            if (!IsNonPolarizedLamp(netlist, componentId))
+            {
+                return null;
+            }
+
+            string swappedId = null;
+            if (terminalId == "L") swappedId = "N";
+            else if (terminalId == "N") swappedId = "L";
+            if (swappedId == null)
+            {
+                return null;
+            }
+
+            return PracticeNetlistTerminal.MakeKey(componentId, swappedId);
+        }
+
+        /// <summary>
+        /// 检查两端子是否连通，对普通交流灯泡的 L/N 端子允许互换。
+        /// 先按原始端子键检查连通；若失败且端子属于灯泡，尝试交换灯泡端子后再次检查。
+        /// </summary>
+        private static bool AreConnectedWithLampSwap(PracticeNetlist netlist, string firstKey, string secondKey)
+        {
+            if (netlist.AreConnected(firstKey, secondKey))
+            {
+                return true;
+            }
+
+            var swappedFirst = TryGetLampSwappedTerminalKey(netlist, firstKey);
+            if (swappedFirst != null && netlist.AreConnected(swappedFirst, secondKey))
+            {
+                return true;
+            }
+
+            var swappedSecond = TryGetLampSwappedTerminalKey(netlist, secondKey);
+            if (swappedSecond != null && netlist.AreConnected(firstKey, swappedSecond))
+            {
+                return true;
+            }
+
+            if (swappedFirst != null && swappedSecond != null && netlist.AreConnected(swappedFirst, swappedSecond))
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 }
