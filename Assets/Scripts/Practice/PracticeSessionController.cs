@@ -46,6 +46,10 @@ namespace ElectricalSim.Practice
         private LocalInspectorPanel inspectorPanel;
         private TopNavigationController navigation;
 
+        // E3：锁定状态下进入练习的拒绝提示。复用于 StartPractice 和 EnterPracticeMode 两处入口检查，
+        // 避免提示文本分散在多处导致不一致。通过 workspace.SetStatus 写入状态栏与操作记录。
+        private const string LockedEntryMessage = "画布已锁定，请先解锁后再进入练习模式。";
+
         private void Awake()
         {
             if (_instance == null)
@@ -100,6 +104,13 @@ namespace ElectricalSim.Practice
         {
             EnsureReferences();
 
+            // E3 第一次检查：锁定状态下立即拒绝，不弹确认框、不读取模板、不清空画布、不建立会话。
+            // 放在 HasWorkspaceContent 之前，避免锁定+非空画布时仍弹出"是否继续"确认框。
+            if (!CanEnterPractice())
+            {
+                return;
+            }
+
             if (HasWorkspaceContent())
             {
                 ShowPracticeConfirm(templateItem, () =>
@@ -125,6 +136,13 @@ namespace ElectricalSim.Practice
         private bool EnterPracticeMode(CircuitTemplateCatalogItemDto templateItem)
         {
             EnsureReferences();
+
+            // E3 第二次检查：防止确认弹窗显示后、用户确认前画布被锁定，确认后继续进入练习形成半进入状态。
+            // 与 StartPractice 复用同一 CanEnterPractice，不复制判断逻辑与提示文本。
+            if (!CanEnterPractice())
+            {
+                return false;
+            }
 
             CircuitTemplateDto templateDto = null;
             string loadError = null;
@@ -222,6 +240,22 @@ namespace ElectricalSim.Practice
 
             inspectorPanel?.AddAssistantMessage(summary);
             workspace.SetStatus(connectionResult.Passed ? "练习检测已提交：接线通过。" : "练习检测已提交：接线需要修改。");
+        }
+
+        /// <summary>
+        /// E3：检查当前画布是否允许进入练习。画布锁定时写入状态栏与操作记录并返回 false。
+        /// 不自动解锁、不自动清空、不静默失败。复用于 StartPractice 与 EnterPracticeMode 两处入口，
+        /// 确保确认弹窗期间锁定也能被第二次检查拦截。
+        /// </summary>
+        private bool CanEnterPractice()
+        {
+            EnsureReferences();
+            if (workspace != null && workspace.IsInteractionLocked)
+            {
+                workspace.SetStatus(LockedEntryMessage);
+                return false;
+            }
+            return true;
         }
 
         private bool HasWorkspaceContent()
