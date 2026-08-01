@@ -164,7 +164,7 @@ namespace ElectricalSim.AI
 
         private string ResolveRecognitionDisplayName(CircuitRecognitionResult recognition)
         {
-            if (recognition != null && recognition.Status == CircuitRecognitionStatus.ExactMatch)
+            if (recognition != null && (recognition.Status == CircuitRecognitionStatus.ExactMatch || recognition.Status == CircuitRecognitionStatus.EquivalentMatch))
             {
                 return recognition.MatchedTemplateName;
             }
@@ -177,9 +177,15 @@ namespace ElectricalSim.AI
             if (recognition == null) return new InspectionReportData();
             var source = recognition.Source == CircuitRecognitionSource.LoadedTemplate ? "系统模板" :
                 recognition.Source == CircuitRecognitionSource.TopologyMatch ? "自由搭建（拓扑匹配）" : "自由搭建";
-            var text = recognition.Status == CircuitRecognitionStatus.ExactMatch
-                ? "识别电路：" + recognition.MatchedTemplateName + "\n搭建来源：" + source + "\n匹配方式：精确静态拓扑"
-                : "搭建来源：" + source + "\n模板匹配：" + recognition.Reason;
+            if (recognition.Status == CircuitRecognitionStatus.ExactMatch || recognition.Status == CircuitRecognitionStatus.EquivalentMatch)
+            {
+                var matchMethod = recognition.Status == CircuitRecognitionStatus.ExactMatch
+                    ? "精确静态拓扑"
+                    : "电气节点等价";
+                return InspectionReportComposer.CreateTeaching(
+                    "识别电路：" + recognition.MatchedTemplateName + "\n搭建来源：" + source + "\n匹配方式：" + matchMethod + "\n" + recognition.Reason);
+            }
+            var text = "搭建来源：" + source + "\n模板匹配：" + recognition.Reason;
             return InspectionReportComposer.CreateTeaching(text);
         }
     }
