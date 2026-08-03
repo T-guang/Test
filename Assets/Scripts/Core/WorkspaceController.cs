@@ -58,12 +58,32 @@ namespace ElectricalSim.Core
         private bool panningCanvas;
         private float canvasZoom = 1f;
         private float simulationRefreshTimer;
+        private AutoReciprocationRoleResolution autoReciprocationRoles;
+        private bool autoReciprocationRolesDirty = true;
         private Vector2 panStartPointer;
         private Vector2 panStartPosition;
         private const int HistoryLimit = 40;
         private const int ActionLogEntryLimit = 180;
         private const int ActionLogCharacterLimit = 10000;
         private const float PreviewPointEpsilon = 2f;
+
+        /// <summary>
+        /// 自动往返角色只由当前活动 Components 与 WireManager.Wires 推导。缓存仅避免同一拓扑下多个
+        /// 视觉组件重复遍历；所有正式拓扑变更都会在 MarkTopologyDirty 中使其失效。
+        /// </summary>
+        internal AutoReciprocationRoleResolution AutoReciprocationRoles
+        {
+            get
+            {
+                if (autoReciprocationRolesDirty || autoReciprocationRoles == null)
+                {
+                    autoReciprocationRoles = AutoReciprocationRoleResolver.Resolve(components, wireManager != null ? wireManager.Wires : null);
+                    autoReciprocationRolesDirty = false;
+                }
+
+                return autoReciprocationRoles;
+            }
+        }
 
         private void Awake()
         {
@@ -382,6 +402,7 @@ namespace ElectricalSim.Core
 
         public void MarkTopologyDirty(string message = null)
         {
+            autoReciprocationRolesDirty = true;
             // 清空活动电路的运行态而不删除场景历史对象。Analyzer/Validation 的输入始终来自
             // Components 与 WireManager.Wires，因此 ClearDrawing 后活动输入应为空。
 

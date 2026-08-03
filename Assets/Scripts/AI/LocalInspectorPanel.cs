@@ -2134,19 +2134,17 @@ namespace ElectricalSim.AI
 
         private string BuildAutoReciprocatingMainRuntimeSummary()
         {
-            var motor = FindWorkspaceComponent("motor_1");
-            var forwardContactor = FindWorkspaceComponent("km_forward");
-            var reverseContactor = FindWorkspaceComponent("km_reverse");
-            var leftLimit = FindWorkspaceComponent("sq_left");
-            var rightLimit = FindWorkspaceComponent("sq_right");
-            if (motor == null || forwardContactor == null || reverseContactor == null ||
-                leftLimit == null || rightLimit == null)
+            var roles = workspace != null ? workspace.AutoReciprocationRoles : null;
+            if (roles == null || !roles.IsResolved)
             {
                 return string.Empty;
             }
 
-            var motionState = RuntimeStateManager.Shared.GetOrCreateMotionState("motor_1");
-            if (motionState == null)
+            var motor = roles.Motor;
+            var forwardContactor = roles.ForwardContactor;
+            var reverseContactor = roles.ReverseContactor;
+
+            if (!RuntimeStateManager.Shared.TryGetMotionState(motor.InstanceId, out var motionState) || motionState == null)
             {
                 return string.Empty;
             }
@@ -2173,19 +2171,19 @@ namespace ElectricalSim.AI
 
         private bool TryAppendAutoReciprocatingRuntimeSummary(StringBuilder builder)
         {
-            var motor = FindWorkspaceComponent("motor_1");
-            var forwardContactor = FindWorkspaceComponent("km_forward");
-            var reverseContactor = FindWorkspaceComponent("km_reverse");
-            var leftLimit = FindWorkspaceComponent("sq_left");
-            var rightLimit = FindWorkspaceComponent("sq_right");
-            if (motor == null || forwardContactor == null || reverseContactor == null ||
-                leftLimit == null || rightLimit == null)
+            var roles = workspace != null ? workspace.AutoReciprocationRoles : null;
+            if (roles == null || !roles.IsResolved)
             {
                 return false;
             }
 
-            var motionState = RuntimeStateManager.Shared.GetOrCreateMotionState("motor_1");
-            if (motionState == null)
+            var motor = roles.Motor;
+            var forwardContactor = roles.ForwardContactor;
+            var reverseContactor = roles.ReverseContactor;
+            var leftLimit = roles.LeftLimitSwitch;
+            var rightLimit = roles.RightLimitSwitch;
+
+            if (!RuntimeStateManager.Shared.TryGetMotionState(motor.InstanceId, out var motionState) || motionState == null)
             {
                 return false;
             }
@@ -2203,8 +2201,8 @@ namespace ElectricalSim.AI
                 "，右 SQ " + (rightLimit.IsClosed ? "人工触发" : "未人工触发") + "。");
             builder.AppendLine("- SQ 有效触发：左 SQ " + (leftEffectiveTriggered ? "触发" : "未触发") +
                 "，右 SQ " + (rightEffectiveTriggered ? "触发" : "未触发") + "。");
-            builder.AppendLine("- 正转接触器 KM_forward：" + (forwardContactor.IsEnergized ? "得电" : "未得电"));
-            builder.AppendLine("- 反转接触器 KM_reverse：" + (reverseContactor.IsEnergized ? "得电" : "未得电"));
+            builder.AppendLine("- 正转接触器：" + (forwardContactor.IsEnergized ? "得电" : "未得电"));
+            builder.AppendLine("- 反转接触器：" + (reverseContactor.IsEnergized ? "得电" : "未得电"));
             builder.AppendLine("- 电机：" + AutoReciprocatingMotorDisplayText(motor, motionState));
 
             if (motionState.RightLimitTriggered)

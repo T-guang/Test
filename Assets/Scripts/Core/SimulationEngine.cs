@@ -18,6 +18,7 @@ namespace ElectricalSim.Core
         private readonly HashSet<CircuitComponent> closedContactors = new HashSet<CircuitComponent>();
         private readonly HashSet<CircuitComponent> energizedOnDelayTimers = new HashSet<CircuitComponent>();
         private readonly float simulationDeltaTime;
+        private readonly AutoReciprocationRoleResolution autoReciprocationRoles;
         private bool timerRuntimeAdvancedThisRun;
         private bool traversalBudgetWarningLogged;
         private const int MaxContactorStabilizationIterations = 4;
@@ -28,6 +29,7 @@ namespace ElectricalSim.Core
             this.components = components;
             this.wires = wires;
             this.simulationDeltaTime = Mathf.Max(0f, simulationDeltaTime);
+            autoReciprocationRoles = AutoReciprocationRoleResolver.Resolve(components, wires);
         }
 
         public static void ResetRuntimeState()
@@ -1220,32 +1222,9 @@ namespace ElectricalSim.Core
 
         private bool IsAutoReciprocatingMotionMotor(CircuitComponent component)
         {
-            return component != null &&
-                string.Equals(component.InstanceId, "motor_1", System.StringComparison.OrdinalIgnoreCase) &&
-                IsThreePhaseMotorComponent(component) &&
-                HasComponent("sq_left") &&
-                HasComponent("sq_right") &&
-                HasComponent("km_forward") &&
-                HasComponent("km_reverse");
-        }
-
-        private bool HasComponent(string instanceId)
-        {
-            if (string.IsNullOrWhiteSpace(instanceId))
-            {
-                return false;
-            }
-
-            foreach (var component in components)
-            {
-                if (component != null &&
-                    string.Equals(component.InstanceId, instanceId, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return autoReciprocationRoles != null &&
+                autoReciprocationRoles.IsResolved &&
+                ReferenceEquals(autoReciprocationRoles.Motor, component);
         }
 
         private MotorDirectionResult EvaluateThreePhaseMotorDirection(CircuitComponent motor)
@@ -1522,24 +1501,19 @@ namespace ElectricalSim.Core
 
         private bool IsVirtualLimitSwitchTriggered(CircuitComponent component)
         {
-            if (component == null ||
-                (!string.Equals(component.InstanceId, "sq_left", System.StringComparison.OrdinalIgnoreCase) &&
-                 !string.Equals(component.InstanceId, "sq_right", System.StringComparison.OrdinalIgnoreCase)) ||
-                !HasComponent("motor_1") ||
-                !HasComponent("km_forward") ||
-                !HasComponent("km_reverse"))
+            if (component == null || autoReciprocationRoles == null || !autoReciprocationRoles.IsResolved)
             {
                 return false;
             }
 
-            if (!RuntimeStateManager.Shared.TryGetMotionState("motor_1", out var motionState) || motionState == null)
+            if (!RuntimeStateManager.Shared.TryGetMotionState(autoReciprocationRoles.Motor.InstanceId, out var motionState) || motionState == null)
             {
                 return false;
             }
 
-            return string.Equals(component.InstanceId, "sq_left", System.StringComparison.OrdinalIgnoreCase)
-                ? motionState.LeftLimitTriggered
-                : motionState.RightLimitTriggered;
+            if (ReferenceEquals(component, autoReciprocationRoles.LeftLimitSwitch)) return motionState.LeftLimitTriggered;
+            if (ReferenceEquals(component, autoReciprocationRoles.RightLimitSwitch)) return motionState.RightLimitTriggered;
+            return false;
         }
 
         private static bool IsLimitSwitch(CircuitComponent component)

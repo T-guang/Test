@@ -1584,20 +1584,19 @@ namespace ElectricalSim.Core
                 return true;
             }
 
-            if (string.Equals(InstanceId, "sq_left", System.StringComparison.OrdinalIgnoreCase) &&
-                RuntimeStateManager.Shared.TryGetMotionState("motor_1", out var leftMotionState) &&
-                leftMotionState != null)
+            var roles = workspace != null ? workspace.AutoReciprocationRoles : null;
+            if (roles == null || !roles.IsResolved || roles.Motor == null)
             {
-                return leftMotionState.LeftLimitTriggered;
+                return false;
             }
 
-            if (string.Equals(InstanceId, "sq_right", System.StringComparison.OrdinalIgnoreCase) &&
-                RuntimeStateManager.Shared.TryGetMotionState("motor_1", out var rightMotionState) &&
-                rightMotionState != null)
+            if (!RuntimeStateManager.Shared.TryGetMotionState(roles.Motor.InstanceId, out var motionState) || motionState == null)
             {
-                return rightMotionState.RightLimitTriggered;
+                return false;
             }
 
+            if (ReferenceEquals(this, roles.LeftLimitSwitch)) return motionState.LeftLimitTriggered;
+            if (ReferenceEquals(this, roles.RightLimitSwitch)) return motionState.RightLimitTriggered;
             return false;
         }
 
@@ -1873,36 +1872,8 @@ namespace ElectricalSim.Core
 
         private bool IsAutoReciprocatingMotionMotor()
         {
-            return Definition != null &&
-                   Definition.kind == ComponentKind.Motor &&
-                   string.Equals(InstanceId, "motor_1", System.StringComparison.OrdinalIgnoreCase) &&
-                   GetTerminal("U") != null &&
-                   GetTerminal("V") != null &&
-                   GetTerminal("W") != null &&
-                   HasWorkspaceComponent("sq_left") &&
-                   HasWorkspaceComponent("sq_right") &&
-                   HasWorkspaceComponent("km_forward") &&
-                   HasWorkspaceComponent("km_reverse");
-        }
-
-        private bool HasWorkspaceComponent(string instanceId)
-        {
-            if (workspace == null || workspace.Components == null || string.IsNullOrWhiteSpace(instanceId))
-            {
-                return false;
-            }
-
-            for (var i = 0; i < workspace.Components.Count; i++)
-            {
-                var component = workspace.Components[i];
-                if (component != null &&
-                    string.Equals(component.InstanceId, instanceId, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            var roles = workspace != null ? workspace.AutoReciprocationRoles : null;
+            return roles != null && roles.IsResolved && ReferenceEquals(roles.Motor, this);
         }
 
         private string GetMotionRuntimeText()
