@@ -508,9 +508,22 @@ namespace ElectricalSim.Core
         /// </summary>
         private static bool IsLampEnergized(CircuitComponent component, HashSet<TerminalView> powered, HashSet<TerminalView> neutral)
         {
-            var hasPhase = component.Terminals.Any(t => powered.Contains(t));
-            var hasNeutral = component.Terminals.Any(t => neutral.Contains(t));
-            return hasPhase && hasNeutral;
+            var lineTerminal = component.GetTerminal("L");
+            var neutralTerminal = component.GetTerminal("N");
+            if (lineTerminal == null || neutralTerminal == null || lineTerminal == neutralTerminal)
+            {
+                return false;
+            }
+
+            // 火线与零线集合一旦重叠，当前回路已存在短路。即使 L/N 端子分别命中集合，
+            // 也不能把短路回路展示为灯泡得电。
+            if (powered.Overlaps(neutral))
+            {
+                return false;
+            }
+
+            return powered.Contains(lineTerminal) && neutral.Contains(neutralTerminal) ||
+                neutral.Contains(lineTerminal) && powered.Contains(neutralTerminal);
         }
 
         private List<TerminalView> GetPhaseRoots()

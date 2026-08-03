@@ -67,6 +67,9 @@ namespace ElectricalSim.Editor
 
                 // D. 模板与练习
                 TestD_TemplateAndPractice(workspace, failures);
+
+                // E. 练习检查中的灯泡端子映射必须为每个灯泡保持一致。
+                TestE_StableLampTerminalMapping(workspace, lampDef, failures);
             }
             catch (Exception exception)
             {
@@ -200,6 +203,7 @@ namespace ElectricalSim.Editor
             RunSimulation(workspace);
             var analysis6 = new CircuitStateAnalyzer().Analyze(workspace.Components, workspace.WireManager.Wires);
             if (!analysis6.HasShortCircuit) failures.Add("C6: 火线零线短接应被短路规则发现。");
+            if (lamp6.IsEnergized) failures.Add("C6: 火零短路时灯泡不应保持 energized。");
 
             // C7: 开关断开导致回路不完整
             ResetWorkspace(workspace);
@@ -226,7 +230,17 @@ namespace ElectricalSim.Editor
             var catalog = JsonUtility.FromJson<CircuitTemplateCatalogDto>(catalogAsset.text);
             if (catalog == null) { failures.Add("D: catalog 解析失败。"); return; }
 
-            var templateIds = new[] { "single_lamp_template", "double_control_lamp_template", "breaker_lamp_template" };
+            var templateIds = new[]
+            {
+                "single_lamp_template",
+                "double_control_lamp_template",
+                "breaker_lamp_template",
+                "meter_lamp_template",
+                "lamp_fan_parallel_template",
+                "double_lamp_single_switch",
+                "two_switch_two_lamp",
+                "breaker_lamp_fan_parallel"
+            };
             foreach (var templateId in templateIds)
             {
                 var item = catalog.templates.FirstOrDefault(c => c.templateId == templateId);
@@ -251,6 +265,11 @@ namespace ElectricalSim.Editor
                 if (!lamp.IsEnergized) failures.Add("D1(" + templateId + "): 原接线灯泡应点亮。");
                 var practiceOriginal = PracticeConnectionChecker.Check(workspace, template);
                 if (!practiceOriginal.Passed) failures.Add("D1(" + templateId + "): 原接线练习检查应通过。");
+                var originalRecognition = new CircuitTopologyRecognitionService().Recognize(workspace);
+                if (originalRecognition.Status != CircuitRecognitionStatus.ExactMatch || originalRecognition.MatchedTemplateId != templateId)
+                    failures.Add("D1(" + templateId + "): 原模板应精确识别自身，实际=" + originalRecognition.Status + "/" + originalRecognition.MatchedTemplateId);
+                var originalAnalysis = new CircuitStateAnalyzer().Analyze(workspace.Components, workspace.WireManager.Wires);
+                if (originalAnalysis == null) failures.Add("D1(" + templateId + "): CircuitStateAnalyzer 未返回结果。");
 
                 // D2: 交换灯泡端子的等价图
                 var swappedTemplate = CloneTemplateWithSwappedLampTerminals(template);
@@ -275,6 +294,213 @@ namespace ElectricalSim.Editor
                 if (!practiceSwapped.Passed)
                     failures.Add("D4(" + templateId + "): 交换端子练习检查应通过，issues=" + practiceSwapped.WrongConnections.Count + "+" + practiceSwapped.MissingConnections.Count + "+" + practiceSwapped.ExtraConnections.Count);
             }
+        }
+
+        // E: 稳定灯泡端子映射。测试比对仍走正式 PracticeConnectionChecker，不复制网表或端子比对算法。
+        private static void TestE_StableLampTerminalMapping(WorkspaceController workspace, ComponentDefinition lampDefinition, List<string> failures)
+        {
+            TestSingleLampStableMapping(workspace, lampDefinition, false, failures);
+            TestSingleLampStableMapping(workspace, lampDefinition, true, failures);
+            TestTwoLampStableMapping(workspace, lampDefinition, false, failures);
+            TestTwoLampStableMapping(workspace, lampDefinition, true, failures);
+            TestNonLampNameDoesNotGainSwapPrivilege(workspace, failures);
+        }
+
+        private static void TestSingleLampStableMapping(WorkspaceController workspace, ComponentDefinition lampDefinition, bool mixedError, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var nodeA = CreateTestNodeDefinition("E4_NodeA");
+            var nodeB = CreateTestNodeDefinition("E4_NodeB");
+            var nodeC = CreateTestNodeDefinition("E4_NodeC");
+            var template = CreatePracticeTemplate(
+                mixedError ? "e4_single_mixed" : "e4_single_swapped",
+                new[] { lampDefinition, nodeA, nodeB, nodeC },
+                new[] { "lamp", "a", "b", "c" },
+                new[]
+                {
+                    CreateTemplateWire("lamp", "L", "a", "X"),
+                    CreateTemplateWire("lamp", "L", "c", "X"),
+                    CreateTemplateWire("lamp", "N", "b", "X")
+                });
+
+            var lamp = workspace.SpawnComponent(lampDefinition, Vector2.zero, "lamp", false);
+            var a = workspace.SpawnComponent(nodeA, Vector2.zero, "a", false);
+            var b = workspace.SpawnComponent(nodeB, Vector2.zero, "b", false);
+            var c = workspace.SpawnComponent(nodeC, Vector2.zero, "c", false);
+            if (lamp == null || a == null || b == null || c == null)
+            {
+                failures.Add("E1: 无法创建单灯端子映射测试元件。");
+                return;
+            }
+
+            if (mixedError)
+            {
+                CreateWire(workspace, lamp, "L", a, "X");
+                CreateWire(workspace, lamp, "N", b, "X");
+                CreateWire(workspace, lamp, "N", c, "X");
+            }
+            else
+            {
+                CreateWire(workspace, lamp, "N", a, "X");
+                CreateWire(workspace, lamp, "N", c, "X");
+                CreateWire(workspace, lamp, "L", b, "X");
+            }
+
+            var result = PracticeConnectionChecker.Check(workspace, template);
+            if (mixedError)
+            {
+                if (result.Passed) failures.Add("E2: 单灯混合错误不存在统一 L/N 映射，Practice 检查应失败。");
+                var recognition = new CircuitTopologyRecognitionService().Recognize(workspace);
+                if (recognition.Status == CircuitRecognitionStatus.EquivalentMatch)
+                    failures.Add("E2: 单灯混合错误不得被识别为 EquivalentMatch。");
+            }
+            else if (!result.Passed)
+            {
+                failures.Add("E1: 单灯整体交换 L/N 后 Practice 检查应通过。");
+            }
+        }
+
+        private static void TestTwoLampStableMapping(WorkspaceController workspace, ComponentDefinition lampDefinition, bool secondLampMixedError, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var nodeA1 = CreateTestNodeDefinition("E4_NodeA1");
+            var nodeB1 = CreateTestNodeDefinition("E4_NodeB1");
+            var nodeA2 = CreateTestNodeDefinition("E4_NodeA2");
+            var nodeB2 = CreateTestNodeDefinition("E4_NodeB2");
+            var template = CreatePracticeTemplate(
+                secondLampMixedError ? "e4_two_lamp_mixed" : "e4_two_lamp_independent",
+                new[] { lampDefinition, lampDefinition, nodeA1, nodeB1, nodeA2, nodeB2 },
+                new[] { "lamp1", "lamp2", "a1", "b1", "a2", "b2" },
+                new[]
+                {
+                    CreateTemplateWire("lamp1", "L", "a1", "X"),
+                    CreateTemplateWire("lamp1", "N", "b1", "X"),
+                    CreateTemplateWire("lamp2", "L", "a2", "X"),
+                    CreateTemplateWire("lamp2", "N", "b2", "X")
+                });
+
+            var lamp1 = workspace.SpawnComponent(lampDefinition, Vector2.zero, "lamp1", false);
+            var lamp2 = workspace.SpawnComponent(lampDefinition, Vector2.zero, "lamp2", false);
+            var a1 = workspace.SpawnComponent(nodeA1, Vector2.zero, "a1", false);
+            var b1 = workspace.SpawnComponent(nodeB1, Vector2.zero, "b1", false);
+            var a2 = workspace.SpawnComponent(nodeA2, Vector2.zero, "a2", false);
+            var b2 = workspace.SpawnComponent(nodeB2, Vector2.zero, "b2", false);
+            if (lamp1 == null || lamp2 == null || a1 == null || b1 == null || a2 == null || b2 == null)
+            {
+                failures.Add("E3: 无法创建双灯端子映射测试元件。");
+                return;
+            }
+
+            CreateWire(workspace, lamp1, "L", a1, "X");
+            CreateWire(workspace, lamp1, "N", b1, "X");
+            if (secondLampMixedError)
+            {
+                CreateWire(workspace, lamp2, "L", a2, "X");
+                CreateWire(workspace, lamp2, "L", b2, "X");
+            }
+            else
+            {
+                CreateWire(workspace, lamp2, "N", a2, "X");
+                CreateWire(workspace, lamp2, "L", b2, "X");
+            }
+
+            var result = PracticeConnectionChecker.Check(workspace, template);
+            if (secondLampMixedError && result.Passed)
+            {
+                failures.Add("E4: 双灯中一盏混合错误不能被正确灯泡掩盖。");
+            }
+            if (!secondLampMixedError && !result.Passed)
+            {
+                failures.Add("E3: 两盏灯应可分别使用原始与交换端子映射。");
+            }
+        }
+
+        private static void TestNonLampNameDoesNotGainSwapPrivilege(WorkspaceController workspace, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var namedLampButSwitch = CreateTestNodeDefinition("LampNamedSwitch");
+            namedLampButSwitch.kind = ComponentKind.Switch;
+            namedLampButSwitch.terminals = new List<TerminalDefinition>
+            {
+                CreateTerminal("L"),
+                CreateTerminal("N")
+            };
+            var nodeA = CreateTestNodeDefinition("E4_NonLampNodeA");
+            var nodeB = CreateTestNodeDefinition("E4_NonLampNodeB");
+            var template = CreatePracticeTemplate(
+                "e4_nonlamp_name",
+                new[] { namedLampButSwitch, nodeA, nodeB },
+                new[] { "device", "a", "b" },
+                new[]
+                {
+                    CreateTemplateWire("device", "L", "a", "X"),
+                    CreateTemplateWire("device", "N", "b", "X")
+                });
+
+            var device = workspace.SpawnComponent(namedLampButSwitch, Vector2.zero, "device", false);
+            var a = workspace.SpawnComponent(nodeA, Vector2.zero, "a", false);
+            var b = workspace.SpawnComponent(nodeB, Vector2.zero, "b", false);
+            CreateWire(workspace, device, "N", a, "X");
+            CreateWire(workspace, device, "L", b, "X");
+            var result = PracticeConnectionChecker.Check(workspace, template);
+            if (result.Passed)
+            {
+                failures.Add("E5: 名称含 Lamp 但 ComponentKind 不是 Lamp 的元件不得获得端子交换特权。");
+            }
+        }
+
+        private static ComponentDefinition CreateTestNodeDefinition(string definitionName)
+        {
+            var definition = ScriptableObject.CreateInstance<ComponentDefinition>();
+            definition.name = definitionName;
+            definition.displayName = definitionName;
+            definition.kind = ComponentKind.TerminalBlock;
+            definition.size = new Vector2(60f, 60f);
+            definition.terminals = new List<TerminalDefinition> { CreateTerminal("X") };
+            return definition;
+        }
+
+        private static TerminalDefinition CreateTerminal(string terminalId)
+        {
+            return new TerminalDefinition { id = terminalId, label = terminalId, normalizedPosition = new Vector2(0.5f, 0.5f) };
+        }
+
+        private static CircuitTemplateDto CreatePracticeTemplate(
+            string templateId,
+            IReadOnlyList<ComponentDefinition> definitions,
+            IReadOnlyList<string> instanceIds,
+            IReadOnlyList<TemplateWireDto> wires)
+        {
+            var template = new CircuitTemplateDto { templateId = templateId, templateName = templateId };
+            for (var i = 0; i < definitions.Count; i++)
+            {
+                template.components.Add(new TemplateComponentDto
+                {
+                    instanceId = instanceIds[i],
+                    definitionName = definitions[i].name,
+                    parameters = new List<ComponentParameter>()
+                });
+            }
+            template.wires.AddRange(wires);
+            return template;
+        }
+
+        private static TemplateWireDto CreateTemplateWire(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        {
+            return new TemplateWireDto
+            {
+                startComponentId = startComponentId,
+                startTerminalId = startTerminalId,
+                endComponentId = endComponentId,
+                endTerminalId = endTerminalId,
+                manualRoutePoints = new List<Vector2>()
+            };
+        }
+
+        private static bool IsLampDefinition(string definitionName)
+        {
+            var definition = LoadDefinition(definitionName);
+            return definition != null && definition.kind == ComponentKind.Lamp;
         }
 
         // --- 辅助方法 ---
@@ -357,7 +583,7 @@ namespace ElectricalSim.Editor
             var lampIds = new HashSet<string>();
             foreach (var comp in clone.components)
             {
-                if (comp != null && comp.definitionName != null && comp.definitionName.Contains("Lamp"))
+                if (comp != null && IsLampDefinition(comp.definitionName))
                 {
                     lampIds.Add(comp.instanceId);
                 }

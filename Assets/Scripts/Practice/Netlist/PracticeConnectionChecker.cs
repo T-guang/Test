@@ -44,9 +44,13 @@ namespace ElectricalSim.Practice.Netlist
                 result.AmbiguousMapping = true;
             }
 
-            AddMissingConnections(result, standard, student, mapping.StandardToStudent);
-            AddWrongDirectConnections(result, standard, student, mapping.StudentToStandard);
-            AddExtraNodeMerges(result, standard, student, mapping.StudentToStandard);
+            // 灯泡端子无极性只影响已确认的普通灯泡实例。先为每个已映射灯泡选定一次 L/N 对应关系，
+            // 后续缺失、接错和额外电气节点检查均复用该对应关系，不能按单条导线临时改选方向。
+            var terminalMap = CreateStableTerminalMap(workspace, standard, student, mapping);
+
+            AddMissingConnections(result, standard, student, terminalMap);
+            AddWrongDirectConnections(result, standard, student, terminalMap);
+            AddExtraNodeMerges(result, standard, student, terminalMap);
             AddSuggestions(result, standard);
 
             result.Passed = !result.HasIssues;
@@ -54,13 +58,13 @@ namespace ElectricalSim.Practice.Netlist
         }
 
         // 标准侧期望连通在映射后以学生侧等价节点判断；无映射端子仍按标准侧描述缺失项，避免丢失关键反馈。
-        private static void AddMissingConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> standardToStudent)
+        private static void AddMissingConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, StableTerminalMap terminalMap)
         {
             var reported = new HashSet<string>();
             foreach (var connection in standard.DirectConnections)
             {
-                if (!ComponentMappingSolver.TryMapTerminal(connection.StartKey, standardToStudent, out var mappedStart) ||
-                    !ComponentMappingSolver.TryMapTerminal(connection.EndKey, standardToStudent, out var mappedEnd))
+                if (!terminalMap.TryMapStandardToStudent(connection.StartKey, out var mappedStart) ||
+                    !terminalMap.TryMapStandardToStudent(connection.EndKey, out var mappedEnd))
                 {
                     var key = connection.GetUndirectedKey();
                     if (reported.Add(key))
@@ -73,7 +77,7 @@ namespace ElectricalSim.Practice.Netlist
                     continue;
                 }
 
-                if (!AreConnectedWithLampSwap(student, mappedStart, mappedEnd))
+                if (!student.AreConnected(mappedStart, mappedEnd))
                 {
                     var key = mappedStart + "<->" + mappedEnd;
                     if (reported.Add(key))
@@ -87,13 +91,13 @@ namespace ElectricalSim.Practice.Netlist
         }
 
         // 学生直接导线映射回标准侧后再判定，防止仅凭实例 ID 差异把正确同类元件接线误报为接错。
-        private static void AddWrongDirectConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> studentToStandard)
+        private static void AddWrongDirectConnections(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, StableTerminalMap terminalMap)
         {
             var reported = new HashSet<string>();
             foreach (var connection in student.DirectConnections)
             {
-                if (!ComponentMappingSolver.TryMapTerminal(connection.StartKey, studentToStandard, out var mappedStart) ||
-                    !ComponentMappingSolver.TryMapTerminal(connection.EndKey, studentToStandard, out var mappedEnd))
+                if (!terminalMap.TryMapStudentToStandard(connection.StartKey, out var mappedStart) ||
+                    !terminalMap.TryMapStudentToStandard(connection.EndKey, out var mappedEnd))
                 {
                     var key = connection.GetUndirectedKey();
                     if (reported.Add(key))
@@ -106,7 +110,7 @@ namespace ElectricalSim.Practice.Netlist
                     continue;
                 }
 
-                if (!AreConnectedWithLampSwap(standard, mappedStart, mappedEnd))
+                if (!standard.AreConnected(mappedStart, mappedEnd))
                 {
                     var key = connection.GetUndirectedKey();
                     if (reported.Add(key))
@@ -120,7 +124,7 @@ namespace ElectricalSim.Practice.Netlist
         }
 
         // 并查集得到的是学生侧电气等价节点组；同组端子在标准侧不应连通时，才构成额外连接。
-        private static void AddExtraNodeMerges(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, Dictionary<string, string> studentToStandard)
+        private static void AddExtraNodeMerges(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, StableTerminalMap terminalMap)
         {
             var reported = new HashSet<string>();
             foreach (var group in student.GetEquivalentNodeGroups())
@@ -131,13 +135,13 @@ namespace ElectricalSim.Practice.Netlist
                     {
                         var studentA = group[i];
                         var studentB = group[j];
-                        if (!ComponentMappingSolver.TryMapTerminal(studentA, studentToStandard, out var standardA) ||
-                            !ComponentMappingSolver.TryMapTerminal(studentB, studentToStandard, out var standardB))
+                        if (!terminalMap.TryMapStudentToStandard(studentA, out var standardA) ||
+                            !terminalMap.TryMapStudentToStandard(studentB, out var standardB))
                         {
                             continue;
                         }
 
-                        if (AreConnectedWithLampSwap(standard, standardA, standardB))
+                        if (standard.AreConnected(standardA, standardB))
                         {
                             continue;
                         }
@@ -164,73 +168,174 @@ namespace ElectricalSim.Practice.Netlist
             }
         }
 
-        // E4：普通交流灯泡无极性端子等价。仅对 DefinitionName 包含 "Lamp" 的元件的 L/N 端子允许互换，
-        // 不影响二极管、直流器件、风扇或其他有极性器件。不建立通用端子等价框架，不全局忽略端子 ID。
-
-        private static bool IsNonPolarizedLamp(PracticeNetlist netlist, string componentId)
+        /// <summary>
+        /// 从当前 Workspace 的实际 ComponentDefinition 读取 ComponentKind。练习网表只保留 definitionName，
+        /// 因此不能通过名称包含 Lamp 推断语义；只有 ComponentKind.Lamp 的实例才可交换 L/N。
+        /// </summary>
+        private static StableTerminalMap CreateStableTerminalMap(
+            WorkspaceController workspace,
+            PracticeNetlist standard,
+            PracticeNetlist student,
+            ComponentMappingResult componentMap)
         {
-            if (string.IsNullOrEmpty(componentId) || !netlist.Components.TryGetValue(componentId, out var component))
+            var lampStudentIds = new HashSet<string>();
+            if (workspace != null)
+            {
+                foreach (var component in workspace.Components)
+                {
+                    if (component != null && component.Definition != null && component.Definition.kind == ComponentKind.Lamp)
+                    {
+                        lampStudentIds.Add(component.InstanceId);
+                    }
+                }
+            }
+
+            var swappedStandardLampIds = new HashSet<string>();
+            foreach (var pair in componentMap.StandardToStudent)
+            {
+                if (!lampStudentIds.Contains(pair.Value) ||
+                    !HasLampWorkingTerminals(standard, pair.Key) ||
+                    !HasLampWorkingTerminals(student, pair.Value))
+                {
+                    continue;
+                }
+
+                // 对完整直接连接集合比较两种方向。得分相同时保持原方向，避免将混合错误放宽为正确接线。
+                var normalScore = ScoreLampOrientation(standard, student, componentMap.StandardToStudent, pair.Key, false);
+                var swappedScore = ScoreLampOrientation(standard, student, componentMap.StandardToStudent, pair.Key, true);
+                if (swappedScore > normalScore)
+                {
+                    swappedStandardLampIds.Add(pair.Key);
+                }
+            }
+
+            return new StableTerminalMap(componentMap.StandardToStudent, componentMap.StudentToStandard, swappedStandardLampIds);
+        }
+
+        private static bool HasLampWorkingTerminals(PracticeNetlist netlist, string componentId)
+        {
+            return netlist != null &&
+                netlist.Terminals.ContainsKey(PracticeNetlistTerminal.MakeKey(componentId, "L")) &&
+                netlist.Terminals.ContainsKey(PracticeNetlistTerminal.MakeKey(componentId, "N"));
+        }
+
+        private static int ScoreLampOrientation(
+            PracticeNetlist standard,
+            PracticeNetlist student,
+            Dictionary<string, string> standardToStudent,
+            string standardLampId,
+            bool swapLampTerminals)
+        {
+            var score = 0;
+            foreach (var connection in standard.DirectConnections)
+            {
+                ComponentMappingSolver.SplitTerminalKey(connection.StartKey, out var startComponentId, out _);
+                ComponentMappingSolver.SplitTerminalKey(connection.EndKey, out var endComponentId, out _);
+                if (startComponentId != standardLampId && endComponentId != standardLampId)
+                {
+                    continue;
+                }
+
+                if (!TryMapStandardTerminalForScore(connection.StartKey, standardToStudent, standardLampId, swapLampTerminals, out var mappedStart) ||
+                    !TryMapStandardTerminalForScore(connection.EndKey, standardToStudent, standardLampId, swapLampTerminals, out var mappedEnd))
+                {
+                    continue;
+                }
+
+                if (student.AreConnected(mappedStart, mappedEnd))
+                {
+                    score++;
+                }
+            }
+
+            return score;
+        }
+
+        private static bool TryMapStandardTerminalForScore(
+            string standardTerminalKey,
+            Dictionary<string, string> standardToStudent,
+            string selectedLampId,
+            bool swapSelectedLamp,
+            out string studentTerminalKey)
+        {
+            studentTerminalKey = null;
+            ComponentMappingSolver.SplitTerminalKey(standardTerminalKey, out var componentId, out var terminalId);
+            if (string.IsNullOrWhiteSpace(componentId) || !standardToStudent.TryGetValue(componentId, out var studentComponentId))
             {
                 return false;
             }
 
-            var name = component.DefinitionName;
-            return name != null && name.Contains("Lamp");
+            if (swapSelectedLamp && componentId == selectedLampId)
+            {
+                terminalId = SwapLampTerminalId(terminalId);
+            }
+
+            studentTerminalKey = PracticeNetlistTerminal.MakeKey(studentComponentId, terminalId);
+            return true;
         }
 
-        private static string TryGetLampSwappedTerminalKey(PracticeNetlist netlist, string terminalKey)
+        private static string SwapLampTerminalId(string terminalId)
         {
-            ComponentMappingSolver.SplitTerminalKey(terminalKey, out var componentId, out var terminalId);
-            if (string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(terminalId))
-            {
-                return null;
-            }
-
-            if (!IsNonPolarizedLamp(netlist, componentId))
-            {
-                return null;
-            }
-
-            string swappedId = null;
-            if (terminalId == "L") swappedId = "N";
-            else if (terminalId == "N") swappedId = "L";
-            if (swappedId == null)
-            {
-                return null;
-            }
-
-            return PracticeNetlistTerminal.MakeKey(componentId, swappedId);
+            if (terminalId == "L") return "N";
+            if (terminalId == "N") return "L";
+            return terminalId;
         }
 
         /// <summary>
-        /// 检查两端子是否连通，对普通交流灯泡的 L/N 端子允许互换。
-        /// 先按原始端子键检查连通；若失败且端子属于灯泡，尝试交换灯泡端子后再次检查。
+        /// 保存一次 Check 调用内确定的灯泡端子映射。它不改变组件映射规则，也不把 L/N 合并为同一端子，
+        /// 仅确保缺失、接错和额外节点检查都使用同一个普通灯泡端子方向。
         /// </summary>
-        private static bool AreConnectedWithLampSwap(PracticeNetlist netlist, string firstKey, string secondKey)
+        private sealed class StableTerminalMap
         {
-            if (netlist.AreConnected(firstKey, secondKey))
+            private readonly Dictionary<string, string> standardToStudent;
+            private readonly Dictionary<string, string> studentToStandard;
+            private readonly HashSet<string> swappedStandardLampIds;
+
+            public StableTerminalMap(
+                Dictionary<string, string> standardToStudent,
+                Dictionary<string, string> studentToStandard,
+                HashSet<string> swappedStandardLampIds)
             {
+                this.standardToStudent = standardToStudent;
+                this.studentToStandard = studentToStandard;
+                this.swappedStandardLampIds = swappedStandardLampIds;
+            }
+
+            public bool TryMapStandardToStudent(string standardTerminalKey, out string studentTerminalKey)
+            {
+                studentTerminalKey = null;
+                ComponentMappingSolver.SplitTerminalKey(standardTerminalKey, out var standardComponentId, out var terminalId);
+                if (string.IsNullOrWhiteSpace(standardComponentId) || !standardToStudent.TryGetValue(standardComponentId, out var studentComponentId))
+                {
+                    return false;
+                }
+
+                if (swappedStandardLampIds.Contains(standardComponentId))
+                {
+                    terminalId = SwapLampTerminalId(terminalId);
+                }
+
+                studentTerminalKey = PracticeNetlistTerminal.MakeKey(studentComponentId, terminalId);
                 return true;
             }
 
-            var swappedFirst = TryGetLampSwappedTerminalKey(netlist, firstKey);
-            if (swappedFirst != null && netlist.AreConnected(swappedFirst, secondKey))
+            public bool TryMapStudentToStandard(string studentTerminalKey, out string standardTerminalKey)
             {
+                standardTerminalKey = null;
+                ComponentMappingSolver.SplitTerminalKey(studentTerminalKey, out var studentComponentId, out var terminalId);
+                if (string.IsNullOrWhiteSpace(studentComponentId) || !studentToStandard.TryGetValue(studentComponentId, out var standardComponentId))
+                {
+                    return false;
+                }
+
+                if (swappedStandardLampIds.Contains(standardComponentId))
+                {
+                    terminalId = SwapLampTerminalId(terminalId);
+                }
+
+                standardTerminalKey = PracticeNetlistTerminal.MakeKey(standardComponentId, terminalId);
                 return true;
             }
-
-            var swappedSecond = TryGetLampSwappedTerminalKey(netlist, secondKey);
-            if (swappedSecond != null && netlist.AreConnected(firstKey, swappedSecond))
-            {
-                return true;
-            }
-
-            if (swappedFirst != null && swappedSecond != null && netlist.AreConnected(swappedFirst, swappedSecond))
-            {
-                return true;
-            }
-
-            return false;
         }
     }
 }
