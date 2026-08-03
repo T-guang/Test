@@ -111,6 +111,12 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // 必须早于内容确认、模板读取和 Spawn 拒绝，避免锁定画布出现半加载状态。
+            if (TryRejectLockedCanvasLoad())
+            {
+                return;
+            }
+
             if (HasWorkspaceContent())
             {
                 ShowLoadConfirm(item, () =>
@@ -127,6 +133,18 @@ namespace ElectricalSim.UI
             {
                 onLoaded?.Invoke();
             }
+        }
+
+        private bool TryRejectLockedCanvasLoad()
+        {
+            if (workspace == null || !workspace.IsInteractionLocked)
+            {
+                return false;
+            }
+
+            workspace.SetStatus("画布已锁定，请先解锁后再加载新图纸。");
+            LockedCanvasLoadDialog.Show();
+            return true;
         }
 
         private bool LoadTemplateNow(CircuitTemplateCatalogItemDto item)

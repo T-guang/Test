@@ -253,6 +253,7 @@ namespace ElectricalSim.Practice
             if (workspace != null && workspace.IsInteractionLocked)
             {
                 workspace.SetStatus(LockedEntryMessage);
+                LockedCanvasLoadDialog.Show();
                 return false;
             }
             return true;
