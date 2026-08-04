@@ -76,6 +76,11 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            if (eventData.clickCount < 2)
+            {
+                return;
+            }
+
             workspace.SpawnComponent(definition, Vector2.zero);
             workspace.SetStatus("已添加元件：" + definition.displayName);
         }
