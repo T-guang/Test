@@ -224,9 +224,19 @@ namespace ElectricalSim.Practice
         /// </summary>
         public void EndPractice()
         {
-            ClearPracticeState();
-            workspace?.ClearDrawing(true);
+            EndPracticeSessionAndClearCanvas();
             navigation?.SelectTab(0);
+        }
+
+        // F2-B：提取练习退出与会话清理+画布清空的正式路径，不包含页面跳转。
+        // 供 TopNavigationController 导航保护复用：用户确认离开模拟电路页后，
+        // 先清理练习会话和画布，再由导航保护切换到用户选择的目标页面。
+        // 不公开含义模糊的布尔参数；EndPractice 仍保留原行为（清理后跳回模拟电路页）。
+        public void EndPracticeSessionAndClearCanvas()
+        {
+            ClearPracticeState();
+            workspace?.StopSimulation();
+            workspace?.ClearDrawing(true);
         }
 
         public void UpdateReferencePanel(CircuitTemplateCatalogItemDto item)

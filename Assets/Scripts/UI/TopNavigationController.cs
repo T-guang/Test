@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System;
 using ElectricalSim.UI.CommonTools;
+using ElectricalSim.Practice;
+using ElectricalSim.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -29,6 +31,10 @@ namespace ElectricalSim.UI
 
         /// <summary>在导航标签完成页面切换后通知局部浮层关闭自身，不参与页面内容逻辑。</summary>
         public event Action<int> TabSelected;
+
+        // F2-B：导航保护字段。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
+        private GameObject navigationGuardDialog;
+        private int pendingNavigationIndex = -1;
 
         private void Awake()
         {
@@ -306,7 +312,244 @@ namespace ElectricalSim.UI
 
         public void SelectTab(int index)
         {
-            // 由导航按钮监听器调用。PageRouter 是页面可见性的唯一协调者，标签索引与 PageId 的映射不可随意改序。
+            // F2-B：导航保护。只有从模拟电路页离开到其他页面时才需要拦截。
+            // 所有外部 SelectTab(0) 调用（进入模拟电路页）和不在模拟电路页时的切换都不会被拦截。
+            if (NeedsNavigationGuard(index))
+            {
+                RequestGuardedNavigation(index);
+                return;
+            }
+
+            ExecuteNavigation(index);
+        }
+
+        // F2-B：判断是否需要导航保护。当前在模拟电路页且目标不是模拟电路页时才拦截。
+        private bool NeedsNavigationGuard(int targetIndex)
+        {
+            if (pageRouter == null)
+            {
+                return false;
+            }
+
+            var targetPage = ToPageId(targetIndex);
+            return pageRouter.CurrentPage == PageId.Simulation && targetPage != PageId.Simulation;
+        }
+
+        // F2-B：请求受保护的导航。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
+        private void RequestGuardedNavigation(int targetIndex)
+        {
+            // 防重入：弹窗已显示时忽略后续点击，不静默更换 pending target。
+            if (navigationGuardDialog != null)
+            {
+                return;
+            }
+
+            pendingNavigationIndex = targetIndex;
+
+            var practice = PracticeSessionController.Instance;
+            var workspace = FindObjectOfType<WorkspaceController>(true);
+
+            var isPracticeActive = practice != null && practice.IsPracticeActive;
+            var isSimulationRunning = workspace != null && workspace.IsSimulationRunning;
+
+            if (isPracticeActive)
+            {
+                ShowPracticeLeaveDialog(targetIndex);
+            }
+            else if (isSimulationRunning)
+            {
+                ShowSimulationLeaveDialog(targetIndex);
+            }
+            else
+            {
+                // 无需保护，直接切换。
+                ExecuteNavigation(targetIndex);
+                pendingNavigationIndex = -1;
+            }
+        }
+
+        // F2-B：普通电路正在仿真时的确认弹窗。
+        private void ShowSimulationLeaveDialog(int targetIndex)
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                // 弹窗无法创建时拒绝导航，保持原页面和状态。
+                Debug.LogWarning("[F2-B] 找不到 Canvas，导航保护弹窗无法创建，已拒绝离开模拟电路页面。");
+                pendingNavigationIndex = -1;
+                return;
+            }
+
+            ShowNavigationGuardDialog(
+                canvas,
+                "离开模拟电路",
+                "当前电路正在运行。\n离开此页面将停止仿真，但会保留当前画布。",
+                "确认离开",
+                "取消",
+                () =>
+                {
+                    var ws = FindObjectOfType<WorkspaceController>(true);
+                    ws?.StopSimulation();
+                    ExecuteNavigation(targetIndex);
+                });
+        }
+
+        // F2-B：练习模式下的确认弹窗。
+        private void ShowPracticeLeaveDialog(int targetIndex)
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[F2-B] 找不到 Canvas，导航保护弹窗无法创建，已拒绝离开模拟电路页面。");
+                pendingNavigationIndex = -1;
+                return;
+            }
+
+            ShowNavigationGuardDialog(
+                canvas,
+                "退出当前练习",
+                "离开此页面将停止仿真、退出当前练习，\n并清空练习画布和参考图纸。",
+                "确认离开",
+                "继续练习",
+                () =>
+                {
+                    var practice = PracticeSessionController.Instance;
+                    practice?.EndPracticeSessionAndClearCanvas();
+                    ExecuteNavigation(targetIndex);
+                });
+        }
+
+        // F2-B：统一的导航保护弹窗创建。复用 LoadTemplateConfirmDialog 的样式，不新增 Dialog 类型。
+        private void ShowNavigationGuardDialog(
+            Canvas canvas, string title, string message,
+            string confirmText, string cancelText, Action onConfirm)
+        {
+            var overlay = new GameObject("NavigationGuardDialog", typeof(RectTransform), typeof(Image));
+            overlay.transform.SetParent(canvas.transform, false);
+            overlay.transform.SetAsLastSibling();
+
+            var overlayRect = overlay.GetComponent<RectTransform>();
+            overlayRect.anchorMin = Vector2.zero;
+            overlayRect.anchorMax = Vector2.one;
+            overlayRect.offsetMin = Vector2.zero;
+            overlayRect.offsetMax = Vector2.zero;
+
+            var overlayImage = overlay.GetComponent<Image>();
+            overlayImage.color = new Color(0f, 0f, 0f, 0.42f);
+            overlayImage.raycastTarget = true;
+
+            var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(overlay.transform, false);
+            var panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(460f, 240f);
+            panel.GetComponent<Image>().color = Color.white;
+
+            var titleObj = new GameObject("Title", typeof(RectTransform), typeof(Text));
+            titleObj.transform.SetParent(panel.transform, false);
+            var titleRect = titleObj.GetComponent<RectTransform>();
+            titleRect.anchorMin = new Vector2(0, 1);
+            titleRect.anchorMax = new Vector2(1, 1);
+            titleRect.pivot = new Vector2(0.5f, 1f);
+            titleRect.anchoredPosition = new Vector2(0f, -24f);
+            titleRect.sizeDelta = new Vector2(-48f, 36f);
+            var titleLabel = titleObj.GetComponent<Text>();
+            titleLabel.text = title;
+            titleLabel.font = MainUiTheme.UiFont;
+            titleLabel.fontSize = 18;
+            titleLabel.fontStyle = FontStyle.Bold;
+            titleLabel.alignment = TextAnchor.MiddleCenter;
+            titleLabel.color = MainUiTheme.Hex("111827");
+
+            var msgObj = new GameObject("Message", typeof(RectTransform), typeof(Text));
+            msgObj.transform.SetParent(panel.transform, false);
+            var msgRect = msgObj.GetComponent<RectTransform>();
+            msgRect.anchorMin = new Vector2(0, 0.5f);
+            msgRect.anchorMax = new Vector2(1, 0.5f);
+            msgRect.pivot = new Vector2(0.5f, 0.5f);
+            msgRect.anchoredPosition = new Vector2(0f, -10f);
+            msgRect.sizeDelta = new Vector2(-48f, 60f);
+            var msgLabel = msgObj.GetComponent<Text>();
+            msgLabel.text = message;
+            msgLabel.font = MainUiTheme.UiFont;
+            msgLabel.fontSize = 15;
+            msgLabel.alignment = TextAnchor.MiddleCenter;
+            msgLabel.color = MainUiTheme.Hex("475569");
+            msgLabel.supportRichText = false;
+
+            var confirmBtn = CreateGuardButton(panel.transform, "ConfirmButton", confirmText,
+                new Vector2(0.5f, 0f), new Vector2(-100f, 24f), new Vector2(160f, 40f),
+                MainUiTheme.SelectedBlue, Color.white);
+            var cancelBtn = CreateGuardButton(panel.transform, "CancelButton", cancelText,
+                new Vector2(0.5f, 0f), new Vector2(100f, 24f), new Vector2(160f, 40f),
+                Color.white, MainUiTheme.Hex("334155"));
+
+            navigationGuardDialog = overlay;
+
+            confirmBtn.onClick.AddListener(() =>
+            {
+                CloseNavigationGuardDialog();
+                onConfirm?.Invoke();
+            });
+
+            cancelBtn.onClick.AddListener(() =>
+            {
+                CloseNavigationGuardDialog();
+            });
+        }
+
+        private static Button CreateGuardButton(
+            Transform parent, string name, string text,
+            Vector2 anchor, Vector2 position, Vector2 size,
+            Color bgColor, Color textColor)
+        {
+            var obj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            obj.transform.SetParent(parent, false);
+            var rect = obj.GetComponent<RectTransform>();
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+            var img = obj.GetComponent<Image>();
+            img.sprite = UiThemeTokens.GetRoundedSprite(8);
+            img.type = Image.Type.Sliced;
+            img.color = bgColor;
+
+            var labelObj = new GameObject("Text", typeof(RectTransform), typeof(Text));
+            labelObj.transform.SetParent(obj.transform, false);
+            var labelRect = labelObj.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
+            var label = labelObj.GetComponent<Text>();
+            label.text = text;
+            label.font = MainUiTheme.UiFont;
+            label.fontSize = 15;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.color = textColor;
+
+            return obj.GetComponent<Button>();
+        }
+
+        // F2-B：关闭导航保护弹窗并清空 pending target。
+        private void CloseNavigationGuardDialog()
+        {
+            if (navigationGuardDialog != null)
+            {
+                DestroyImmediate(navigationGuardDialog);
+                navigationGuardDialog = null;
+            }
+            pendingNavigationIndex = -1;
+        }
+
+        // F2-B：实际执行页面切换（PageRouter.ShowPage + RefreshTabStates + TabSelected）。
+        private void ExecuteNavigation(int index)
+        {
             var page = ToPageId(index);
             if (pageRouter != null)
             {
