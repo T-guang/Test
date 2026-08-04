@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -107,6 +107,9 @@ namespace ElectricalSim.UI
         private void LateUpdate()
         {
             RefreshWireColorButtons(false);
+            // 外部 StopSimulation（如加载新模板）不会触发 ToggleSimulation，
+            // 这里每帧同步按钮文字，确保 IsSimulationRunning 变化后按钮立即恢复"开始仿真"。
+            RefreshSimulationButtonLabel();
         }
 
         private void BindButton(Button button, UnityEngine.Events.UnityAction action)
@@ -1218,9 +1221,14 @@ namespace ElectricalSim.UI
             var label = startButton != null ? startButton.GetComponentInChildren<Text>() : null;
             if (label != null)
             {
-                label.color = Color.white;
-                MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.ToolbarPrimaryButton);
-                label.text = workspace != null && workspace.IsSimulationRunning ? "结束仿真" : "开始仿真";
+                var desired = workspace != null && workspace.IsSimulationRunning ? "结束仿真" : "开始仿真";
+                // LateUpdate 每帧调用，仅当文字不一致时才刷新，避免覆盖颜色/样式或触发多余布局重建。
+                if (label.text != desired)
+                {
+                    label.color = Color.white;
+                    MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.ToolbarPrimaryButton);
+                    label.text = desired;
+                }
             }
         }
 

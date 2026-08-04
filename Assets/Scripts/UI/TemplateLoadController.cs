@@ -1,4 +1,5 @@
 using ElectricalSim.Core;
+using ElectricalSim.Practice;
 using ElectricalSim.Templates;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -117,9 +118,11 @@ namespace ElectricalSim.UI
                 return;
             }
 
-            if (HasWorkspaceContent())
+            // 练习活动时即使画布为空也必须先显示确认框：加载新图纸会退出当前练习。
+            var practiceActive = PracticeSessionController.Instance != null && PracticeSessionController.Instance.IsPracticeActive;
+            if (HasWorkspaceContent() || practiceActive)
             {
-                ShowLoadConfirm(item, () =>
+                ShowLoadConfirm(item, practiceActive, () =>
                 {
                     if (LoadTemplateNow(item))
                     {
@@ -168,6 +171,21 @@ namespace ElectricalSim.UI
             }
 
             var catalog = saveLoadService != null ? saveLoadService.Catalog : null;
+
+            // 预检：验证模板可在当前画布生成，不读取/清空画布。
+            // 预检失败时保持旧电路与旧仿真继续运行，不停止旧仿真、不结束旧练习、不清空画布。
+            if (!CircuitTemplateSpawnService.TryValidate(template, catalog, out var validateMessage))
+            {
+                workspace.SetStatus(string.IsNullOrWhiteSpace(validateMessage) ? "模板校验失败：" + item.templateId : validateMessage);
+                return false;
+            }
+
+            // 提交点：模板读取与校验均成功。此后停止旧仿真、结束旧练习、清空画布并生成新电路。
+            // StopSimulation 会重置 IsSimulationRunning、simulationRefreshTimer 并通过 SimulationEngine.ResetRuntimeState
+            // 清除旧 KT/电机/自动往返/热继运行态缓存；新模板加载后不会自动运行。
+            workspace.StopSimulation();
+            PracticeSessionController.Instance.ClearPracticeState();
+
             if (!CircuitTemplateSpawnService.Spawn(template, workspace, catalog, out var message))
             {
                 workspace.SetStatus(string.IsNullOrWhiteSpace(message) ? "模板生成失败：" + item.templateId : message);
@@ -187,7 +205,7 @@ namespace ElectricalSim.UI
             return hasComponents || hasWires;
         }
 
-        private void ShowLoadConfirm(CircuitTemplateCatalogItemDto item, System.Action onConfirm)
+        private void ShowLoadConfirm(CircuitTemplateCatalogItemDto item, bool practiceActive, System.Action onConfirm)
         {
             var canvas = FindObjectOfType<Canvas>();
             if (canvas == null)
@@ -241,7 +259,11 @@ namespace ElectricalSim.UI
             title.rectTransform.offsetMax = new Vector2(-20f, -28f);
 
             var templateName = string.IsNullOrWhiteSpace(item.templateName) ? item.templateId : item.templateName;
-            var message = CreateText("Message", panel.transform, $"当前画布将被清空并加载标准图纸“{templateName}”，是否继续？", 15, FontStyle.Normal, MainUiTheme.Hex("475569"));
+            // 练习活动时明确说明加载新图纸会退出当前练习；普通非练习加载保持原文。
+            var messageText = practiceActive
+                ? $"当前处于练习模式，加载标准图纸“{templateName}”将退出当前练习并清空画布，是否继续？"
+                : $"当前画布将被清空并加载标准图纸“{templateName}”，是否继续？";
+            var message = CreateText("Message", panel.transform, messageText, 15, FontStyle.Normal, MainUiTheme.Hex("475569"));
             message.alignment = TextAnchor.MiddleCenter;
             message.horizontalOverflow = HorizontalWrapMode.Wrap;
             message.verticalOverflow = VerticalWrapMode.Overflow;

@@ -157,6 +157,10 @@ namespace ElectricalSim.Practice
                 return false;
             }
 
+            // 提交点：模板读取成功。停止旧仿真并清理旧运行态缓存（KT/电机/往返/热继），
+            // 再清空画布。新练习画布加载后不会自动运行。
+            workspace?.StopSimulation();
+
             workspace?.ClearDrawing(true);
 
             IsPracticeActive = true;

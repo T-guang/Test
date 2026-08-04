@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using ElectricalSim.Core;
 using UnityEngine;
 
@@ -98,6 +98,19 @@ namespace ElectricalSim.Templates
             message = "已加载模板：" + template.templateName;
             workspace.SetStatus(message);
             return true;
+        }
+
+        /// <summary>
+        /// 仅校验模板 DTO 与元件目录是否可生成，不读取、不清空、不修改工作区。
+        /// 供 TemplateLoadController 等加载入口在停止旧仿真前完成预检：
+        /// 预检失败时保持旧电路与旧仿真继续运行，预检成功后才进入替换提交点。
+        /// </summary>
+        public static bool TryValidate(
+            CircuitTemplateDto template,
+            IReadOnlyList<ComponentDefinition> catalog,
+            out string message)
+        {
+            return ValidateTemplate(template, catalog, out _, out message);
         }
 
         private static bool ValidateTemplate(
