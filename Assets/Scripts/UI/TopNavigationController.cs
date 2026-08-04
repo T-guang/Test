@@ -438,6 +438,7 @@ namespace ElectricalSim.UI
             overlayImage.color = new Color(0f, 0f, 0f, 0.42f);
             overlayImage.raycastTarget = true;
 
+            // F2-B.1：容器样式对齐 PracticeSessionController.ShowPracticeConfirm（圆角+边框+阴影+尺寸）。
             var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
             panel.transform.SetParent(overlay.transform, false);
             var panelRect = panel.GetComponent<RectTransform>();
@@ -445,21 +446,32 @@ namespace ElectricalSim.UI
             panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(460f, 240f);
-            panel.GetComponent<Image>().color = Color.white;
+            panelRect.sizeDelta = new Vector2(500f, 270f);
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.sprite = UiThemeTokens.GetRoundedSprite(16, 64);
+            panelImage.type = Image.Type.Sliced;
+            panelImage.color = Color.white;
+
+            var outline = panel.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Hex("E5E7EB");
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var shadow = panel.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.05f);
+            shadow.effectDistance = new Vector2(0f, -4f);
 
             var titleObj = new GameObject("Title", typeof(RectTransform), typeof(Text));
             titleObj.transform.SetParent(panel.transform, false);
             var titleRect = titleObj.GetComponent<RectTransform>();
-            titleRect.anchorMin = new Vector2(0, 1);
-            titleRect.anchorMax = new Vector2(1, 1);
+            titleRect.anchorMin = new Vector2(0f, 1f);
+            titleRect.anchorMax = new Vector2(1f, 1f);
             titleRect.pivot = new Vector2(0.5f, 1f);
-            titleRect.anchoredPosition = new Vector2(0f, -24f);
-            titleRect.sizeDelta = new Vector2(-48f, 36f);
+            titleRect.offsetMin = new Vector2(20f, -60f);
+            titleRect.offsetMax = new Vector2(-20f, -28f);
             var titleLabel = titleObj.GetComponent<Text>();
             titleLabel.text = title;
             titleLabel.font = MainUiTheme.UiFont;
-            titleLabel.fontSize = 18;
+            titleLabel.fontSize = 20;
             titleLabel.fontStyle = FontStyle.Bold;
             titleLabel.alignment = TextAnchor.MiddleCenter;
             titleLabel.color = MainUiTheme.Hex("111827");
@@ -467,25 +479,32 @@ namespace ElectricalSim.UI
             var msgObj = new GameObject("Message", typeof(RectTransform), typeof(Text));
             msgObj.transform.SetParent(panel.transform, false);
             var msgRect = msgObj.GetComponent<RectTransform>();
-            msgRect.anchorMin = new Vector2(0, 0.5f);
-            msgRect.anchorMax = new Vector2(1, 0.5f);
-            msgRect.pivot = new Vector2(0.5f, 0.5f);
-            msgRect.anchoredPosition = new Vector2(0f, -10f);
-            msgRect.sizeDelta = new Vector2(-48f, 60f);
+            msgRect.anchorMin = new Vector2(0f, 0f);
+            msgRect.anchorMax = new Vector2(1f, 1f);
+            msgRect.offsetMin = new Vector2(48f, 85f);
+            msgRect.offsetMax = new Vector2(-48f, -90f);
             var msgLabel = msgObj.GetComponent<Text>();
             msgLabel.text = message;
             msgLabel.font = MainUiTheme.UiFont;
             msgLabel.fontSize = 15;
             msgLabel.alignment = TextAnchor.MiddleCenter;
             msgLabel.color = MainUiTheme.Hex("475569");
+            msgLabel.lineSpacing = 1.3f;
             msgLabel.supportRichText = false;
 
+            // F2-B.1：按钮尺寸/颜色/位置对齐 CreateDialogButton（取消浅灰、确认蓝色、确认文字 Bold）。
             var confirmBtn = CreateGuardButton(panel.transform, "ConfirmButton", confirmText,
-                new Vector2(0.5f, 0f), new Vector2(-100f, 24f), new Vector2(160f, 40f),
-                MainUiTheme.SelectedBlue, Color.white);
+                new Vector2(0.5f, 0f), new Vector2(-74f, 48f), new Vector2(118f, 38f),
+                MainUiTheme.Hex("2563EB"), Color.white);
             var cancelBtn = CreateGuardButton(panel.transform, "CancelButton", cancelText,
-                new Vector2(0.5f, 0f), new Vector2(100f, 24f), new Vector2(160f, 40f),
-                Color.white, MainUiTheme.Hex("334155"));
+                new Vector2(0.5f, 0f), new Vector2(74f, 48f), new Vector2(118f, 38f),
+                MainUiTheme.Hex("F1F5F9"), MainUiTheme.Hex("334155"));
+
+            var confirmLabel = confirmBtn.transform.Find("Text")?.GetComponent<Text>();
+            if (confirmLabel != null)
+            {
+                confirmLabel.fontStyle = FontStyle.Bold;
+            }
 
             navigationGuardDialog = overlay;
 
@@ -515,7 +534,7 @@ namespace ElectricalSim.UI
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
             var img = obj.GetComponent<Image>();
-            img.sprite = UiThemeTokens.GetRoundedSprite(8);
+            img.sprite = UiThemeTokens.GetRoundedSprite(8, 64);
             img.type = Image.Type.Sliced;
             img.color = bgColor;
 
