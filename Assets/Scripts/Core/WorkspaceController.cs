@@ -36,6 +36,7 @@ namespace ElectricalSim.Core
         public Color CurrentWireColor { get; set; } = new Color(0.95f, 0.15f, 0.12f);
         public WireStyle CurrentWireStyle { get; set; } = WireStyle.Orthogonal;
         public bool IsInteractionLocked { get; private set; }
+        public bool AutoShowParameterPanel { get; set; } = false;
         public bool IsSimulationRunning { get; private set; }
         public CircuitComponent SelectedComponent => selectedComponent;
         public bool HasSelectedWire => selectedWire != null;
@@ -474,13 +475,25 @@ namespace ElectricalSim.Core
             }
 
             SetStatus("已选中元件：" + component.Definition.displayName + "。按 D 或 Delete 删除。");
-            componentParameterView?.Show(component, this);
+            if (AutoShowParameterPanel)
+            {
+                componentParameterView?.Show(component, this);
+            }
+            else
+            {
+                componentParameterView?.Hide();
+            }
             RefreshMeasurementPanel();
         }
 
         public void RefreshParameterPanelFor(CircuitComponent component)
         {
             if (componentParameterView == null || component == null || component != selectedComponent)
+            {
+                return;
+            }
+
+            if (!AutoShowParameterPanel)
             {
                 return;
             }
