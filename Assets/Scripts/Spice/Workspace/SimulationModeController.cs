@@ -29,6 +29,22 @@ namespace ElectricalSim.Spice.Workspace
         public RectTransform PopupLayer => popupLayer;
         public event Action<SimulationWorkspaceMode> ModeChanged;
 
+        // F2-C：SPICE 求解状态查询。通过同 GameObject 上的 SpiceWorkspaceDemoHost 获取 SpiceWorkspaceController 引用，
+        // 复用其已序列化的 workspaceController，不新增场景绑定。GetComponent 仅查询同对象组件，不是场景扫描。
+        private SpiceWorkspaceDemoHost cachedSpiceHost;
+        public bool IsSpiceSolving
+        {
+            get
+            {
+                if (cachedSpiceHost == null)
+                {
+                    cachedSpiceHost = GetComponent<SpiceWorkspaceDemoHost>();
+                }
+                var controller = cachedSpiceHost != null ? cachedSpiceHost.Controller : null;
+                return controller != null && controller.ResultState == SpiceWorkspaceResultState.Running;
+            }
+        }
+
         /// <summary>仅供场景装配器写入显式内容 Root；不会查询或创建页面对象。</summary>
         public void Configure(
             GameObject topBar,

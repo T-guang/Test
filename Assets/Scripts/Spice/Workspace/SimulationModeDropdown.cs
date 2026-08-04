@@ -57,6 +57,9 @@ namespace ElectricalSim.Spice.Workspace
         {
             ValidateBindings();
             modeController.ConfigurePopupLayer(popupLayer);
+            // F2-C：将 modeController 注入 TopNavigationController，使其能查询当前模式和 SPICE 求解状态。
+            // 复用 SimulationModeDropdown 已有的序列化引用，不新增场景绑定。
+            topNavigation.ConfigureModeController(modeController);
             ApplyMenuLayout();
             dropdownButton.onClick.AddListener(ToggleMenu);
             controlCircuitOption.onClick.AddListener(SelectControlCircuit);
@@ -108,10 +111,181 @@ namespace ElectricalSim.Spice.Workspace
 
         private void SelectMode(SimulationWorkspaceMode mode)
         {
+            // F2-C：目标与当前模式相同时不弹窗、不切换。
+            if (modeController.CurrentMode == mode)
+            {
+                CloseMenu();
+                return;
+            }
+
+            // F2-C：SPICE 正在求解时阻止模式切换，显示单按钮提示。
+            if (modeController.IsSpiceSolving)
+            {
+                ShowSpiceSolvingBlockedForModeSwitch();
+                return;
+            }
+
+            // F2-C：导航保护弹窗已打开时不允许模式切换绕过遮罩。
+            if (topNavigation.IsNavigationGuardDialogOpen)
+            {
+                return;
+            }
+
             topNavigation.SelectTab(0);
-            modeController.SetMode(mode);
-            RefreshOptionPresentation();
-            CloseMenu();
+
+            if (mode == SimulationWorkspaceMode.SpiceDc)
+            {
+                // F2-C：电工 → SPICE，复用 TopNavigationController 的电工离开保护。
+                // 确认后停止电工仿真/退出练习，再执行模式切换。
+                topNavigation.RequestLeaveControlWorkspace(() =>
+                {
+                    modeController.SetMode(mode);
+                    RefreshOptionPresentation();
+                    CloseMenu();
+                });
+            }
+            else
+            {
+                // F2-C：SPICE → 电工，SPICE 未求解（已检查），直接切换。
+                modeController.SetMode(mode);
+                RefreshOptionPresentation();
+                CloseMenu();
+            }
+        }
+
+        // F2-C：SPICE 求解中阻止模式切换的单按钮提示。
+        private void ShowSpiceSolvingBlockedForModeSwitch()
+        {
+            var canvas = popupCanvas;
+            if (canvas == null)
+            {
+                Debug.LogWarning("[F2-C] 找不到 Canvas，SPICE 求解阻止弹窗无法创建，已拒绝模式切换。");
+                return;
+            }
+
+            ShowModeSwitchSingleButtonDialog(
+                canvas,
+                "SPICE 正在求解",
+                "当前 SPICE 电路正在计算，\n请等待计算完成后再切换模式。",
+                "我知道了");
+        }
+
+        // F2-C：模式切换单按钮提示弹窗。复用 F2-B.1 视觉样式。
+        private void ShowModeSwitchSingleButtonDialog(Canvas canvas, string title, string message, string buttonText)
+        {
+            var overlay = new GameObject("ModeSwitchGuardDialog", typeof(RectTransform), typeof(Image));
+            overlay.transform.SetParent(canvas.transform, false);
+            overlay.transform.SetAsLastSibling();
+
+            var overlayRect = overlay.GetComponent<RectTransform>();
+            overlayRect.anchorMin = Vector2.zero;
+            overlayRect.anchorMax = Vector2.one;
+            overlayRect.offsetMin = Vector2.zero;
+            overlayRect.offsetMax = Vector2.zero;
+
+            var overlayImage = overlay.GetComponent<Image>();
+            overlayImage.color = new Color(0f, 0f, 0f, 0.42f);
+            overlayImage.raycastTarget = true;
+
+            var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(overlay.transform, false);
+            var panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(500f, 270f);
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.sprite = UiThemeTokens.GetRoundedSprite(16, 64);
+            panelImage.type = Image.Type.Sliced;
+            panelImage.color = Color.white;
+
+            var outline = panel.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Hex("E5E7EB");
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var shadow = panel.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.05f);
+            shadow.effectDistance = new Vector2(0f, -4f);
+
+            var titleObj = new GameObject("Title", typeof(RectTransform), typeof(Text));
+            titleObj.transform.SetParent(panel.transform, false);
+            var titleRect = titleObj.GetComponent<RectTransform>();
+            titleRect.anchorMin = new Vector2(0f, 1f);
+            titleRect.anchorMax = new Vector2(1f, 1f);
+            titleRect.pivot = new Vector2(0.5f, 1f);
+            titleRect.offsetMin = new Vector2(20f, -60f);
+            titleRect.offsetMax = new Vector2(-20f, -28f);
+            var titleLabel = titleObj.GetComponent<Text>();
+            titleLabel.text = title;
+            titleLabel.font = MainUiTheme.UiFont;
+            titleLabel.fontSize = 20;
+            titleLabel.fontStyle = FontStyle.Bold;
+            titleLabel.alignment = TextAnchor.MiddleCenter;
+            titleLabel.color = MainUiTheme.Hex("111827");
+
+            var msgObj = new GameObject("Message", typeof(RectTransform), typeof(Text));
+            msgObj.transform.SetParent(panel.transform, false);
+            var msgRect = msgObj.GetComponent<RectTransform>();
+            msgRect.anchorMin = new Vector2(0f, 0f);
+            msgRect.anchorMax = new Vector2(1f, 1f);
+            msgRect.offsetMin = new Vector2(48f, 85f);
+            msgRect.offsetMax = new Vector2(-48f, -90f);
+            var msgLabel = msgObj.GetComponent<Text>();
+            msgLabel.text = message;
+            msgLabel.font = MainUiTheme.UiFont;
+            msgLabel.fontSize = 15;
+            msgLabel.alignment = TextAnchor.MiddleCenter;
+            msgLabel.color = MainUiTheme.Hex("475569");
+            msgLabel.lineSpacing = 1.3f;
+            msgLabel.supportRichText = false;
+
+            var okBtn = CreateModeSwitchButton(panel.transform, "OkButton", buttonText,
+                new Vector2(0.5f, 0f), new Vector2(0f, 48f), new Vector2(118f, 38f),
+                MainUiTheme.Hex("2563EB"), Color.white);
+
+            var dialog = overlay;
+            okBtn.onClick.AddListener(() =>
+            {
+                DestroyImmediate(dialog);
+                CloseMenu();
+            });
+        }
+
+        private static Button CreateModeSwitchButton(
+            Transform parent, string name, string text,
+            Vector2 anchor, Vector2 position, Vector2 size,
+            Color bgColor, Color textColor)
+        {
+            var obj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            obj.transform.SetParent(parent, false);
+            var rect = obj.GetComponent<RectTransform>();
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+            var img = obj.GetComponent<Image>();
+            img.sprite = UiThemeTokens.GetRoundedSprite(8, 64);
+            img.type = Image.Type.Sliced;
+            img.color = bgColor;
+
+            var labelObj = new GameObject("Text", typeof(RectTransform), typeof(Text));
+            labelObj.transform.SetParent(obj.transform, false);
+            var labelRect = labelObj.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
+            var label = labelObj.GetComponent<Text>();
+            label.text = text;
+            label.font = MainUiTheme.UiFont;
+            label.fontSize = 15;
+            label.fontStyle = FontStyle.Bold;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.color = textColor;
+
+            return obj.GetComponent<Button>();
         }
 
         private void OpenMenu()

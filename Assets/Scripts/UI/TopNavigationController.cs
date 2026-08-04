@@ -3,6 +3,7 @@ using System;
 using ElectricalSim.UI.CommonTools;
 using ElectricalSim.Practice;
 using ElectricalSim.Core;
+using ElectricalSim.Spice.Workspace;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -35,6 +36,10 @@ namespace ElectricalSim.UI
         // F2-B：导航保护字段。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
         private GameObject navigationGuardDialog;
         private int pendingNavigationIndex = -1;
+
+        // F2-C：模式控制器引用，用于查询当前模式（ControlCircuit/SpiceDc）和 SPICE 求解状态。
+        // 由 SimulationModeDropdown.Awake 通过 ConfigureModeController 注入，不新增场景绑定。
+        private SimulationModeController modeController;
 
         private void Awake()
         {
@@ -312,7 +317,7 @@ namespace ElectricalSim.UI
 
         public void SelectTab(int index)
         {
-            // F2-B：导航保护。只有从模拟电路页离开到其他页面时才需要拦截。
+            // F2-B/F2-C：导航保护。只有从模拟电路页离开到其他页面时才需要拦截。
             // 所有外部 SelectTab(0) 调用（进入模拟电路页）和不在模拟电路页时的切换都不会被拦截。
             if (NeedsNavigationGuard(index))
             {
@@ -321,6 +326,46 @@ namespace ElectricalSim.UI
             }
 
             ExecuteNavigation(index);
+        }
+
+        // F2-C：由 SimulationModeDropdown.Awake 调用，注入模式控制器引用。
+        // 不使用 FindObjectOfType 或场景扫描，复用 SimulationModeDropdown 已有序列化引用。
+        public void ConfigureModeController(SimulationModeController controller)
+        {
+            modeController = controller;
+        }
+
+        // F2-C：查询当前是否有导航保护弹窗打开。供 SimulationModeDropdown 防重入使用。
+        public bool IsNavigationGuardDialogOpen => navigationGuardDialog != null;
+
+        // F2-C：电工离开保护公开入口。供 SimulationModeDropdown 在切换到 SPICE 前复用。
+        // 判断电工运行和练习状态，显示与 F2-B 同款弹窗（模式切换专用文案），确认后完成清理并调用 onConfirmed。
+        // 无需保护时直接调用 onConfirmed。取消或弹窗创建失败时不调用 onConfirmed。
+        public void RequestLeaveControlWorkspace(Action onConfirmed)
+        {
+            if (navigationGuardDialog != null)
+            {
+                return;
+            }
+
+            var practice = PracticeSessionController.Instance;
+            var workspace = FindObjectOfType<WorkspaceController>(true);
+
+            var isPracticeActive = practice != null && practice.IsPracticeActive;
+            var isSimulationRunning = workspace != null && workspace.IsSimulationRunning;
+
+            if (isPracticeActive)
+            {
+                ShowPracticeLeaveForModeSwitchDialog(onConfirmed);
+            }
+            else if (isSimulationRunning)
+            {
+                ShowSimulationLeaveForModeSwitchDialog(onConfirmed);
+            }
+            else
+            {
+                onConfirmed?.Invoke();
+            }
         }
 
         // F2-B：判断是否需要导航保护。当前在模拟电路页且目标不是模拟电路页时才拦截。
@@ -335,7 +380,7 @@ namespace ElectricalSim.UI
             return pageRouter.CurrentPage == PageId.Simulation && targetPage != PageId.Simulation;
         }
 
-        // F2-B：请求受保护的导航。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
+        // F2-B/F2-C：请求受保护的导航。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
         private void RequestGuardedNavigation(int targetIndex)
         {
             // 防重入：弹窗已显示时忽略后续点击，不静默更换 pending target。
@@ -346,11 +391,27 @@ namespace ElectricalSim.UI
 
             pendingNavigationIndex = targetIndex;
 
+            // F2-C：当前为 SPICE 模式且正在求解时，阻止离开 Simulation 页面。
+            if (modeController != null
+                && modeController.CurrentMode == SimulationWorkspaceMode.SpiceDc
+                && modeController.IsSpiceSolving)
+            {
+                ShowSpiceSolvingBlockedDialog();
+                return;
+            }
+
             var practice = PracticeSessionController.Instance;
             var workspace = FindObjectOfType<WorkspaceController>(true);
 
             var isPracticeActive = practice != null && practice.IsPracticeActive;
             var isSimulationRunning = workspace != null && workspace.IsSimulationRunning;
+
+            // F2-C：当前为 SPICE 模式时，电工 WorkspaceController.IsSimulationRunning 不应触发电工弹窗。
+            // 电工 workspace 在 SPICE 模式下虽隐藏但 IsSimulationRunning 可能保持 true，需按当前模式区分。
+            if (modeController != null && modeController.CurrentMode == SimulationWorkspaceMode.SpiceDc)
+            {
+                isSimulationRunning = false;
+            }
 
             if (isPracticeActive)
             {
@@ -366,6 +427,159 @@ namespace ElectricalSim.UI
                 ExecuteNavigation(targetIndex);
                 pendingNavigationIndex = -1;
             }
+        }
+
+        // F2-C：SPICE 求解中阻止导航的单按钮提示。
+        private void ShowSpiceSolvingBlockedDialog()
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[F2-C] 找不到 Canvas，SPICE 求解阻止弹窗无法创建，已拒绝导航。");
+                pendingNavigationIndex = -1;
+                return;
+            }
+
+            ShowSingleButtonDialog(
+                canvas,
+                "SPICE 正在求解",
+                "当前 SPICE 电路正在计算，\n请等待计算完成后再切换模式。",
+                "我知道了");
+        }
+
+        // F2-C：模式切换专用——电工运行中确认弹窗。
+        private void ShowSimulationLeaveForModeSwitchDialog(Action onConfirmed)
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[F2-C] 找不到 Canvas，模式切换保护弹窗无法创建，已拒绝切换。");
+                return;
+            }
+
+            ShowNavigationGuardDialog(
+                canvas,
+                "离开模拟电路",
+                "当前电路正在运行。\n切换到 SPICE 将停止仿真，但会保留当前画布。",
+                "确认切换",
+                "取消",
+                () =>
+                {
+                    var ws = FindObjectOfType<WorkspaceController>(true);
+                    ws?.StopSimulation();
+                    onConfirmed?.Invoke();
+                });
+        }
+
+        // F2-C：模式切换专用——练习确认弹窗。
+        private void ShowPracticeLeaveForModeSwitchDialog(Action onConfirmed)
+        {
+            var canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[F2-C] 找不到 Canvas，模式切换保护弹窗无法创建，已拒绝切换。");
+                return;
+            }
+
+            ShowNavigationGuardDialog(
+                canvas,
+                "退出当前练习",
+                "切换到 SPICE 将停止仿真、退出当前练习，\n并清空练习画布和参考图纸。",
+                "确认切换",
+                "继续练习",
+                () =>
+                {
+                    var practice = PracticeSessionController.Instance;
+                    practice?.EndPracticeSessionAndClearCanvas();
+                    onConfirmed?.Invoke();
+                });
+        }
+
+        // F2-C：单按钮提示弹窗（SPICE 求解中阻止导航时使用）。复用 F2-B.1 视觉样式。
+        private void ShowSingleButtonDialog(Canvas canvas, string title, string message, string buttonText)
+        {
+            var overlay = new GameObject("NavigationGuardDialog", typeof(RectTransform), typeof(Image));
+            overlay.transform.SetParent(canvas.transform, false);
+            overlay.transform.SetAsLastSibling();
+
+            var overlayRect = overlay.GetComponent<RectTransform>();
+            overlayRect.anchorMin = Vector2.zero;
+            overlayRect.anchorMax = Vector2.one;
+            overlayRect.offsetMin = Vector2.zero;
+            overlayRect.offsetMax = Vector2.zero;
+
+            var overlayImage = overlay.GetComponent<Image>();
+            overlayImage.color = new Color(0f, 0f, 0f, 0.42f);
+            overlayImage.raycastTarget = true;
+
+            var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(overlay.transform, false);
+            var panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(500f, 270f);
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.sprite = UiThemeTokens.GetRoundedSprite(16, 64);
+            panelImage.type = Image.Type.Sliced;
+            panelImage.color = Color.white;
+
+            var outline = panel.AddComponent<Outline>();
+            outline.effectColor = MainUiTheme.Hex("E5E7EB");
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            var shadow = panel.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.05f);
+            shadow.effectDistance = new Vector2(0f, -4f);
+
+            var titleObj = new GameObject("Title", typeof(RectTransform), typeof(Text));
+            titleObj.transform.SetParent(panel.transform, false);
+            var titleRect = titleObj.GetComponent<RectTransform>();
+            titleRect.anchorMin = new Vector2(0f, 1f);
+            titleRect.anchorMax = new Vector2(1f, 1f);
+            titleRect.pivot = new Vector2(0.5f, 1f);
+            titleRect.offsetMin = new Vector2(20f, -60f);
+            titleRect.offsetMax = new Vector2(-20f, -28f);
+            var titleLabel = titleObj.GetComponent<Text>();
+            titleLabel.text = title;
+            titleLabel.font = MainUiTheme.UiFont;
+            titleLabel.fontSize = 20;
+            titleLabel.fontStyle = FontStyle.Bold;
+            titleLabel.alignment = TextAnchor.MiddleCenter;
+            titleLabel.color = MainUiTheme.Hex("111827");
+
+            var msgObj = new GameObject("Message", typeof(RectTransform), typeof(Text));
+            msgObj.transform.SetParent(panel.transform, false);
+            var msgRect = msgObj.GetComponent<RectTransform>();
+            msgRect.anchorMin = new Vector2(0f, 0f);
+            msgRect.anchorMax = new Vector2(1f, 1f);
+            msgRect.offsetMin = new Vector2(48f, 85f);
+            msgRect.offsetMax = new Vector2(-48f, -90f);
+            var msgLabel = msgObj.GetComponent<Text>();
+            msgLabel.text = message;
+            msgLabel.font = MainUiTheme.UiFont;
+            msgLabel.fontSize = 15;
+            msgLabel.alignment = TextAnchor.MiddleCenter;
+            msgLabel.color = MainUiTheme.Hex("475569");
+            msgLabel.lineSpacing = 1.3f;
+            msgLabel.supportRichText = false;
+
+            var okBtn = CreateGuardButton(panel.transform, "OkButton", buttonText,
+                new Vector2(0.5f, 0f), new Vector2(0f, 48f), new Vector2(118f, 38f),
+                MainUiTheme.Hex("2563EB"), Color.white);
+            var okLabel = okBtn.transform.Find("Text")?.GetComponent<Text>();
+            if (okLabel != null)
+            {
+                okLabel.fontStyle = FontStyle.Bold;
+            }
+
+            navigationGuardDialog = overlay;
+
+            okBtn.onClick.AddListener(() =>
+            {
+                CloseNavigationGuardDialog();
+            });
         }
 
         // F2-B：普通电路正在仿真时的确认弹窗。
