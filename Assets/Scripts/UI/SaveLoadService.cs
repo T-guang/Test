@@ -180,11 +180,21 @@ namespace ElectricalSim.UI
             }
 
             // 在清空当前画布前先检查所有元件定义与导线端子引用，避免明显无效的外部 JSON 覆盖学习者当前电路。
+            // F1-A：同时拒绝重复 instanceId，并在校验阶段建立 instanceId → ComponentDefinition 映射供导线预检使用。
+            var instanceIds = new HashSet<string>(StringComparer.Ordinal);
+            var definitionsByInstanceId = new Dictionary<string, ComponentDefinition>(StringComparer.Ordinal);
             foreach (var item in drawing.components)
             {
                 if (item == null || string.IsNullOrWhiteSpace(item.instanceId) || string.IsNullOrWhiteSpace(item.definitionName))
                 {
                     error = "导入失败：图纸中存在无效元件。";
+                    workspace.SetStatus(error);
+                    return false;
+                }
+
+                if (!instanceIds.Add(item.instanceId))
+                {
+                    error = $"导入失败：元件编号 '{item.instanceId}' 重复，当前画布未发生变化。";
                     workspace.SetStatus(error);
                     return false;
                 }
@@ -196,8 +206,14 @@ namespace ElectricalSim.UI
                     workspace.SetStatus(error);
                     return false;
                 }
+
+                definitionsByInstanceId[item.instanceId] = definition;
             }
 
+            // F1-A：导线前置校验。在清空画布前完成所有 DTO 级判断，避免无效 JSON 覆盖学习者当前电路。
+            // 规则与 WireManager.CanCreateWire 保持一致：同端子拒绝、同元件跳线仅允许 Motor_StarDelta 的 U1/V1/W1/U2/V2/W2、PE 不放开。
+            // 不复制更宽松的接线规则，也不修改 WireManager。
+            var wireEndpointPairs = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in drawing.wires)
             {
                 if (item == null ||
@@ -211,41 +227,99 @@ namespace ElectricalSim.UI
                     return false;
                 }
 
-                var startComp = drawing.components.Find(c => c.instanceId == item.startComponentId);
-                var endComp = drawing.components.Find(c => c.instanceId == item.endComponentId);
-                if (startComp == null || endComp == null)
+                if (!definitionsByInstanceId.TryGetValue(item.startComponentId, out var startDef) ||
+                    !definitionsByInstanceId.TryGetValue(item.endComponentId, out var endDef))
                 {
                     error = "导入失败：导线引用了不存在的元件。";
                     workspace.SetStatus(error);
                     return false;
                 }
 
-                var startDef = catalog.Find(d => d.name == startComp.definitionName);
-                var endDef = catalog.Find(d => d.name == endComp.definitionName);
-
-                if (startDef != null && startDef.terminals.Find(t => t.id == item.startTerminalId) == null)
+                if (startDef.terminals.Find(t => t.id == item.startTerminalId) == null)
                 {
                     error = $"导入失败：元件 '{startDef.name}' 缺少端子 '{item.startTerminalId}'。";
                     workspace.SetStatus(error);
                     return false;
                 }
-                if (endDef != null && endDef.terminals.Find(t => t.id == item.endTerminalId) == null)
+                if (endDef.terminals.Find(t => t.id == item.endTerminalId) == null)
                 {
                     error = $"导入失败：元件 '{endDef.name}' 缺少端子 '{item.endTerminalId}'。";
                     workspace.SetStatus(error);
                     return false;
                 }
+
+                // F1-A：起点和终点不能是完全相同端子（同一元件同一端子）。
+                if (item.startComponentId == item.endComponentId && item.startTerminalId == item.endTerminalId)
+                {
+                    error = $"导入失败：导线不能连接到元件 '{item.startComponentId}' 的同一端子 '{item.startTerminalId}'。";
+                    workspace.SetStatus(error);
+                    return false;
+                }
+
+                // F1-A：同一元件内部跳线遵守 WireManager 既有规则。
+                // 仅 Motor_StarDelta 且 allowSameComponentJumper=true 时允许 U1/V1/W1/U2/V2/W2 之间跳线；PE 不放开。
+                if (item.startComponentId == item.endComponentId)
+                {
+                    if (startDef == null ||
+                        !startDef.allowSameComponentJumper ||
+                        startDef.name.IndexOf("Motor_StarDelta", StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        error = $"导入失败：元件 '{item.startComponentId}' 不允许同一器件内部端子跳线。";
+                        workspace.SetStatus(error);
+                        return false;
+                    }
+
+                    if (!IsStarDeltaJumperTerminal(item.startTerminalId) || !IsStarDeltaJumperTerminal(item.endTerminalId))
+                    {
+                        error = $"导入失败：星三角电机只允许 U1/V1/W1/U2/V2/W2 参与跳线，PE 不参与。";
+                        workspace.SetStatus(error);
+                        return false;
+                    }
+                }
+
+                // F1-A：不允许重复的无向端点对。
+                var pairKey = BuildUndirectedWireKey(item.startComponentId, item.startTerminalId, item.endComponentId, item.endTerminalId);
+                if (!wireEndpointPairs.Add(pairKey))
+                {
+                    error = "导入失败：图纸中存在重复导线连接。";
+                    workspace.SetStatus(error);
+                    return false;
+                }
             }
+
+            // F1-A：所有校验通过后的成功导入生命周期。
+            // 1. 再次确认 workspace 不为 null（已在入口检查，此处防御性二次确认）；
+            // 2. 若 IsInteractionLocked，拒绝导入，旧状态保持；
+            // 3. 调用 workspace.StopSimulation()；
+            // 4. 调用 ApplyDrawingDto；
+            // 5. 导入完成后 IsSimulationRunning 必须为 false；
+            // 6. 新电路不得自动运行；
+            // 7. 最后才提示导入成功。
+            if (workspace.IsInteractionLocked)
+            {
+                error = "导入失败：画布已锁定，请先解锁后再导入图纸。";
+                workspace.SetStatus(error);
+                return false;
+            }
+
+            workspace.StopSimulation();
 
             try
             {
                 // 验证通过后才进入恢复流程；
                 // 恢复阶段发生异常时，已清空或已部分恢复的画布不会自动回滚。
                 ApplyDrawingDto(drawing);
+
+                // F1-A：导入完成后 IsSimulationRunning 必须为 false，新电路不得自动运行。
+                if (workspace.IsSimulationRunning)
+                {
+                    workspace.StopSimulation();
+                }
+
                 var docName = ResolveDocumentName(drawing, string.IsNullOrWhiteSpace(sourceFilePath) ? "外部导入图纸.json" : sourceFilePath);
-                
+
                 workspace.SetStatus($"外部图纸导入成功，可点击检查当前电路进行校验。\n已从外部 JSON 导入图纸：{docName}");
-                
+
                 // If it was a local file, we can optionally update status with the full path, but generic message is fine.
                 return true;
             }
@@ -256,6 +330,26 @@ namespace ElectricalSim.UI
                 workspace.SetStatus(error);
                 return false;
             }
+        }
+
+        // F1-A：与 WireManager.IsStarDeltaJumperTerminal 保持一致的 DTO 级判断，
+        // 仅用于导入前置校验，不修改 WireManager 也不扩大跳线白名单。
+        private static bool IsStarDeltaJumperTerminal(string terminalId)
+        {
+            return terminalId == "U1" ||
+                terminalId == "V1" ||
+                terminalId == "W1" ||
+                terminalId == "U2" ||
+                terminalId == "V2" ||
+                terminalId == "W2";
+        }
+
+        // F1-A：构建无向端点对的规范化键，使 (A→B) 与 (B→A) 视为同一对。
+        private static string BuildUndirectedWireKey(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
+        {
+            var a = startComponentId + ":" + startTerminalId;
+            var b = endComponentId + ":" + endTerminalId;
+            return string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
         }
 
         public List<SavedBlueprintInfo> ListSavedBlueprints()
@@ -403,10 +497,16 @@ namespace ElectricalSim.UI
                 var definition = catalog.Find(d => d.name == item.definitionName);
                 if (definition == null)
                 {
-                    continue;
+                    // F1-A：前置校验已确认 definition 存在；此分支仅防御极端运行时异常（如 catalog 被外部修改）。
+                    throw new InvalidOperationException($"导入恢复失败：元件类型 '{item.definitionName}' 在恢复阶段不可用。");
                 }
 
                 var component = workspace.SpawnComponent(definition, new Vector2(item.x, item.y), item.instanceId, false);
+                if (component == null)
+                {
+                    // F1-A：SpawnComponent 返回 null 不得继续解引用；前置校验已拒绝锁定画布，此处仅防御极端运行时异常。
+                    throw new InvalidOperationException($"导入恢复失败：元件 '{item.instanceId}' 创建失败。");
+                }
                 component.SetClosed(item.isClosed);
                 component.SetParameters(item.parameters);
             }
@@ -420,8 +520,13 @@ namespace ElectricalSim.UI
                 var style = WireStyle.Orthogonal;
                 Enum.TryParse(item.style, out style);
                 var wire = workspace.WireManager.CreateWire(start, end, color, style);
+                if (wire == null)
+                {
+                    // F1-A：CreateWire 返回 null 不得静默忽略；前置校验已确认连接合法，此处仅防御极端运行时异常。
+                    throw new InvalidOperationException($"导入恢复失败：导线 '{item.startComponentId}:{item.startTerminalId}' → '{item.endComponentId}:{item.endTerminalId}' 创建失败。");
+                }
                 // 历史图纸缺少手动路由字段时保持 DTO 默认值并使用自动路径；不会在读取阶段改写原文件。
-                if (wire != null && item.hasManualRoute)
+                if (item.hasManualRoute)
                 {
                     if (item.manualRoutePoints != null && item.manualRoutePoints.Count >= 2)
                     {

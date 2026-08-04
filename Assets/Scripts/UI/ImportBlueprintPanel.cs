@@ -113,6 +113,14 @@ namespace ElectricalSim.UI
                 return;
             }
 
+            // F1-A：练习模式下正式导入操作前拒绝，保持练习、参考图纸、画布、运行态全部不变。
+            var practice = ElectricalSim.Practice.PracticeSessionController.Instance;
+            if (practice != null && practice.IsPracticeActive)
+            {
+                SetError("请先退出当前练习后再导入图纸。");
+                return;
+            }
+
             if (saveLoadService.LoadFromFile(blueprint.filePath, out var error))
             {
                 Hide();
@@ -268,6 +276,15 @@ namespace ElectricalSim.UI
         private void OnExternalImportClicked()
         {
             SetError(string.Empty);
+
+            // F1-A：练习模式下正式导入操作前拒绝，保持练习、参考图纸、画布、运行态全部不变。
+            var practice = ElectricalSim.Practice.PracticeSessionController.Instance;
+            if (practice != null && practice.IsPracticeActive)
+            {
+                SetError("请先退出当前练习后再导入图纸。");
+                return;
+            }
+
             // NativeFileBrowser/WindowsFileDialog/Receiver 仅承担平台文件选择；选中文本仍需由 SaveLoadService 做格式、定义和端子校验。
             NativeFileBrowser.RequestImportBlueprint(
                 json => 
