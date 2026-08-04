@@ -471,19 +471,23 @@ namespace ElectricalSim.Editor
             var saveOk = saveLoad.SaveAs(testName, true, out var savedInfo, out _, out var saveError);
             if (!saveOk || savedInfo == null)
             {
-                // batchmode 环境下 persistentDataPath 可能存在权限限制；降级为直接 JSON 导入验证往返一致性。
-                Debug.LogWarning($"[F1-A][Test16] 保存失败（可能是 batchmode 环境限制），降级为 JSON 直接导入验证：{saveError}");
+                // batchmode 环境下 persistentDataPath 可能存在权限限制。
+                // 标记为 NOT_TESTED_SAVE_REIMPORT，不声称真实 SaveAs → LoadFromFile roundtrip 已通过。
+                var reason = string.IsNullOrWhiteSpace(saveError) ? "SaveAs 返回失败且未提供错误信息" : saveError;
+                Debug.LogWarning($"[F1-A][Test16] NOT_TESTED_SAVE_REIMPORT: {reason}");
+
+                // 附加 smoke：JSON 直接导入验证（不作为 roundtrip 证据）
                 ResetWorkspace(workspace);
                 var json = BuildDrawingJson(
                     new[] { ("lamp_rt", "Lamp_220V", 0f, 0f), ("btn_rt", "Button_Start_NO", 100f, 0f) },
                     new[] { ("lamp_rt", "L", "btn_rt", "23") });
                 var loadOk = saveLoad.LoadFromJsonString(json, out var loadError);
-                if (!loadOk) failures.Add($"{scenario}: JSON 直接导入应成功，error={loadError}");
-                if (workspace.Components.Count != 2) failures.Add($"{scenario}: JSON 导入后元件数应为 2，实际={workspace.Components.Count}。");
+                if (!loadOk) failures.Add($"{scenario}: JSON 直接导入 smoke 应成功，error={loadError}");
+                else if (workspace.Components.Count != 2) failures.Add($"{scenario}: JSON 导入后元件数应为 2，实际={workspace.Components.Count}。");
                 return;
             }
 
-            // 清空画布后重新导入
+            // 真实 SaveAs → LoadFromFile roundtrip
             ResetWorkspace(workspace);
             var loadOk2 = saveLoad.LoadFromFile(savedInfo.filePath, out var loadError2);
             if (!loadOk2)
@@ -499,7 +503,7 @@ namespace ElectricalSim.Editor
             try { saveLoad.DeleteSavedBlueprint(savedInfo.filePath, out _); } catch { }
         }
 
-        // 17. 练习状态导入入口验证
+        // 17. 练习状态导入入口验证（真实调用生产方法 LoadBlueprint 和 OnExternalImportClicked）
         private static void Test17_PracticeImportEntryAudit(
             WorkspaceController workspace, SaveLoadService saveLoad,
             PracticeSessionController practice,
@@ -507,70 +511,164 @@ namespace ElectricalSim.Editor
         {
             const string scenario = "17";
             ResetWorkspace(workspace);
-            practice.ClearPracticeState();
 
-            // 验证 ImportBlueprintPanel 在练习状态下会拒绝导入
-            // 由于 ImportBlueprintPanel.LoadBlueprint 和 OnExternalImportClicked 检查 PracticeSessionController.Instance.IsPracticeActive，
-            // 这里通过直接验证 SaveLoadService.LoadFromJsonString 不受练习状态影响（练习拦截在 UI 层），
-            // 同时验证练习状态下 PracticeSessionController.Instance.IsPracticeActive 可被 ImportBlueprintPanel 读取。
-
-            // 先确认非练习状态下导入正常
-            if (practice.IsPracticeActive)
+            // 通过生产 Create 方法创建真实 ImportBlueprintPanel 实例
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
             {
-                failures.Add($"{scenario}: 前置应非练习状态。");
+                failures.Add($"{scenario}: Canvas 未找到，无法创建 ImportBlueprintPanel。");
+                return;
+            }
+            var canvasRect = canvas.GetComponent<RectTransform>();
+            if (canvasRect == null)
+            {
+                failures.Add($"{scenario}: Canvas RectTransform 未找到。");
                 return;
             }
 
-            var json = BuildDrawingJson(
-                new[] { ("lamp_1", "Lamp_220V", 0f, 0f) },
-                Array.Empty<(string, string, string, string)>());
-            var okNormal = saveLoad.LoadFromJsonString(json, out var errorNormal);
-            if (!okNormal)
+            ImportBlueprintPanel panel = null;
+            try
             {
-                failures.Add($"{scenario}: 非练习状态下导入应成功，error={errorNormal}");
-            }
+                panel = ImportBlueprintPanel.Create(canvasRect, saveLoad);
+                if (panel == null)
+                {
+                    failures.Add($"{scenario}: ImportBlueprintPanel.Create 返回 null。");
+                    return;
+                }
+                panel.Show();
 
-            // 建立练习状态（使用真实入口）
-            ResetWorkspace(workspace);
-            var catalog = LoadTemplateCatalog();
-            var item = GetTemplateItem(catalog, "single_lamp_template");
-            practice.StartPractice(item);
-            if (!practice.IsPracticeActive)
+                // 建立真实练习状态
+                var catalog = LoadTemplateCatalog();
+                var item = GetTemplateItem(catalog, "single_lamp_template");
+                practice.StartPractice(item);
+                if (!practice.IsPracticeActive)
+                {
+                    failures.Add($"{scenario}: 练习前置未建立。");
+                    return;
+                }
+
+                // 记录练习状态快照
+                var componentsBefore = workspace.Components.Count;
+                var wiresBefore = workspace.WireManager.Wires.Count;
+                var practiceItemBefore = practice.CurrentTemplateItem;
+                var simRunningBefore = workspace.IsSimulationRunning;
+
+                // 反射获取 errorText 字段和 LoadBlueprint / OnExternalImportClicked 方法
+                var errorTextField = typeof(ImportBlueprintPanel).GetField("errorText",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                var loadBlueprintMethod = typeof(ImportBlueprintPanel).GetMethod("LoadBlueprint",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                var externalImportMethod = typeof(ImportBlueprintPanel).GetMethod("OnExternalImportClicked",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (errorTextField == null)
+                {
+                    failures.Add($"{scenario}: errorText 字段未找到。");
+                    return;
+                }
+                if (loadBlueprintMethod == null)
+                {
+                    failures.Add($"{scenario}: LoadBlueprint 方法未找到。");
+                    return;
+                }
+                if (externalImportMethod == null)
+                {
+                    failures.Add($"{scenario}: OnExternalImportClicked 方法未找到。");
+                    return;
+                }
+
+                // === Test17-A: LoadBlueprint 入口 ===
+                var blueprintInfo = new SavedBlueprintInfo
+                {
+                    documentId = "test-doc",
+                    documentName = "Test Blueprint",
+                    savedAt = "2026-08-04 12:00:00",
+                    fileName = "test_blueprint.json",
+                    filePath = "Z:/nonexistent/path/test_blueprint.json",
+                    lastWriteTime = DateTime.Now
+                };
+
+                loadBlueprintMethod.Invoke(panel, new object[] { blueprintInfo });
+
+                var errorText = errorTextField.GetValue(panel) as Text;
+                var errorTextValue = errorText != null ? errorText.text : null;
+
+                if (string.IsNullOrEmpty(errorTextValue) || !errorTextValue.Contains("请先退出当前练习后再导入图纸"))
+                {
+                    failures.Add($"{scenario}-A: LoadBlueprint 应显示练习拒绝提示，实际 errorText={errorTextValue}");
+                }
+                if (errorTextValue != null && errorTextValue.Contains("文件不存在"))
+                {
+                    failures.Add($"{scenario}-A: 练习保护发生在 LoadFromFile 之前，不应显示文件不存在，实际 errorText={errorTextValue}");
+                }
+                if (!panel.gameObject.activeSelf)
+                {
+                    failures.Add($"{scenario}-A: 面板不应被隐藏。");
+                }
+                if (workspace.Components.Count != componentsBefore)
+                {
+                    failures.Add($"{scenario}-A: 画布元件数应保持={componentsBefore}，实际={workspace.Components.Count}。");
+                }
+                if (workspace.WireManager.Wires.Count != wiresBefore)
+                {
+                    failures.Add($"{scenario}-A: 画布 Wire 数应保持={wiresBefore}，实际={workspace.WireManager.Wires.Count}。");
+                }
+                if (!practice.IsPracticeActive)
+                {
+                    failures.Add($"{scenario}-A: IsPracticeActive 应保持 true。");
+                }
+                if (practice.CurrentTemplateItem != practiceItemBefore)
+                {
+                    failures.Add($"{scenario}-A: CurrentTemplateItem 应保持。");
+                }
+                if (workspace.IsSimulationRunning != simRunningBefore)
+                {
+                    failures.Add($"{scenario}-A: IsSimulationRunning 应保持={simRunningBefore}，实际={workspace.IsSimulationRunning}。");
+                }
+
+                Debug.Log("[F1-A][Test17-A] saved blueprint import blocked in practice");
+
+                // === Test17-B: OnExternalImportClicked 入口 ===
+                externalImportMethod.Invoke(panel, null);
+
+                errorText = errorTextField.GetValue(panel) as Text;
+                errorTextValue = errorText != null ? errorText.text : null;
+
+                if (string.IsNullOrEmpty(errorTextValue) || !errorTextValue.Contains("请先退出当前练习后再导入图纸"))
+                {
+                    failures.Add($"{scenario}-B: OnExternalImportClicked 应显示练习拒绝提示，实际 errorText={errorTextValue}");
+                }
+                if (workspace.Components.Count != componentsBefore)
+                {
+                    failures.Add($"{scenario}-B: 画布元件数应保持={componentsBefore}，实际={workspace.Components.Count}。");
+                }
+                if (workspace.WireManager.Wires.Count != wiresBefore)
+                {
+                    failures.Add($"{scenario}-B: 画布 Wire 数应保持={wiresBefore}，实际={workspace.WireManager.Wires.Count}。");
+                }
+                if (!practice.IsPracticeActive)
+                {
+                    failures.Add($"{scenario}-B: IsPracticeActive 应保持 true。");
+                }
+                if (practice.CurrentTemplateItem != practiceItemBefore)
+                {
+                    failures.Add($"{scenario}-B: CurrentTemplateItem 应保持。");
+                }
+                if (workspace.IsSimulationRunning != simRunningBefore)
+                {
+                    failures.Add($"{scenario}-B: IsSimulationRunning 应保持={simRunningBefore}，实际={workspace.IsSimulationRunning}。");
+                }
+
+                Debug.Log("[F1-A][Test17-B] external import blocked in practice");
+            }
+            finally
             {
-                failures.Add($"{scenario}: 练习前置未建立。");
-                return;
+                if (panel != null && panel.gameObject != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+                }
+                practice.ClearPracticeState();
             }
-
-            // 验证 ImportBlueprintPanel 能读到练习状态（通过 PracticeSessionController.Instance）
-            var practiceCheck = PracticeSessionController.Instance;
-            if (practiceCheck == null || !practiceCheck.IsPracticeActive)
-            {
-                failures.Add($"{scenario}: ImportBlueprintPanel 无法通过 PracticeSessionController.Instance 读取练习状态。");
-            }
-
-            // 验证练习状态下画布、参考图纸、运行态保持
-            var componentsBefore = workspace.Components.Count;
-            var practiceItemBefore = practice.CurrentTemplateItem;
-
-            // 模拟 ImportBlueprintPanel.LoadBlueprint 的练习检查
-            // 如果练习状态可读，ImportBlueprintPanel 会拒绝导入并提示
-            if (practiceCheck != null && practiceCheck.IsPracticeActive)
-            {
-                // ImportBlueprintPanel 会显示 "请先退出当前练习后再导入图纸。" 并 return
-                // 不调用 saveLoadService.LoadFromFile / LoadFromJsonString
-                Debug.Log("[F1-A][Test17] 练习状态导入入口可达，ImportBlueprintPanel 将拒绝导入并提示用户退出练习。");
-            }
-            else
-            {
-                failures.Add($"{scenario}: 练习状态下 PracticeSessionController.Instance.IsPracticeActive 应为 true。");
-            }
-
-            // 验证练习状态未被改变
-            if (!practice.IsPracticeActive) failures.Add($"{scenario}: 练习状态应保持。");
-            if (practice.CurrentTemplateItem != practiceItemBefore) failures.Add($"{scenario}: 参考图纸应保持。");
-            if (workspace.Components.Count != componentsBefore) failures.Add($"{scenario}: 画布元件应保持。");
-
-            practice.ClearPracticeState();
         }
 
         #region Helpers
