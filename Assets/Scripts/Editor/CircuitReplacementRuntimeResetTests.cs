@@ -82,6 +82,8 @@ namespace ElectricalSim.Editor
                 TestN_PracticeEmptyCanvasLoadRequiresConfirm(workspace, loader, practice, itemA, itemB, failures);
                 TestO_PracticeNonEmptyCanvasLoadConfirm(workspace, loader, practice, itemA, itemB, failures);
                 TestP_CancelReplacementKeepsSimulationRunning(workspace, loader, itemA, itemB, failures);
+                TestQ_StandardTemplateValidationFails(workspace, loader, itemA, itemB, failures);
+                TestR_PracticeTemplateValidationFails(workspace, practice, itemA, itemB, failures);
             }
             catch (Exception exception)
             {
@@ -636,6 +638,122 @@ namespace ElectricalSim.Editor
             AssertRuntimeStatePreserved(scenario, failures);
         }
 
+        // Q. 普通模板结构预检失败：TryLoad 成功但 TryValidate 失败，旧状态全部保持
+        // 通过临时清空 SaveLoadService.Catalog 触发 TryValidate 失败，不使用不存在的 resourcePath 冒充。
+        private static void TestQ_StandardTemplateValidationFails(
+            WorkspaceController workspace, TemplateLoadController loader,
+            CircuitTemplateCatalogItemDto itemA, CircuitTemplateCatalogItemDto itemB, List<string> failures)
+        {
+            const string scenario = "Q";
+            SetupRunningOldCircuit(workspace, loader, itemA, failures, scenario);
+            var componentCountBefore = workspace.Components.Count;
+            var wireCountBefore = workspace.WireManager.Wires.Count;
+            var instanceIdsBefore = workspace.Components.Select(c => c.InstanceId).ToList();
+            var templateIdBefore = TemplateEditSession.CurrentTemplateId;
+            SeedRuntimeState();
+
+            // 验证 itemB 的 resourcePath 真实存在并可读取，排除"用不存在的 resourcePath 冒充预检失败"。
+            if (!CircuitTemplateLoader.TryLoad(itemB.resourcePath, out var itemBTemplate, out var itemBLoadError))
+            {
+                failures.Add(scenario + ": 测试前置失败，itemB 应可读取，实际错误=" + itemBLoadError);
+                return;
+            }
+            if (itemBTemplate == null || itemBTemplate.components == null || itemBTemplate.components.Count == 0)
+            {
+                failures.Add(scenario + ": 测试前置失败，itemB components 应非空。");
+                return;
+            }
+
+            var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>(true);
+            if (saveLoad == null) { failures.Add(scenario + ": 未找到 SaveLoadService。"); return; }
+
+            WithEmptyCatalog(saveLoad, () =>
+            {
+                var callbacks = 0;
+                loader.RequestLoadTemplateFromGallery(itemB, () => callbacks++);
+                ClickLoadTemplateConfirmButton();
+
+                // TryLoad 成功但 TryValidate 失败（catalog 为空）
+                if (workspace.IsSimulationRunning != true) failures.Add(scenario + ": 预检失败后旧仿真应仍在运行。");
+                if (workspace.Components.Count != componentCountBefore) failures.Add(scenario + ": 预检失败后组件数量应不变。");
+                if (workspace.WireManager.Wires.Count != wireCountBefore) failures.Add(scenario + ": 预检失败后 Wire 数量应不变。");
+                var instanceIdsAfter = workspace.Components.Select(c => c.InstanceId).ToList();
+                if (!instanceIdsBefore.SequenceEqual(instanceIdsAfter)) failures.Add(scenario + ": 预检失败后 InstanceId 列表应不变。");
+                if (callbacks != 0) failures.Add(scenario + ": 预检失败时 onLoaded 不应调用，实际=" + callbacks);
+                if (TemplateEditSession.CurrentTemplateId != templateIdBefore) failures.Add(scenario + ": 预检失败后 TemplateEditSession 应不变。");
+                AssertRuntimeStatePreserved(scenario, failures);
+            });
+        }
+
+        // R. 练习模板结构预检失败：练习 A 已建立，加载练习 B 时 TryValidate 失败，旧练习和旧画布全部保持
+        // 通过临时清空 SaveLoadService.Catalog 触发 TryValidate 失败，不使用不存在的 resourcePath 冒充。
+        private static void TestR_PracticeTemplateValidationFails(
+            WorkspaceController workspace, PracticeSessionController practice,
+            CircuitTemplateCatalogItemDto itemA, CircuitTemplateCatalogItemDto itemB, List<string> failures)
+        {
+            const string scenario = "R";
+            CleanupWorkspace(workspace, practice);
+            int practiceCbA = 0;
+            practice.StartPractice(itemA, () => practiceCbA++);
+            if (!practice.IsPracticeActive) { failures.Add(scenario + ": 练习 A 前置未建立。"); return; }
+            if (practice.CurrentTemplateItem != itemA) { failures.Add(scenario + ": 练习 A CurrentTemplateItem 应为 A。"); return; }
+            SpawnPracticeComponent(workspace, "PracticeR-Switch", "practice-r-sw");
+            workspace.StartSimulation();
+            if (!workspace.IsSimulationRunning) { failures.Add(scenario + ": 旧仿真未启动。"); return; }
+            SeedRuntimeState();
+
+            var componentCountBefore = workspace.Components.Count;
+            var wireCountBefore = workspace.WireManager.Wires.Count;
+            var instanceIdsBefore = workspace.Components.Select(c => c.InstanceId).ToList();
+            var referencePanelBefore = UnityEngine.Object.FindObjectOfType<BlueprintReferencePanel>(true);
+            var referenceActiveBefore = referencePanelBefore != null && referencePanelBefore.gameObject.activeSelf;
+
+            // 验证 itemB 的 resourcePath 真实存在并可读取，排除"用不存在的 resourcePath 冒充预检失败"。
+            if (!CircuitTemplateLoader.TryLoad(itemB.resourcePath, out var itemBTemplate, out var itemBLoadError))
+            {
+                failures.Add(scenario + ": 测试前置失败，itemB 应可读取，实际错误=" + itemBLoadError);
+                return;
+            }
+            if (itemBTemplate == null || itemBTemplate.components == null || itemBTemplate.components.Count == 0)
+            {
+                failures.Add(scenario + ": 测试前置失败，itemB components 应非空。");
+                return;
+            }
+
+            var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>(true);
+            if (saveLoad == null) { failures.Add(scenario + ": 未找到 SaveLoadService。"); return; }
+
+            WithEmptyCatalog(saveLoad, () =>
+            {
+                int practiceCbB = 0;
+                practice.StartPractice(itemB, () => practiceCbB++);
+                // 画布有内容 → 弹练习确认框；点击确认后 EnterPracticeMode 调用 TryLoad 成功但 TryValidate 失败
+                ClickPracticeConfirmButton();
+
+                // 预检失败：旧仿真继续运行
+                if (workspace.IsSimulationRunning != true) failures.Add(scenario + ": 预检失败后旧仿真应仍在运行。");
+                // 旧画布完全不变
+                if (workspace.Components.Count != componentCountBefore) failures.Add(scenario + ": 预检失败后组件数量应不变。");
+                if (workspace.WireManager.Wires.Count != wireCountBefore) failures.Add(scenario + ": 预检失败后 Wire 数量应不变。");
+                var instanceIdsAfter = workspace.Components.Select(c => c.InstanceId).ToList();
+                if (!instanceIdsBefore.SequenceEqual(instanceIdsAfter)) failures.Add(scenario + ": 预检失败后 InstanceId 列表应不变。");
+                // 练习 A 保持
+                if (!practice.IsPracticeActive) failures.Add(scenario + ": 预检失败后练习 A 应保持 active。");
+                if (practice.CurrentTemplateItem != itemA) failures.Add(scenario + ": 预检失败后 CurrentTemplateItem 应仍为 A。");
+                if (practice.CurrentTemplateData == null) failures.Add(scenario + ": 预检失败后 CurrentTemplateData 应仍为 A。");
+                // B 回调为 0
+                if (practiceCbB != 0) failures.Add(scenario + ": 预检失败时 B 的 onEntered 不应调用，实际=" + practiceCbB);
+                // 参考图纸仍为 A
+                if (referencePanelBefore != null)
+                {
+                    var referenceActiveAfter = referencePanelBefore.gameObject.activeSelf;
+                    if (referenceActiveAfter != referenceActiveBefore) failures.Add(scenario + ": 预检失败后参考图纸显隐应不变。");
+                }
+                // 旧运行时缓存保持
+                AssertRuntimeStatePreserved(scenario, failures);
+            });
+        }
+
         // --- 通用断言 ---
 
         private static void AssertReplacementSuccess(
@@ -877,6 +995,25 @@ namespace ElectricalSim.Editor
             var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
             if (field == null) throw new MissingFieldException(target.GetType().Name, fieldName);
             field.SetValue(target, value);
+        }
+
+        // F2-A.4：临时将 SaveLoadService.Catalog 置空以触发 CircuitTemplateSpawnService.TryValidate 失败
+        // （catalog 为空时 TryValidate 返回 false，错误"模板加载失败：元件库为空。"）。
+        // 不通过不存在的 resourcePath 冒充预检失败。无论 action 是否抛异常，finally 必须恢复原 catalog。
+        private static void WithEmptyCatalog(SaveLoadService saveLoad, System.Action action)
+        {
+            var catalogField = typeof(SaveLoadService).GetField("catalog", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (catalogField == null) throw new MissingFieldException("SaveLoadService", "catalog");
+            var original = catalogField.GetValue(saveLoad);
+            try
+            {
+                catalogField.SetValue(saveLoad, new List<ComponentDefinition>());
+                action?.Invoke();
+            }
+            finally
+            {
+                catalogField.SetValue(saveLoad, original);
+            }
         }
 
         // 查找开始仿真按钮：DemoUIController.startButton 是 private，通过反射获取；

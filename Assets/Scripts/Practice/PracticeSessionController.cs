@@ -45,6 +45,9 @@ namespace ElectricalSim.Practice
         private BlueprintReferencePanel referencePanel;
         private LocalInspectorPanel inspectorPanel;
         private TopNavigationController navigation;
+        // F2-A.4：练习模板结构预检需要 ComponentDefinition 目录，复用 TemplateLoadController 已有的 SaveLoadService.Catalog，
+        // 不在 PracticeSessionController 内复制 catalog 读取逻辑。序列化字段保留场景已绑定的引用。
+        [SerializeField] private SaveLoadService saveLoadService;
 
         // E3：锁定状态下进入练习的拒绝提示。复用于 StartPractice 和 EnterPracticeMode 两处入口检查，
         // 避免提示文本分散在多处导致不一致。通过 workspace.SetStatus 写入状态栏与操作记录。
@@ -88,6 +91,12 @@ namespace ElectricalSim.Practice
             if (navigation == null)
             {
                 navigation = FindObjectOfType<TopNavigationController>(true);
+            }
+
+            // F2-A.4：仅补齐缺失引用，避免覆盖场景已绑定或运行时已注入的 SaveLoadService。
+            if (saveLoadService == null)
+            {
+                saveLoadService = FindObjectOfType<SaveLoadService>(true);
             }
         }
 
@@ -157,7 +166,20 @@ namespace ElectricalSim.Practice
                 return false;
             }
 
-            // 提交点：模板读取成功。停止旧仿真并清理旧运行态缓存（KT/电机/往返/热继），
+            // F2-A.4：模板结构预检。复用 CircuitTemplateSpawnService.TryValidate，不复制校验逻辑。
+            // 预检失败时不停止旧仿真、不清空画布、不修改当前 PracticeSession、不隐藏参考图纸、不调用回调、不切换页面。
+            var catalog = saveLoadService != null ? saveLoadService.Catalog : null;
+            if (!CircuitTemplateSpawnService.TryValidate(templateDto, catalog, out var validateMessage))
+            {
+                var templateId = templateItem != null ? templateItem.templateId : "未知模板";
+                workspace?.SetStatus(
+                    string.IsNullOrWhiteSpace(validateMessage)
+                        ? $"练习模板 {templateId} 校验失败。"
+                        : $"练习模板 {templateId} 校验失败：{validateMessage}");
+                return false;
+            }
+
+            // 提交点：模板读取与结构预检均成功。停止旧仿真并清理旧运行态缓存（KT/电机/往返/热继），
             // 再清空画布。新练习画布加载后不会自动运行。
             workspace?.StopSimulation();
 
