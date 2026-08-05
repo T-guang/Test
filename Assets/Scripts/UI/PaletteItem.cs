@@ -76,7 +76,9 @@ namespace ElectricalSim.UI
                 return;
             }
 
-            if (eventData.clickCount < 2)
+            // 严格双击语义：仅 clickCount == 2 时生成一次。
+            // clickCount=1/3/4... 以及 null eventData 都不生成，避免双击周期内重复触发。
+            if (eventData == null || eventData.clickCount != 2)
             {
                 return;
             }
@@ -124,6 +126,14 @@ namespace ElectricalSim.UI
             if (dragPreview != null)
             {
                 Destroy(dragPreview.gameObject);
+            }
+
+            // 严格判断指针是否位于电工画布有效矩形内。
+            // 在坐标转换和 SpawnComponent 之前完成边界判断，画布外不生成、不改变历史。
+            if (eventData == null || workspace.WorkspaceRect == null ||
+                !RectTransformUtility.RectangleContainsScreenPoint(workspace.WorkspaceRect, eventData.position, eventData.pressEventCamera))
+            {
+                return;
             }
 
             if (workspace.TryScreenToCanvasLocal(eventData.position, eventData.pressEventCamera, out var localPoint))

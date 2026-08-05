@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using ElectricalSim.Core;
@@ -14,11 +15,16 @@ namespace ElectricalSim.Editor
     /// <summary>
     /// F4 元件参数入口冻结与元件池双击生成测试。
     ///
+    /// F4.1 更新：严格双击语义（clickCount == 2）与拖拽画布边界判定。
+    ///
     /// 验证：
     /// - 单击元件池卡片不生成元件；
+    /// - 序列 1→2 生成 1 个，序列 1→2→3 仍为 1 个；
+    /// - 三个独立 1→2 周期生成 3 个；
+    /// - clickCount=0/null 防御不生成；
     /// - 双击元件池卡片生成一个元件；
-    /// - 拖拽到画布生成一个元件；
-    /// - 拖拽到画布外不生成；
+    /// - 拖拽到画布内生成一个元件；
+    /// - 拖拽到画布外严格 0 个，且不增加 Undo 历史；
     /// - 锁定画布时双击和拖拽都不生成；
     /// - 单击画布元件仍被选中但不显示参数面板；
     /// - 拖动画布元件后不显示参数面板；
@@ -56,24 +62,34 @@ namespace ElectricalSim.Editor
                     throw new InvalidOperationException("F4 测试依赖缺失：catalog 缺少 Lamp_220V / Button_Start_NO。");
                 }
 
+                // === 双击语义测试 ===
                 Test01_SingleClickNoSpawn(workspace, lampDef, failures);
                 Test02_MultipleSingleClicksNoSpawn(workspace, lampDef, failures);
-                Test03_DoubleClickOneSpawn(workspace, lampDef, failures);
-                Test04_TripleDoubleClickThreeSpawns(workspace, lampDef, failures);
-                Test05_DoubleClickUsesDefaultPosition(workspace, lampDef, failures);
-                Test06_DragToCanvasOneSpawn(workspace, lampDef, failures);
-                Test07_DragNoExtraDefaultSpawn(workspace, lampDef, failures);
-                Test08_DragOutsideCanvasNoSpawn(workspace, lampDef, failures);
-                Test09_LockedDoubleClickNoSpawn(workspace, lampDef, failures);
-                Test10_LockedDragNoSpawn(workspace, lampDef, failures);
-                Test11_ClickComponentStillSelected(workspace, lampDef, failures);
-                Test12_ClickComponentNoParameterPanel(workspace, lampDef, failures);
-                Test13_DragComponentNoParameterPanel(workspace, lampDef, failures);
-                Test14_ParameterValuesPreserved(workspace, lampDef, failures);
-                Test15_SaveDtoIncludesParameters(workspace, saveLoad, lampDef, failures);
-                Test16_ImportWithParametersRestored(workspace, saveLoad, lampDef, failures);
-                Test17_DeleteSelectedStillWorks(workspace, lampDef, failures);
-                Test18_UndoRedoSpawnStillWorks(workspace, lampDef, failures);
+                Test03_SequenceOneTwoOneSpawn(workspace, lampDef, failures);
+                Test04_SequenceOneTwoThreeOneSpawn(workspace, lampDef, failures);
+                Test05_ThreeSeparateOneTwoCyclesThreeSpawns(workspace, lampDef, failures);
+                Test06_ClickCountZeroAndNullDefense(workspace, lampDef, failures);
+                Test07_DoubleClickUsesDefaultPosition(workspace, lampDef, failures);
+
+                // === 拖拽边界测试 ===
+                Test08_DragToCanvasOneSpawn(workspace, lampDef, failures);
+                Test09_DragNoExtraDefaultSpawn(workspace, lampDef, failures);
+                Test10_DragOutsideCanvasStrictZero(workspace, lampDef, failures);
+                Test11_DragOutsideNoUndoHistory(workspace, lampDef, failures);
+
+                // === 锁定测试 ===
+                Test12_LockedDoubleClickNoSpawn(workspace, lampDef, failures);
+                Test13_LockedDragNoSpawn(workspace, lampDef, failures);
+
+                // === 参数面板冻结测试（F4-A）===
+                Test14_ClickComponentStillSelected(workspace, lampDef, failures);
+                Test15_ClickComponentNoParameterPanel(workspace, lampDef, failures);
+                Test16_DragComponentNoParameterPanel(workspace, lampDef, failures);
+                Test17_ParameterValuesPreserved(workspace, lampDef, failures);
+                Test18_SaveDtoIncludesParameters(workspace, saveLoad, lampDef, failures);
+                Test19_ImportWithParametersRestored(workspace, saveLoad, lampDef, failures);
+                Test20_DeleteSelectedStillWorks(workspace, lampDef, failures);
+                Test21_UndoRedoSpawnStillWorks(workspace, lampDef, failures);
             }
             catch (Exception exception)
             {
@@ -169,14 +185,37 @@ namespace ElectricalSim.Editor
             return RectTransformUtility.WorldToScreenPoint(cam, workspace.WorkspaceRect.position);
         }
 
+        // 获取 WorkspaceRect 中心点的屏幕坐标，确保落在矩形内部。
+        private static Vector2 GetWorkspaceCenterScreenPosition(WorkspaceController workspace)
+        {
+            var rect = workspace.WorkspaceRect;
+            var canvas = workspace.GetComponentInParent<Canvas>();
+            Camera cam = null;
+            if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            {
+                cam = canvas.worldCamera;
+            }
+            // 使用 rect.center（pivot 相对中心）的世界位置
+            var worldCenter = rect.TransformPoint(rect.rect.center);
+            return RectTransformUtility.WorldToScreenPoint(cam, worldCenter);
+        }
+
+        private static int GetUndoStackCount(WorkspaceController workspace)
+        {
+            var field = typeof(WorkspaceController).GetField("undoStack",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var stack = field?.GetValue(workspace) as IList;
+            return stack?.Count ?? -1;
+        }
+
         private static CircuitComponent SpawnComponentDirect(WorkspaceController workspace, ComponentDefinition def, Vector2 pos)
         {
             return workspace.SpawnComponent(def, pos);
         }
 
-        // === 测试方法 ===
+        // === 双击语义测试 ===
 
-        // 1. 单击元件池卡片一次，不生成
+        // 1. 单击元件池卡片一次（clickCount=1），不生成
         private static void Test01_SingleClickNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
@@ -223,20 +262,23 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 3. 双击一次，只生成一个
-        private static void Test03_DoubleClickOneSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 3. 序列 1→2：只生成 1 个（仅 clickCount==2 触发）
+        private static void Test03_SequenceOneTwoOneSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
             try
             {
                 var countBefore = workspace.Components.Count;
-                var ped = CreatePointerEventData(clickCount: 2);
-                item.OnPointerClick(ped);
+                // 模拟真实双击序列：先 clickCount=1，再 clickCount=2
+                var ped1 = CreatePointerEventData(clickCount: 1);
+                item.OnPointerClick(ped1);
+                var ped2 = CreatePointerEventData(clickCount: 2);
+                item.OnPointerClick(ped2);
                 var countAfter = workspace.Components.Count;
                 if (countAfter - countBefore != 1)
                 {
-                    failures.Add($"03: 双击应生成1个元件，before={countBefore} after={countAfter}");
+                    failures.Add($"03: 序列1→2应生成1个元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -245,23 +287,51 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 4. 连续双击三次，准确生成三个
-        private static void Test04_TripleDoubleClickThreeSpawns(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 4. 序列 1→2→3：仍为 1 个（clickCount=3 不触发）
+        private static void Test04_SequenceOneTwoThreeOneSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
             try
             {
                 var countBefore = workspace.Components.Count;
-                for (var i = 0; i < 3; i++)
+                var ped1 = CreatePointerEventData(clickCount: 1);
+                item.OnPointerClick(ped1);
+                var ped2 = CreatePointerEventData(clickCount: 2);
+                item.OnPointerClick(ped2);
+                var ped3 = CreatePointerEventData(clickCount: 3);
+                item.OnPointerClick(ped3);
+                var countAfter = workspace.Components.Count;
+                if (countAfter - countBefore != 1)
                 {
-                    var ped = CreatePointerEventData(clickCount: 2);
-                    item.OnPointerClick(ped);
+                    failures.Add($"04: 序列1→2→3应仍为1个元件，before={countBefore} after={countAfter}");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(item.gameObject);
+            }
+        }
+
+        // 5. 单独的三个 1→2 周期：生成 3 个
+        private static void Test05_ThreeSeparateOneTwoCyclesThreeSpawns(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var item = CreateTestPaletteItem(workspace, lampDef);
+            try
+            {
+                var countBefore = workspace.Components.Count;
+                for (var cycle = 0; cycle < 3; cycle++)
+                {
+                    var ped1 = CreatePointerEventData(clickCount: 1);
+                    item.OnPointerClick(ped1);
+                    var ped2 = CreatePointerEventData(clickCount: 2);
+                    item.OnPointerClick(ped2);
                 }
                 var countAfter = workspace.Components.Count;
                 if (countAfter - countBefore != 3)
                 {
-                    failures.Add($"04: 3次双击应生成3个元件，before={countBefore} after={countAfter}");
+                    failures.Add($"05: 三个独立1→2周期应生成3个元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -270,8 +340,47 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 5. 双击仍使用现有默认生成位置规则
-        private static void Test05_DoubleClickUsesDefaultPosition(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 6. clickCount=0 和 null eventData 防御不生成
+        private static void Test06_ClickCountZeroAndNullDefense(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var item = CreateTestPaletteItem(workspace, lampDef);
+            try
+            {
+                var countBefore = workspace.Components.Count;
+
+                // clickCount=0 不生成
+                var ped0 = CreatePointerEventData(clickCount: 0);
+                item.OnPointerClick(ped0);
+                var countAfterZero = workspace.Components.Count;
+                if (countAfterZero != countBefore)
+                {
+                    failures.Add($"06a: clickCount=0不应生成元件，before={countBefore} after={countAfterZero}");
+                }
+
+                // null eventData 不生成且不抛异常
+                try
+                {
+                    item.OnPointerClick(null);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"06b: null eventData不应抛异常，exception={ex.Message}");
+                }
+                var countAfterNull = workspace.Components.Count;
+                if (countAfterNull != countBefore)
+                {
+                    failures.Add($"06c: null eventData不应生成元件，before={countBefore} after={countAfterNull}");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(item.gameObject);
+            }
+        }
+
+        // 7. 双击仍使用现有默认生成位置规则
+        private static void Test07_DoubleClickUsesDefaultPosition(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
@@ -281,7 +390,7 @@ namespace ElectricalSim.Editor
                 item.OnPointerClick(ped);
                 if (workspace.Components.Count != 1)
                 {
-                    failures.Add("05: 双击应生成1个元件用于位置检查。");
+                    failures.Add("07: 双击应生成1个元件用于位置检查。");
                     return;
                 }
                 // 默认位置为 Vector2.zero，经过 Snap 处理后应接近原点
@@ -289,7 +398,7 @@ namespace ElectricalSim.Editor
                 var pos = rect != null ? rect.anchoredPosition : Vector2.zero;
                 if (pos.magnitude > 500f)
                 {
-                    failures.Add($"05: 默认生成位置应接近原点，actual={pos}");
+                    failures.Add($"07: 默认生成位置应接近原点，actual={pos}");
                 }
             }
             finally
@@ -298,24 +407,27 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 6. 拖拽到画布，只生成一个
-        private static void Test06_DragToCanvasOneSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // === 拖拽边界测试 ===
+
+        // 8. 拖拽到画布内，只生成一个
+        private static void Test08_DragToCanvasOneSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
             try
             {
                 var countBefore = workspace.Components.Count;
-                var screenPos = GetWorkspaceScreenPosition(workspace);
+                var screenPos = GetWorkspaceCenterScreenPosition(workspace);
                 var ped = CreatePointerEventData(clickCount: 1);
                 ped.position = screenPos;
+                ped.pressPosition = screenPos;
                 item.OnBeginDrag(ped);
                 item.OnDrag(ped);
                 item.OnEndDrag(ped);
                 var countAfter = workspace.Components.Count;
                 if (countAfter - countBefore != 1)
                 {
-                    failures.Add($"06: 拖拽到画布应生成1个元件，before={countBefore} after={countAfter}");
+                    failures.Add($"08: 拖拽到画布内应生成1个元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -324,17 +436,18 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 7. 拖拽生成后默认位置没有额外元件
-        private static void Test07_DragNoExtraDefaultSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 9. 拖拽生成后默认位置没有额外元件
+        private static void Test09_DragNoExtraDefaultSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
             try
             {
                 var countBefore = workspace.Components.Count;
-                var screenPos = GetWorkspaceScreenPosition(workspace);
+                var screenPos = GetWorkspaceCenterScreenPosition(workspace);
                 var ped = CreatePointerEventData(clickCount: 1);
                 ped.position = screenPos;
+                ped.pressPosition = screenPos;
                 item.OnBeginDrag(ped);
                 item.OnDrag(ped);
                 item.OnEndDrag(ped);
@@ -343,7 +456,7 @@ namespace ElectricalSim.Editor
                 var countAfter = workspace.Components.Count;
                 if (countAfter - countBefore != 1)
                 {
-                    failures.Add($"07: 拖拽应只生成1个元件（无默认位置额外元件），before={countBefore} after={countAfter}");
+                    failures.Add($"09: 拖拽应只生成1个元件（无默认位置额外元件），before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -352,10 +465,8 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 8. 拖拽到画布外，不生成额外元件（F4 关注点：不因双击+拖拽产生 2+ 个元件）
-        // 注意：Overlay Canvas 的 ScreenPointToLocalPointInRectangle 对越界点可能仍返回 true，
-        // 这是现有坐标转换行为，F4 不修改。本测试验证 F4 不会导致一次拖拽生成 2+ 个元件。
-        private static void Test08_DragOutsideCanvasNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 10. 拖拽到画布外，严格 0 个
+        private static void Test10_DragOutsideCanvasStrictZero(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var item = CreateTestPaletteItem(workspace, lampDef);
@@ -365,14 +476,15 @@ namespace ElectricalSim.Editor
                 var ped = CreatePointerEventData(clickCount: 1);
                 // 使用一个远离画布的屏幕坐标
                 ped.position = new Vector2(-10000f, -10000f);
+                ped.pressPosition = new Vector2(-10000f, -10000f);
                 item.OnBeginDrag(ped);
                 item.OnDrag(ped);
                 item.OnEndDrag(ped);
                 var countAfter = workspace.Components.Count;
-                // F4 关注点：一次拖拽不应生成超过 1 个元件（防止双击+拖拽产生重复）
-                if (countAfter - countBefore > 1)
+                // 严格 0 个：画布外不得生成任何元件
+                if (countAfter - countBefore != 0)
                 {
-                    failures.Add($"08: 一次拖拽不应生成超过1个元件，before={countBefore} after={countAfter}");
+                    failures.Add($"10: 拖拽到画布外应严格0个元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -381,8 +493,42 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 9. 画布锁定时双击不生成
-        private static void Test09_LockedDoubleClickNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 11. 拖拽到画布外不增加 Undo 历史
+        private static void Test11_DragOutsideNoUndoHistory(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        {
+            ResetWorkspace(workspace);
+            var item = CreateTestPaletteItem(workspace, lampDef);
+            try
+            {
+                var countBefore = workspace.Components.Count;
+                var undoBefore = GetUndoStackCount(workspace);
+                var ped = CreatePointerEventData(clickCount: 1);
+                ped.position = new Vector2(-10000f, -10000f);
+                ped.pressPosition = new Vector2(-10000f, -10000f);
+                item.OnBeginDrag(ped);
+                item.OnDrag(ped);
+                item.OnEndDrag(ped);
+                var countAfter = workspace.Components.Count;
+                var undoAfter = GetUndoStackCount(workspace);
+                if (countAfter != countBefore)
+                {
+                    failures.Add($"11a: 拖拽到画布外不应生成元件，before={countBefore} after={countAfter}");
+                }
+                if (undoAfter != undoBefore)
+                {
+                    failures.Add($"11b: 拖拽到画布外不应增加Undo历史，before={undoBefore} after={undoAfter}");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(item.gameObject);
+            }
+        }
+
+        // === 锁定测试 ===
+
+        // 12. 画布锁定时双击不生成
+        private static void Test12_LockedDoubleClickNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             if (!workspace.IsInteractionLocked)
@@ -398,7 +544,7 @@ namespace ElectricalSim.Editor
                 var countAfter = workspace.Components.Count;
                 if (countAfter != countBefore)
                 {
-                    failures.Add($"09: 锁定时双击不应生成元件，before={countBefore} after={countAfter}");
+                    failures.Add($"12: 锁定时双击不应生成元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -411,8 +557,8 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 10. 画布锁定时拖拽不生成
-        private static void Test10_LockedDragNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 13. 画布锁定时拖拽不生成
+        private static void Test13_LockedDragNoSpawn(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             if (!workspace.IsInteractionLocked)
@@ -423,16 +569,17 @@ namespace ElectricalSim.Editor
             try
             {
                 var countBefore = workspace.Components.Count;
-                var screenPos = GetWorkspaceScreenPosition(workspace);
+                var screenPos = GetWorkspaceCenterScreenPosition(workspace);
                 var ped = CreatePointerEventData(clickCount: 1);
                 ped.position = screenPos;
+                ped.pressPosition = screenPos;
                 item.OnBeginDrag(ped);
                 item.OnDrag(ped);
                 item.OnEndDrag(ped);
                 var countAfter = workspace.Components.Count;
                 if (countAfter != countBefore)
                 {
-                    failures.Add($"10: 锁定时拖拽不应生成元件，before={countBefore} after={countAfter}");
+                    failures.Add($"13: 锁定时拖拽不应生成元件，before={countBefore} after={countAfter}");
                 }
             }
             finally
@@ -445,14 +592,16 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 11. 单击画布已有元件，元件仍被选中
-        private static void Test11_ClickComponentStillSelected(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // === 参数面板冻结测试（F4-A）===
+
+        // 14. 单击画布已有元件，元件仍被选中
+        private static void Test14_ClickComponentStillSelected(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("11: 前置生成元件失败。");
+                failures.Add("14: 前置生成元件失败。");
                 return;
             }
             try
@@ -461,7 +610,7 @@ namespace ElectricalSim.Editor
                 component.OnPointerClick(ped);
                 if (workspace.SelectedComponent != component)
                 {
-                    failures.Add("11: 单击后元件应被选中。");
+                    failures.Add("14: 单击后元件应被选中。");
                 }
             }
             finally
@@ -470,15 +619,15 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 12. 单击画布元件，不显示参数面板
-        private static void Test12_ClickComponentNoParameterPanel(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 15. 单击画布元件，不显示参数面板
+        private static void Test15_ClickComponentNoParameterPanel(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("12: 前置生成元件失败。");
+                failures.Add("15: 前置生成元件失败。");
                 return;
             }
             try
@@ -488,7 +637,7 @@ namespace ElectricalSim.Editor
                 var view = GetComponentParameterView(workspace);
                 if (view != null && view.gameObject.activeSelf)
                 {
-                    failures.Add("12: 参数面板不应显示。");
+                    failures.Add("15: 参数面板不应显示。");
                 }
             }
             finally
@@ -497,15 +646,15 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 13. 拖动画布元件后，不显示参数面板
-        private static void Test13_DragComponentNoParameterPanel(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 16. 拖动画布元件后，不显示参数面板
+        private static void Test16_DragComponentNoParameterPanel(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("13: 前置生成元件失败。");
+                failures.Add("16: 前置生成元件失败。");
                 return;
             }
             try
@@ -515,7 +664,7 @@ namespace ElectricalSim.Editor
                 var view = GetComponentParameterView(workspace);
                 if (view != null && view.gameObject.activeSelf)
                 {
-                    failures.Add("13: 拖动开始后参数面板不应显示。");
+                    failures.Add("16: 拖动开始后参数面板不应显示。");
                 }
             }
             finally
@@ -524,15 +673,15 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 14. 元件参数值在参数面板冻结后仍然存在
-        private static void Test14_ParameterValuesPreserved(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 17. 元件参数值在参数面板冻结后仍然存在
+        private static void Test17_ParameterValuesPreserved(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("14: 前置生成元件失败。");
+                failures.Add("17: 前置生成元件失败。");
                 return;
             }
             try
@@ -550,7 +699,7 @@ namespace ElectricalSim.Editor
                 var v2 = p2 != null ? p2.value : 0f;
                 if (!Mathf.Approximately(v1, 220f) || !Mathf.Approximately(v2, 40f))
                 {
-                    failures.Add($"14: 参数值应保持，ratedVoltage={v1} ratedPower={v2}");
+                    failures.Add($"17: 参数值应保持，ratedVoltage={v1} ratedPower={v2}");
                 }
             }
             finally
@@ -559,15 +708,15 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 15. 用户图纸保存 DTO 仍包含参数
-        private static void Test15_SaveDtoIncludesParameters(WorkspaceController workspace, SaveLoadService saveLoad, ComponentDefinition lampDef, List<string> failures)
+        // 18. 用户图纸保存 DTO 仍包含参数
+        private static void Test18_SaveDtoIncludesParameters(WorkspaceController workspace, SaveLoadService saveLoad, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("15: 前置生成元件失败。");
+                failures.Add("18: 前置生成元件失败。");
                 return;
             }
             try
@@ -579,28 +728,28 @@ namespace ElectricalSim.Editor
                     BindingFlags.NonPublic | BindingFlags.Instance);
                 if (method == null)
                 {
-                    failures.Add("15: 未找到 SaveLoadService.CreateDrawingDto 方法。");
+                    failures.Add("18: 未找到 SaveLoadService.CreateDrawingDto 方法。");
                     return;
                 }
                 var drawing = method.Invoke(saveLoad, null);
                 if (drawing == null)
                 {
-                    failures.Add("15: CreateDrawingDto 返回 null。");
+                    failures.Add("18: CreateDrawingDto 返回 null。");
                     return;
                 }
                 var jsonResult = JsonUtility.ToJson(drawing, false);
                 if (string.IsNullOrEmpty(jsonResult))
                 {
-                    failures.Add("15: 序列化 JSON 返回空。");
+                    failures.Add("18: 序列化 JSON 返回空。");
                     return;
                 }
                 if (!jsonResult.Contains("ratedVoltage") || !jsonResult.Contains("220"))
                 {
-                    failures.Add("15: DTO 应包含参数 ratedVoltage=220。");
+                    failures.Add("18: DTO 应包含参数 ratedVoltage=220。");
                 }
                 if (!jsonResult.Contains("ratedPower") || !jsonResult.Contains("40"))
                 {
-                    failures.Add("15: DTO 应包含参数 ratedPower=40。");
+                    failures.Add("18: DTO 应包含参数 ratedPower=40。");
                 }
             }
             finally
@@ -609,27 +758,27 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 16. 导入带参数图纸后参数仍然恢复
-        private static void Test16_ImportWithParametersRestored(WorkspaceController workspace, SaveLoadService saveLoad, ComponentDefinition lampDef, List<string> failures)
+        // 19. 导入带参数图纸后参数仍然恢复
+        private static void Test19_ImportWithParametersRestored(WorkspaceController workspace, SaveLoadService saveLoad, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             try
             {
                 // 构造带参数的 JSON：parameters 是 ComponentParameter 数组，value 为 float
-                var json = "{\"documentId\":\"f4-16\",\"documentName\":\"F4 Test\",\"savedAt\":\"2026-08-04 12:00:00\"," +
+                var json = "{\"documentId\":\"f4-19\",\"documentName\":\"F4 Test\",\"savedAt\":\"2026-08-04 12:00:00\"," +
                     "\"components\":[{\"instanceId\":\"lamp_imp\",\"definitionName\":\"Lamp_220V\",\"x\":0,\"y\":0,\"isClosed\":false," +
                     "\"parameters\":[{\"key\":\"ratedVoltage\",\"value\":220},{\"key\":\"ratedPower\",\"value\":60}]}]," +
                     "\"wires\":[]}";
                 var ok = saveLoad.LoadFromJsonString(json, out var error);
                 if (!ok)
                 {
-                    failures.Add($"16: 导入应成功，error={error}");
+                    failures.Add($"19: 导入应成功，error={error}");
                     return;
                 }
                 if (workspace.Components.Count != 1)
                 {
-                    failures.Add($"16: 导入后应有1个元件，actual={workspace.Components.Count}");
+                    failures.Add($"19: 导入后应有1个元件，actual={workspace.Components.Count}");
                     return;
                 }
                 var comp = workspace.Components[0];
@@ -639,7 +788,7 @@ namespace ElectricalSim.Editor
                 var v2 = p2 != null ? p2.value : 0f;
                 if (!Mathf.Approximately(v1, 220f) || !Mathf.Approximately(v2, 60f))
                 {
-                    failures.Add($"16: 参数应恢复，ratedVoltage={v1}(expected 220) ratedPower={v2}(expected 60)");
+                    failures.Add($"19: 参数应恢复，ratedVoltage={v1}(expected 220) ratedPower={v2}(expected 60)");
                 }
             }
             finally
@@ -648,15 +797,15 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 17. 删除选中元件功能不受影响
-        private static void Test17_DeleteSelectedStillWorks(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 20. 删除选中元件功能不受影响
+        private static void Test20_DeleteSelectedStillWorks(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
             var component = SpawnComponentDirect(workspace, lampDef, Vector2.zero);
             if (component == null)
             {
-                failures.Add("17: 前置生成元件失败。");
+                failures.Add("20: 前置生成元件失败。");
                 return;
             }
             try
@@ -665,18 +814,18 @@ namespace ElectricalSim.Editor
                 component.OnPointerClick(ped);
                 if (workspace.SelectedComponent != component)
                 {
-                    failures.Add("17: 元件应被选中。");
+                    failures.Add("20: 元件应被选中。");
                     return;
                 }
                 workspace.DeleteSelectedComponent();
                 if (workspace.Components.Count != 0)
                 {
-                    failures.Add($"17: 删除后画布应为空，actual={workspace.Components.Count}");
+                    failures.Add($"20: 删除后画布应为空，actual={workspace.Components.Count}");
                 }
             }
             catch (Exception ex)
             {
-                failures.Add($"17: 删除选中元件异常：{ex.Message}");
+                failures.Add($"20: 删除选中元件异常：{ex.Message}");
             }
             finally
             {
@@ -684,8 +833,8 @@ namespace ElectricalSim.Editor
             }
         }
 
-        // 18. 撤销、重做生成行为不受影响
-        private static void Test18_UndoRedoSpawnStillWorks(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
+        // 21. 撤销、重做生成行为不受影响
+        private static void Test21_UndoRedoSpawnStillWorks(WorkspaceController workspace, ComponentDefinition lampDef, List<string> failures)
         {
             ResetWorkspace(workspace);
             workspace.AutoShowParameterPanel = false;
@@ -695,26 +844,26 @@ namespace ElectricalSim.Editor
                 SpawnComponentDirect(workspace, lampDef, Vector2.zero);
                 if (workspace.Components.Count != 1)
                 {
-                    failures.Add($"18: 生成后应有1个元件，actual={workspace.Components.Count}");
+                    failures.Add($"21: 生成后应有1个元件，actual={workspace.Components.Count}");
                     return;
                 }
                 // 撤销
                 workspace.Undo();
                 if (workspace.Components.Count != 0)
                 {
-                    failures.Add($"18: 撤销后画布应为空，actual={workspace.Components.Count}");
+                    failures.Add($"21: 撤销后画布应为空，actual={workspace.Components.Count}");
                     return;
                 }
                 // 重做
                 workspace.Redo();
                 if (workspace.Components.Count != 1)
                 {
-                    failures.Add($"18: 重做后应有1个元件，actual={workspace.Components.Count}");
+                    failures.Add($"21: 重做后应有1个元件，actual={workspace.Components.Count}");
                 }
             }
             catch (Exception ex)
             {
-                failures.Add($"18: 撤销/重做异常：{ex.Message}");
+                failures.Add($"21: 撤销/重做异常：{ex.Message}");
             }
             finally
             {
