@@ -68,6 +68,7 @@ namespace ElectricalSim.UI
 
         public void Show()
         {
+            if (!gameObject.activeSelf) ModalInputGate.NotifyOpened();
             gameObject.SetActive(true);
             CancelDelete();
             RefreshList();
@@ -75,6 +76,7 @@ namespace ElectricalSim.UI
 
         public void Hide()
         {
+            if (gameObject.activeSelf) ModalInputGate.NotifyClosed();
             CancelDelete();
             gameObject.SetActive(false);
         }

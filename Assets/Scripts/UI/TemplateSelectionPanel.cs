@@ -70,6 +70,7 @@ namespace ElectricalSim.UI
 
         public void Show(IReadOnlyList<CircuitTemplateCatalogItemDto> templates)
         {
+            if (!gameObject.activeSelf) ModalInputGate.NotifyOpened();
             allTemplates.Clear();
             if (templates != null)
             {
@@ -84,6 +85,7 @@ namespace ElectricalSim.UI
 
         public void Hide()
         {
+            if (gameObject.activeSelf) ModalInputGate.NotifyClosed();
             gameObject.SetActive(false);
         }
 

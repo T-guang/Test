@@ -859,8 +859,7 @@ namespace ElectricalSim.Core
             var scroll = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scroll) < 0.01f) return;
 
-            // Only block zoom if mouse is on the far left (Palette area) or top (Toolbar)
-            if (Input.mousePosition.x < 300f || Input.mousePosition.y > Screen.height - 60f)
+            if (!ShouldAllowCanvasZoom(Input.mousePosition))
             {
                 return;
             }
@@ -881,6 +880,18 @@ namespace ElectricalSim.Core
             var newContentPointUnderMouse = contentPointUnderMouse * (nextZoom / oldZoom);
             var offset = newContentPointUnderMouse - contentPointUnderMouse;
             SetCanvasPan(canvasContent.anchoredPosition - offset * oldZoom);
+        }
+
+        /// <summary>
+        /// 判断指定屏幕位置是否允许画布滚轮缩放。
+        /// 模态弹窗打开时一律拒绝；鼠标不在中央 WorkspaceRect 内时拒绝。
+        /// 不使用 IsPointerOverGameObject，不依赖 GameObject 名称，不扫描场景。
+        /// </summary>
+        public bool ShouldAllowCanvasZoom(Vector2 screenPosition)
+        {
+            if (ModalInputGate.IsAnyOpen) return false;
+            if (workspaceRect == null) return false;
+            return RectTransformUtility.RectangleContainsScreenPoint(workspaceRect, screenPosition, null);
         }
 
         public void ResetView()
