@@ -8,12 +8,13 @@ using ElectricalSim.Templates;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ElectricalSim.Editor
 {
     /// <summary>
-    /// F5 滚轮输入隔离与检查助手滚轮支持测试。
+    /// F5/F5.1 滚轮输入隔离与检查助手滚轮支持测试。
     ///
     /// 验证：
     /// - ShouldAllowCanvasZoom 在鼠标位于中央 WorkspaceRect 内且无模态弹窗时返回 true；
@@ -21,12 +22,17 @@ namespace ElectricalSim.Editor
     /// - 模态弹窗打开时返回 false；
     /// - TemplateSelectionPanel Show/Hide 正确维护 ModalInputGate；
     /// - ImportBlueprintPanel Show/Hide 正确维护 ModalInputGate；
-    /// - 检查助手 ScrollRect 配置正确（vertical=true, viewport+content 存在）；
+    /// - 检查助手 ScrollRect 配置正确（vertical=true, viewport+content 存在, scrollSensitivity=26f）；
     /// - 标准图纸弹窗 ScrollRect 配置正确；
-    /// - 导入图纸弹窗 ScrollRect 配置正确；
+    /// - 导入图纸弹窗 ScrollRect 配置正确（scrollSensitivity=26f）；
     /// - 画布缩放最小/最大值保持不变；
     /// - 画布平移入口不受影响；
-    /// - HandleCanvasZoom 不再使用硬编码 300px 屏蔽。
+    /// - HandleCanvasZoom 不再使用硬编码 300px 屏蔽；
+    /// - F5.1：真实调用 ScrollRect.OnScroll 验证检查助手内容产生位移；
+    /// - F5.1：真实调用 ScrollRect.OnScroll 验证导入图纸列表内容产生位移；
+    /// - F5.1：顶部/底部继续滚轮不越界；
+    /// - F5.1：内容不足一屏时不报错；
+    /// - F5.1：滚轮作用于检查助手或导入列表时 ShouldAllowCanvasZoom 返回 false。
     ///
     /// 所有断言失败收集后抛 InvalidOperationException，使 Unity batchmode 非零退出。
     /// </summary>
@@ -70,6 +76,15 @@ namespace ElectricalSim.Editor
                 TestImportBlueprintPanelModalGate(failures);
                 TestModalGateDoubleOpenClose(failures);
                 TestModalGateCloseWithoutOpen(failures);
+                // F5.1：真实 OnScroll 测试
+                TestAssistantRealOnScroll(failures, workspace);
+                TestAssistantOnScrollTopBoundary(failures, workspace);
+                TestAssistantOnScrollBottomBoundary(failures, workspace);
+                TestAssistantInsufficientContent(failures, workspace);
+                TestImportDialogRealOnScroll(failures, workspace);
+                TestImportDialogOnScrollTopBoundary(failures, workspace);
+                TestImportDialogOnScrollBottomBoundary(failures, workspace);
+                TestImportDialogInsufficientContent(failures, workspace);
             }
             catch (Exception ex)
             {
@@ -545,6 +560,663 @@ namespace ElectricalSim.Editor
             var worldCenter = (min + max) * 0.5f;
             // Screen Space - Overlay: world corner == screen coordinate
             return new Vector2(worldCenter.x, worldCenter.y);
+        }
+
+        // --- F5.1：真实 OnScroll 测试 ---
+
+        private static PointerEventData CreateScrollPointerEventData(EventSystem eventSystem, Vector2 scrollDelta, Vector2 position)
+        {
+            var eventData = new PointerEventData(eventSystem);
+            eventData.scrollDelta = scrollDelta;
+            eventData.position = position;
+            return eventData;
+        }
+
+        private static Vector2 GetRectTransformScreenCenter(RectTransform rect)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var min = corners[0];
+            var max = corners[2];
+            var worldCenter = (min + max) * 0.5f;
+            return new Vector2(worldCenter.x, worldCenter.y);
+        }
+
+        private static void ForceRebuildScrollLayout(ScrollRect scrollRect)
+        {
+            Canvas.ForceUpdateCanvases();
+            if (scrollRect.content != null)
+            {
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scrollRect.content);
+            }
+            Canvas.ForceUpdateCanvases();
+        }
+
+        private static ScrollRect FindVerticalScrollRectInPanel(Component panel)
+        {
+            var scrollRects = panel.GetComponentsInChildren<ScrollRect>(true);
+            foreach (var sr in scrollRects)
+            {
+                if (sr.vertical && sr.viewport != null && sr.content != null)
+                {
+                    return sr;
+                }
+            }
+            return null;
+        }
+
+        private static void TestAssistantRealOnScroll(List<string> failures, WorkspaceController workspace)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add("TestAssistantRealOnScroll: Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            LocalInspectorPanel panel = null;
+            var createdPanel = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<LocalInspectorPanel>(true);
+                if (panel == null)
+                {
+                    panel = LocalInspectorPanel.Create(canvas.GetComponent<RectTransform>(), workspace);
+                    createdPanel = true;
+                }
+
+                var scrollRect = GetPrivateFieldValue<ScrollRect>(panel, "reportScrollRect");
+                if (scrollRect == null)
+                {
+                    failures.Add("TestAssistantRealOnScroll: reportScrollRect 未找到。");
+                    return;
+                }
+
+                // 检查 scrollSensitivity
+                if (!Mathf.Approximately(scrollRect.scrollSensitivity, 26f))
+                    failures.Add($"TestAssistantRealOnScroll: scrollSensitivity 应为 26f，实际 {scrollRect.scrollSensitivity}。");
+
+                // 生成足够高的内容（多段长文本）
+                panel.AddAssistantMessage(BuildLongReportText(40));
+
+                ForceRebuildScrollLayout(scrollRect);
+
+                var content = scrollRect.content;
+                if (content == null)
+                {
+                    failures.Add("TestAssistantRealOnScroll: content 未设置。");
+                    return;
+                }
+
+                // 内容高度必须大于 viewport 才能滚动
+                var viewportRect = scrollRect.viewport;
+                if (viewportRect == null || content.rect.height <= viewportRect.rect.height)
+                {
+                    failures.Add($"TestAssistantRealOnScroll: 内容高度 {content.rect.height} 不足以测试滚动（viewport {viewportRect?.rect.height}）。");
+                    return;
+                }
+
+                // 使用检查助手面板中心作为鼠标位置（应位于 workspaceRect 外）
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+
+                // 记录 OnScroll 前位置
+                var posBefore = content.anchoredPosition;
+                var vnpBefore = scrollRect.verticalNormalizedPosition;
+
+                // 构造滚轮事件（向下滚动）
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, -1f), mousePos);
+                scrollRect.OnScroll(eventData);
+
+                // 记录 OnScroll 后位置
+                var posAfter = content.anchoredPosition;
+                var vnpAfter = scrollRect.verticalNormalizedPosition;
+
+                var deltaPos = Mathf.Abs(posAfter.y - posBefore.y);
+                var deltaVnp = Mathf.Abs(vnpAfter - vnpBefore);
+
+                if (deltaPos < 0.1f && deltaVnp < 0.001f)
+                    failures.Add($"TestAssistantRealOnScroll: OnScroll 后内容未产生明显位移（posDelta={deltaPos}, vnpDelta={deltaVnp}）。");
+
+                // 滚轮作用于检查助手时，ShouldAllowCanvasZoom 应返回 false（鼠标不在 workspaceRect 内）
+                ModalInputGate.ResetForTests();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(eventData.position);
+                if (allowZoom)
+                    failures.Add("TestAssistantRealOnScroll: 滚轮作用于检查助手时 ShouldAllowCanvasZoom 应返回 false。");
+
+                UnityEngine.Debug.Log($"[F5.1] Assistant OnScroll: posBefore={posBefore}, posAfter={posAfter}, deltaPos={deltaPos}, vnpBefore={vnpBefore}, vnpAfter={vnpAfter}, sensitivity={scrollRect.scrollSensitivity}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("TestAssistantRealOnScroll 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+            }
+        }
+
+        private static void TestAssistantOnScrollTopBoundary(List<string> failures, WorkspaceController workspace)
+        {
+            TestAssistantOnScrollBoundary(failures, workspace, scrollToTopFirst: true, testName: "TestAssistantOnScrollTopBoundary");
+        }
+
+        private static void TestAssistantOnScrollBottomBoundary(List<string> failures, WorkspaceController workspace)
+        {
+            TestAssistantOnScrollBoundary(failures, workspace, scrollToTopFirst: false, testName: "TestAssistantOnScrollBottomBoundary");
+        }
+
+        private static void TestAssistantOnScrollBoundary(List<string> failures, WorkspaceController workspace, bool scrollToTopFirst, string testName)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add(testName + ": Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem_B", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            LocalInspectorPanel panel = null;
+            var createdPanel = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<LocalInspectorPanel>(true);
+                if (panel == null)
+                {
+                    panel = LocalInspectorPanel.Create(canvas.GetComponent<RectTransform>(), workspace);
+                    createdPanel = true;
+                }
+
+                var scrollRect = GetPrivateFieldValue<ScrollRect>(panel, "reportScrollRect");
+                if (scrollRect == null)
+                {
+                    failures.Add(testName + ": reportScrollRect 未找到。");
+                    return;
+                }
+
+                panel.AddAssistantMessage(BuildLongReportText(40));
+                ForceRebuildScrollLayout(scrollRect);
+
+                var content = scrollRect.content;
+                var viewportRect = scrollRect.viewport;
+                if (content == null || viewportRect == null || content.rect.height <= viewportRect.rect.height)
+                {
+                    failures.Add(testName + ": 内容不足以测试边界。");
+                    return;
+                }
+
+                // 先滚到顶部或底部
+                scrollRect.verticalNormalizedPosition = scrollToTopFirst ? 1f : 0f;
+                Canvas.ForceUpdateCanvases();
+
+                var posBefore = content.anchoredPosition;
+
+                // 使用面板中心作为鼠标位置
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+
+                // 向不能继续滚动的方向滚（顶部向下、底部向上）
+                var scrollDir = scrollToTopFirst ? -1f : 1f;
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, scrollDir), mousePos);
+                scrollRect.OnScroll(eventData);
+
+                var posAfter = content.anchoredPosition;
+
+                // Clamped 模式下不应越过边界（允许微小惯性位移，但不应大幅越界）
+                var deltaPos = Mathf.Abs(posAfter.y - posBefore.y);
+                if (deltaPos > 30f)
+                    failures.Add($"{testName}: 边界处继续滚轮位移过大 {deltaPos}（Clamped 应限制越界）。");
+
+                // 画布缩放仍应被拒绝（鼠标在面板上，不在 workspaceRect 内）
+                ModalInputGate.ResetForTests();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(mousePos);
+                if (allowZoom)
+                    failures.Add(testName + ": 边界滚轮时 ShouldAllowCanvasZoom 应返回 false。");
+
+                UnityEngine.Debug.Log($"[F5.1] {testName}: posBefore={posBefore}, posAfter={posAfter}, deltaPos={deltaPos}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add(testName + " 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+            }
+        }
+
+        private static void TestAssistantInsufficientContent(List<string> failures, WorkspaceController workspace)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add("TestAssistantInsufficientContent: Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem_C", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            LocalInspectorPanel panel = null;
+            var createdPanel = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<LocalInspectorPanel>(true);
+                if (panel == null)
+                {
+                    panel = LocalInspectorPanel.Create(canvas.GetComponent<RectTransform>(), workspace);
+                    createdPanel = true;
+                }
+
+                var scrollRect = GetPrivateFieldValue<ScrollRect>(panel, "reportScrollRect");
+                if (scrollRect == null)
+                {
+                    failures.Add("TestAssistantInsufficientContent: reportScrollRect 未找到。");
+                    return;
+                }
+
+                // 只添加少量内容（不足一屏）
+                panel.AddAssistantMessage("短报告");
+                ForceRebuildScrollLayout(scrollRect);
+
+                var content = scrollRect.content;
+                if (content == null)
+                {
+                    failures.Add("TestAssistantInsufficientContent: content 未设置。");
+                    return;
+                }
+
+                var posBefore = content.anchoredPosition;
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, -1f), mousePos);
+                // 不应抛出异常
+                scrollRect.OnScroll(eventData);
+                var posAfter = content.anchoredPosition;
+
+                // 内容不足一屏时位移应很小或为零，但不能报错
+                UnityEngine.Debug.Log($"[F5.1] Assistant InsufficientContent: posBefore={posBefore}, posAfter={posAfter}");
+
+                // 画布缩放仍应被拒绝
+                ModalInputGate.ResetForTests();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(mousePos);
+                if (allowZoom)
+                    failures.Add("TestAssistantInsufficientContent: 内容不足时 ShouldAllowCanvasZoom 应返回 false。");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("TestAssistantInsufficientContent 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+            }
+        }
+
+        private static void TestImportDialogRealOnScroll(List<string> failures, WorkspaceController workspace)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add("TestImportDialogRealOnScroll: Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem_D", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            ImportBlueprintPanel panel = null;
+            var createdPanel = false;
+            var wasPanelActive = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<ImportBlueprintPanel>(true);
+                if (panel == null)
+                {
+                    var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>(true);
+                    if (saveLoad == null)
+                    {
+                        failures.Add("TestImportDialogRealOnScroll: SaveLoadService 未找到。");
+                        return;
+                    }
+                    panel = ImportBlueprintPanel.Create(canvas.GetComponent<RectTransform>(), saveLoad);
+                    createdPanel = true;
+                }
+
+                // 面板创建时为 inactive，需激活后布局才能计算高度
+                wasPanelActive = panel.gameObject.activeSelf;
+                panel.gameObject.SetActive(true);
+
+                var scrollRect = FindVerticalScrollRectInPanel(panel);
+                if (scrollRect == null)
+                {
+                    failures.Add("TestImportDialogRealOnScroll: ScrollRect 未找到。");
+                    return;
+                }
+
+                // 检查 scrollSensitivity
+                if (!Mathf.Approximately(scrollRect.scrollSensitivity, 26f))
+                    failures.Add($"TestImportDialogRealOnScroll: scrollSensitivity 应为 26f，实际 {scrollRect.scrollSensitivity}。");
+
+                // 在 content 下创建足够多的测试卡片，使内容超过一屏
+                var content = scrollRect.content;
+                if (content == null)
+                {
+                    failures.Add("TestImportDialogRealOnScroll: content 未设置。");
+                    return;
+                }
+
+                // 创建 20 个测试卡片
+                for (int i = 0; i < 20; i++)
+                {
+                    var cardGo = new GameObject("TestCard_" + i, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+                    cardGo.transform.SetParent(content, false);
+                    var cardRect = cardGo.GetComponent<RectTransform>();
+                    cardRect.anchorMin = new Vector2(0f, 1f);
+                    cardRect.anchorMax = new Vector2(1f, 1f);
+                    cardRect.pivot = new Vector2(0.5f, 1f);
+                    cardRect.sizeDelta = new Vector2(0f, 80f);
+                    cardGo.GetComponent<Image>().color = new Color(0.9f, 0.9f, 0.9f);
+                    var le = cardGo.GetComponent<LayoutElement>();
+                    le.preferredHeight = 80f;
+                    le.minHeight = 80f;
+                }
+
+                ForceRebuildScrollLayout(scrollRect);
+
+                var viewportRect = scrollRect.viewport;
+                if (viewportRect == null || content.rect.height <= viewportRect.rect.height)
+                {
+                    failures.Add($"TestImportDialogRealOnScroll: 内容高度 {content.rect.height} 不足以测试滚动（viewport {viewportRect?.rect.height}）。");
+                    return;
+                }
+
+                var posBefore = content.anchoredPosition;
+                var vnpBefore = scrollRect.verticalNormalizedPosition;
+
+                // 使用导入弹窗面板中心作为鼠标位置（应位于 workspaceRect 外）
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, -1f), mousePos);
+                scrollRect.OnScroll(eventData);
+
+                var posAfter = content.anchoredPosition;
+                var vnpAfter = scrollRect.verticalNormalizedPosition;
+
+                var deltaPos = Mathf.Abs(posAfter.y - posBefore.y);
+                var deltaVnp = Mathf.Abs(vnpAfter - vnpBefore);
+
+                if (deltaPos < 0.1f && deltaVnp < 0.001f)
+                    failures.Add($"TestImportDialogRealOnScroll: OnScroll 后内容未产生明显位移（posDelta={deltaPos}, vnpDelta={deltaVnp}）。");
+
+                // 滚轮作用于导入列表时，ShouldAllowCanvasZoom 应返回 false
+                // 导入弹窗是模态的，需模拟 ModalInputGate 打开状态
+                ModalInputGate.ResetForTests();
+                ModalInputGate.NotifyOpened();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(eventData.position);
+                if (allowZoom)
+                    failures.Add("TestImportDialogRealOnScroll: 滚轮作用于导入列表时 ShouldAllowCanvasZoom 应返回 false。");
+
+                UnityEngine.Debug.Log($"[F5.1] ImportDialog OnScroll: posBefore={posBefore}, posAfter={posAfter}, deltaPos={deltaPos}, vnpBefore={vnpBefore}, vnpAfter={vnpAfter}, sensitivity={scrollRect.scrollSensitivity}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("TestImportDialogRealOnScroll 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+                else if (panel != null && !wasPanelActive)
+                    panel.gameObject.SetActive(false);
+            }
+        }
+
+        private static void TestImportDialogOnScrollTopBoundary(List<string> failures, WorkspaceController workspace)
+        {
+            TestImportDialogOnScrollBoundary(failures, workspace, scrollToTopFirst: true, testName: "TestImportDialogOnScrollTopBoundary");
+        }
+
+        private static void TestImportDialogOnScrollBottomBoundary(List<string> failures, WorkspaceController workspace)
+        {
+            TestImportDialogOnScrollBoundary(failures, workspace, scrollToTopFirst: false, testName: "TestImportDialogOnScrollBottomBoundary");
+        }
+
+        private static void TestImportDialogOnScrollBoundary(List<string> failures, WorkspaceController workspace, bool scrollToTopFirst, string testName)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add(testName + ": Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem_E", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            ImportBlueprintPanel panel = null;
+            var createdPanel = false;
+            var wasPanelActive = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<ImportBlueprintPanel>(true);
+                if (panel == null)
+                {
+                    var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>(true);
+                    if (saveLoad == null)
+                    {
+                        failures.Add(testName + ": SaveLoadService 未找到。");
+                        return;
+                    }
+                    panel = ImportBlueprintPanel.Create(canvas.GetComponent<RectTransform>(), saveLoad);
+                    createdPanel = true;
+                }
+
+                // 面板创建时为 inactive，需激活后布局才能计算高度
+                wasPanelActive = panel.gameObject.activeSelf;
+                panel.gameObject.SetActive(true);
+
+                var scrollRect = FindVerticalScrollRectInPanel(panel);
+                if (scrollRect == null)
+                {
+                    failures.Add(testName + ": ScrollRect 未找到。");
+                    return;
+                }
+
+                var content = scrollRect.content;
+                if (content == null)
+                {
+                    failures.Add(testName + ": content 未设置。");
+                    return;
+                }
+
+                // 创建足够多的测试卡片
+                for (int i = 0; i < 20; i++)
+                {
+                    var cardGo = new GameObject("TestCardB_" + i, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+                    cardGo.transform.SetParent(content, false);
+                    var cardRect = cardGo.GetComponent<RectTransform>();
+                    cardRect.anchorMin = new Vector2(0f, 1f);
+                    cardRect.anchorMax = new Vector2(1f, 1f);
+                    cardRect.pivot = new Vector2(0.5f, 1f);
+                    cardRect.sizeDelta = new Vector2(0f, 80f);
+                    cardGo.GetComponent<Image>().color = new Color(0.9f, 0.9f, 0.9f);
+                    var le = cardGo.GetComponent<LayoutElement>();
+                    le.preferredHeight = 80f;
+                    le.minHeight = 80f;
+                }
+
+                ForceRebuildScrollLayout(scrollRect);
+
+                var viewportRect = scrollRect.viewport;
+                if (viewportRect == null || content.rect.height <= viewportRect.rect.height)
+                {
+                    failures.Add(testName + ": 内容不足以测试边界。");
+                    return;
+                }
+
+                scrollRect.verticalNormalizedPosition = scrollToTopFirst ? 1f : 0f;
+                Canvas.ForceUpdateCanvases();
+
+                var posBefore = content.anchoredPosition;
+                var scrollDir = scrollToTopFirst ? -1f : 1f;
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, scrollDir), mousePos);
+                scrollRect.OnScroll(eventData);
+
+                var posAfter = content.anchoredPosition;
+                var deltaPos = Mathf.Abs(posAfter.y - posBefore.y);
+
+                if (deltaPos > 30f)
+                    failures.Add($"{testName}: 边界处继续滚轮位移过大 {deltaPos}（Clamped 应限制越界）。");
+
+                // 导入弹窗是模态的，需模拟 ModalInputGate 打开状态
+                ModalInputGate.ResetForTests();
+                ModalInputGate.NotifyOpened();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(eventData.position);
+                if (allowZoom)
+                    failures.Add(testName + ": 边界滚轮时 ShouldAllowCanvasZoom 应返回 false。");
+
+                UnityEngine.Debug.Log($"[F5.1] {testName}: posBefore={posBefore}, posAfter={posAfter}, deltaPos={deltaPos}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add(testName + " 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+                else if (panel != null && !wasPanelActive)
+                    panel.gameObject.SetActive(false);
+            }
+        }
+
+        private static void TestImportDialogInsufficientContent(List<string> failures, WorkspaceController workspace)
+        {
+            var canvas = UnityEngine.Object.FindObjectOfType<Canvas>(true);
+            if (canvas == null)
+            {
+                failures.Add("TestImportDialogInsufficientContent: Canvas 未找到。");
+                return;
+            }
+
+            var eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>(true);
+            if (eventSystem == null)
+            {
+                var esGo = new GameObject("F5_EventSystem_F", typeof(EventSystem));
+                eventSystem = esGo.GetComponent<EventSystem>();
+            }
+
+            ImportBlueprintPanel panel = null;
+            var createdPanel = false;
+            var wasPanelActive = false;
+            try
+            {
+                panel = UnityEngine.Object.FindObjectOfType<ImportBlueprintPanel>(true);
+                if (panel == null)
+                {
+                    var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>(true);
+                    if (saveLoad == null)
+                    {
+                        failures.Add("TestImportDialogInsufficientContent: SaveLoadService 未找到。");
+                        return;
+                    }
+                    panel = ImportBlueprintPanel.Create(canvas.GetComponent<RectTransform>(), saveLoad);
+                    createdPanel = true;
+                }
+
+                // 面板创建时为 inactive，需激活后布局才能计算高度
+                wasPanelActive = panel.gameObject.activeSelf;
+                panel.gameObject.SetActive(true);
+
+                var scrollRect = FindVerticalScrollRectInPanel(panel);
+                if (scrollRect == null)
+                {
+                    failures.Add("TestImportDialogInsufficientContent: ScrollRect 未找到。");
+                    return;
+                }
+
+                // 不添加额外内容，content 可能为空或不足一屏
+                ForceRebuildScrollLayout(scrollRect);
+
+                var content = scrollRect.content;
+                if (content == null)
+                {
+                    failures.Add("TestImportDialogInsufficientContent: content 未设置。");
+                    return;
+                }
+
+                var posBefore = content.anchoredPosition;
+                var panelRect = panel.GetComponent<RectTransform>();
+                var mousePos = GetRectTransformScreenCenter(panelRect);
+                var eventData = CreateScrollPointerEventData(eventSystem, new Vector2(0f, -1f), mousePos);
+                // 不应抛出异常
+                scrollRect.OnScroll(eventData);
+                var posAfter = content.anchoredPosition;
+
+                UnityEngine.Debug.Log($"[F5.1] ImportDialog InsufficientContent: posBefore={posBefore}, posAfter={posAfter}");
+
+                // 导入弹窗是模态的，需模拟 ModalInputGate 打开状态
+                ModalInputGate.ResetForTests();
+                ModalInputGate.NotifyOpened();
+                var allowZoom = workspace.ShouldAllowCanvasZoom(mousePos);
+                if (allowZoom)
+                    failures.Add("TestImportDialogInsufficientContent: 内容不足时 ShouldAllowCanvasZoom 应返回 false。");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("TestImportDialogInsufficientContent 异常: " + ex.Message);
+            }
+            finally
+            {
+                if (createdPanel && panel != null)
+                    UnityEngine.Object.DestroyImmediate(panel.gameObject);
+                else if (panel != null && !wasPanelActive)
+                    panel.gameObject.SetActive(false);
+            }
+        }
+
+        private static string BuildLongReportText(int blockCount)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < blockCount; i++)
+            {
+                sb.AppendLine("=== 检查项 " + (i + 1) + " ===");
+                sb.AppendLine("这是一个用于测试滚轮滚动的长报告内容。当前行用于填充 Content 高度，使其超过 Viewport 高度，从而验证 ScrollRect.OnScroll 能够产生实际位移。");
+                sb.AppendLine("每一段包含多行文本，确保 VerticalLayoutGroup 和 ContentSizeFitter 正确计算 PreferredSize。");
+                sb.AppendLine();
+            }
+            return sb.ToString();
         }
     }
 }

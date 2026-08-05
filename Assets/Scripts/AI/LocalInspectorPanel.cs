@@ -175,6 +175,7 @@ namespace ElectricalSim.AI
             reportScrollRect.vertical = true;
             reportScrollRect.movementType = ScrollRect.MovementType.Clamped;
             reportScrollRect.inertia = true;
+            reportScrollRect.scrollSensitivity = 26f;
 
             var viewport = CreateRect("Viewport", reportRoot);
             viewport.anchorMin = Vector2.zero;

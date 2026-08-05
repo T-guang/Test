@@ -270,6 +270,9 @@ namespace ElectricalSim.UI
             scrollRect.content = contentRoot;
             scrollRect.horizontal = false;
             scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.inertia = true;
+            scrollRect.scrollSensitivity = 26f;
 
             BuildConfirmDeletePanel(panel);
             Initialize(saveLoadService);
