@@ -943,7 +943,9 @@ namespace ElectricalSim.UI
             label.text = GetPaletteDisplayName(definition);
             label.lineSpacing = 1.02f;
             MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.PaletteCardTitle);
-            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            // 允许长名称换行到第二行，超出两行时截断，防止文本溢出到相邻卡片
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
             label.color = MainUiTheme.DeepText;
             label.raycastTarget = false;
 
@@ -952,6 +954,7 @@ namespace ElectricalSim.UI
             labelRect.anchorMax = new Vector2(1f, 0f);
             labelRect.pivot = new Vector2(0.5f, 0f);
             labelRect.anchoredPosition = new Vector2(0f, 9f);
+            // 宽度 -2 留 1px 左右边距，高度 36 容纳两行 14~15px 文本
             labelRect.sizeDelta = new Vector2(-2f, 36f);
 
             var outline = rect.GetComponent<Outline>() ?? rect.gameObject.AddComponent<Outline>();
@@ -980,10 +983,17 @@ namespace ElectricalSim.UI
             if (ContainsName(name, "AC_ThreePhase_Power") ||
                 ContainsName(name, "TerminalBlock") ||
                 ContainsName(name, "Fuse_1P") ||
-                ContainsName(name, "Fuse_3P") ||
-                ContainsName(name, "KnifeSwitch"))
+                ContainsName(name, "Fuse_3P"))
             {
                 return new Vector2(76f, 40f);
+            }
+
+            // 刀开关 QS 原图为纵向 sprite（宽高比≈0.62），原 76×40 宽扁框导致 preserveAspect 下渲染宽仅 ~25px。
+            // 改为 56×80 竖框，受宽度约束，渲染高度 ≈ 56/0.62 ≈ 90px，视觉高度提升约 125%，主体明显增大且不裁切。
+            // 此修改仅影响元件池预览，不影响画布 SpawnComponent 实际尺寸（画布尺寸由 ComponentDefinition.size + prefab root sizeDelta 决定）。
+            if (ContainsName(name, "KnifeSwitch"))
+            {
+                return new Vector2(56f, 80f);
             }
 
             if (ContainsName(name, "AC_220V_Power") ||
