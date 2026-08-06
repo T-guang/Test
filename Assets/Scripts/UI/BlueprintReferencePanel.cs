@@ -260,17 +260,89 @@ namespace ElectricalSim.UI
             MoveToParent(zoomInButton != null ? zoomInButton.transform as RectTransform : null, headerRect);
             MoveToParent(closeButton != null ? closeButton.transform as RectTransform : null, headerRect);
 
+            // 标题区严格分离：占用除右侧控制组外的全部宽度。
+            // 控制组总宽 = 4 个按钮(32) + 3 个间距(6) + 1 个间距(8 到 X) + X 右边距(10) = 32*4 + 6*3 + 8 + 10 = 158
+            // 标题右边缘距 header 右边缘 = 162（含 4px 安全间隔，避免与控制组重叠）
+            const float ControlGroupWidth = 162f;
+            const float TitleRightOffset = ControlGroupWidth + 4f;
+
             if (referenceTitle != null)
             {
-                SetStretchRect(referenceTitle.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(8f, 0f), new Vector2(-170f, 0f));
+                SetStretchRect(referenceTitle.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(8f, 0f), new Vector2(-TitleRightOffset, 0f));
                 referenceTitle.alignment = TextAnchor.MiddleLeft;
+                // 允许长标题换行到第二行，超出两行时截断；避免水平溢出侵入按钮区
+                referenceTitle.horizontalOverflow = HorizontalWrapMode.Wrap;
+                referenceTitle.verticalOverflow = VerticalWrapMode.Truncate;
             }
 
-            SetHeaderButtonRect(zoomOutButton, -156f, 36f);
-            SetHeaderButtonRect(resetButton, -114f, 48f);
-            SetHeaderButtonRect(zoomInButton, -60f, 36f);
-            SetHeaderButtonRect(closeButton, -18f, 36f);
+            // 控制组从右向左布局：X(32) + 8 间距 + +(32) + 6 间距 + 1:1(40) + 6 间距 + -(32)
+            // 距 header 右边缘的偏移（pivot=1,0.5，anchoredPosition.x 为负值）
+            const float BtnSize = 32f;
+            const float ResetWidth = 40f;
+            const float GapSmall = 6f;
+            const float GapBeforeClose = 8f;
+            const float RightMargin = 10f;
+
+            float closeRight = -RightMargin;
+            float zoomInRight = closeRight - BtnSize - GapBeforeClose;
+            float resetRight = zoomInRight - BtnSize - GapSmall;
+            float zoomOutRight = resetRight - ResetWidth - GapSmall;
+
+            ApplyHeaderButtonStyle(zoomOutButton, zoomOutRight, BtnSize, false);
+            ApplyHeaderButtonStyle(resetButton, resetRight, ResetWidth, true);
+            ApplyHeaderButtonStyle(zoomInButton, zoomInRight, BtnSize, false);
+            ApplyHeaderButtonStyle(closeButton, closeRight, BtnSize, false, true);
+
             headerRect.SetAsLastSibling();
+        }
+
+        private static void ApplyHeaderButtonStyle(Button button, float rightOffset, float width, bool isReset, bool isClose = false)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var rect = button.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1f, 0.5f);
+            rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.sizeDelta = new Vector2(width, 32f);
+            rect.anchoredPosition = new Vector2(rightOffset, 0f);
+
+            // 复用项目现有圆角按钮样式（UiThemeTokens.GetRoundedSprite），与对话框按钮风格一致
+            var bg = button.GetComponent<Image>();
+            if (bg != null)
+            {
+                bg.sprite = UiThemeTokens.GetRoundedSprite(6, 64);
+                bg.type = Image.Type.Sliced;
+                if (isClose)
+                {
+                    bg.color = UiThemeTokens.TextMuted;
+                }
+                else if (isReset)
+                {
+                    bg.color = UiThemeTokens.PrimaryBlue;
+                }
+                else
+                {
+                    bg.color = UiThemeTokens.BorderColor;
+                }
+            }
+
+            // 统一按钮文字样式
+            var label = button.GetComponentInChildren<Text>(true);
+            if (label != null)
+            {
+                label.font = MainUiTheme.UiFont;
+                label.fontSize = isReset ? 13 : 16;
+                label.fontStyle = FontStyle.Bold;
+                label.alignment = TextAnchor.MiddleCenter;
+                label.color = isClose ? Color.white : (isReset ? Color.white : UiThemeTokens.TextDark);
+                label.resizeTextForBestFit = false;
+                label.horizontalOverflow = HorizontalWrapMode.Overflow;
+                label.verticalOverflow = VerticalWrapMode.Overflow;
+            }
         }
 
         private void ConfigureImageViewport(float headerHeight, float infoHeight)
@@ -643,21 +715,6 @@ namespace ElectricalSim.UI
             rect.anchorMax = anchorMax;
             rect.offsetMin = offsetMin;
             rect.offsetMax = offsetMax;
-        }
-
-        private static void SetHeaderButtonRect(Button button, float rightOffset, float width)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            var rect = button.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 0.5f);
-            rect.anchorMax = new Vector2(1f, 0.5f);
-            rect.pivot = new Vector2(1f, 0.5f);
-            rect.sizeDelta = new Vector2(width, 36f);
-            rect.anchoredPosition = new Vector2(rightOffset, 0f);
         }
     }
 }
