@@ -25,6 +25,10 @@ namespace ElectricalSim.UI
         [SerializeField] private Image referenceImage;
         [SerializeField] private Text referenceRecommendations;
 
+        // 两层 Header：Prefix Row 显示 "图纸参考：" 短标签，Name Row 显示完整模板名称。
+        // referenceTitle 用作 Name Row（完整模板名称独占一行），prefixText 用作 Prefix Row。
+        private Text prefixText;
+
         private RectTransform headerRect;
         private RectTransform imageViewportRect;
         private RectTransform infoScrollViewRect;
@@ -68,14 +72,26 @@ namespace ElectricalSim.UI
             EnsureFixedLayout();
             headerRect?.SetAsLastSibling();
 
+            if (prefixText != null)
+            {
+                prefixText.font = MainUiTheme.UiFontBold;
+                prefixText.fontSize = 15;
+                prefixText.fontStyle = FontStyle.Normal;
+                prefixText.color = MainUiTheme.MutedText;
+                prefixText.resizeTextForBestFit = false;
+                prefixText.text = "图纸参考：";
+            }
+
             if (referenceTitle != null)
             {
                 referenceTitle.font = MainUiTheme.UiFontBold;
-                referenceTitle.fontSize = 20;
                 referenceTitle.fontStyle = FontStyle.Normal;
                 referenceTitle.color = MainUiTheme.NormalText;
-                referenceTitle.resizeTextForBestFit = false;
-                referenceTitle.text = "图纸参考：" + templateItem.templateName;
+                // 模板名称独占 Name Row，允许在 16~20px 范围内轻微自动缩放以适配不同长度
+                referenceTitle.resizeTextForBestFit = true;
+                referenceTitle.resizeTextMinSize = 16;
+                referenceTitle.resizeTextMaxSize = 20;
+                referenceTitle.text = templateItem.templateName ?? string.Empty;
             }
 
             Sprite sprite = null;
@@ -178,19 +194,22 @@ namespace ElectricalSim.UI
             switch (sizeMode)
             {
                 case ReferencePanelSizeMode.Small:
-                    panelSize = new Vector2(420f, 420f);
-                    headerHeight = 48f;
-                    infoHeight = 126f;
+                    // Small 模式：面板从 420×420 提升至 440×440，Header 两层（Prefix 30 + Name 34 = 64）
+                    panelSize = new Vector2(440f, 440f);
+                    headerHeight = 64f;
+                    infoHeight = 120f;
                     break;
                 case ReferencePanelSizeMode.Large:
+                    // Large 模式：Header 两层（Prefix 32 + Name 36 = 68）
                     panelSize = new Vector2(680f, 700f);
-                    headerHeight = 52f;
-                    infoHeight = 200f;
+                    headerHeight = 68f;
+                    infoHeight = 196f;
                     break;
                 default:
+                    // Medium 模式：Header 两层（Prefix 32 + Name 34 = 66）
                     panelSize = new Vector2(520f, 540f);
-                    headerHeight = 50f;
-                    infoHeight = 160f;
+                    headerHeight = 66f;
+                    infoHeight = 154f;
                     break;
             }
         }
@@ -255,28 +274,47 @@ namespace ElectricalSim.UI
 
             SetStretchRect(headerRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(14f, -headerHeight), new Vector2(-14f, 0f));
             MoveToParent(referenceTitle != null ? referenceTitle.rectTransform : null, headerRect);
+            MoveToParent(prefixText != null ? prefixText.rectTransform : null, headerRect);
             MoveToParent(zoomOutButton != null ? zoomOutButton.transform as RectTransform : null, headerRect);
             MoveToParent(resetButton != null ? resetButton.transform as RectTransform : null, headerRect);
             MoveToParent(zoomInButton != null ? zoomInButton.transform as RectTransform : null, headerRect);
             MoveToParent(closeButton != null ? closeButton.transform as RectTransform : null, headerRect);
 
-            // 标题区严格分离：占用除右侧控制组外的全部宽度。
-            // 控制组总宽 = 4 个按钮(32) + 3 个间距(6) + 1 个间距(8 到 X) + X 右边距(10) = 32*4 + 6*3 + 8 + 10 = 158
-            // 标题右边缘距 header 右边缘 = 162（含 4px 安全间隔，避免与控制组重叠）
+            // 两层 Header：Top Row（Prefix + 控制组）+ Name Row（完整模板名称）
+            // Top Row 高度 = PrefixRowHeight，Name Row 高度 = headerHeight - PrefixRowHeight
+            float prefixRowHeight = headerHeight <= 64f ? 30f : 32f;
+            float nameRowHeight = headerHeight - prefixRowHeight;
+
+            // Prefix Row：左侧 "图纸参考：" 短标签，右侧控制组
             const float ControlGroupWidth = 162f;
             const float TitleRightOffset = ControlGroupWidth + 4f;
 
+            if (prefixText != null)
+            {
+                // Prefix 占用 Top Row 左侧，右边界限制在控制组左侧
+                SetStretchRect(prefixText.rectTransform,
+                    new Vector2(0f, 0f), new Vector2(1f, 1f),
+                    new Vector2(8f, 0f), new Vector2(-TitleRightOffset, -nameRowHeight));
+                prefixText.alignment = TextAnchor.MiddleLeft;
+                prefixText.horizontalOverflow = HorizontalWrapMode.Overflow;
+                prefixText.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+
             if (referenceTitle != null)
             {
-                SetStretchRect(referenceTitle.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(8f, 0f), new Vector2(-TitleRightOffset, 0f));
+                // Name Row：完整模板名称独占底部，占用 Header 几乎全部宽度
+                SetStretchRect(referenceTitle.rectTransform,
+                    new Vector2(0f, 0f), new Vector2(1f, 0f),
+                    new Vector2(8f, 0f), new Vector2(-8f, prefixRowHeight));
                 referenceTitle.alignment = TextAnchor.MiddleLeft;
-                // 允许长标题换行到第二行，超出两行时截断；避免水平溢出侵入按钮区
-                referenceTitle.horizontalOverflow = HorizontalWrapMode.Wrap;
+                // 不依赖中文 Wrap，名称独占完整宽度，Overflow 允许单行显示
+                referenceTitle.horizontalOverflow = HorizontalWrapMode.Overflow;
                 referenceTitle.verticalOverflow = VerticalWrapMode.Truncate;
             }
 
-            // 控制组从右向左布局：X(32) + 8 间距 + +(32) + 6 间距 + 1:1(40) + 6 间距 + -(32)
+            // 控制组从右向左布局在 Top Row：X(32) + 8 间距 + +(32) + 6 间距 + 1:1(40) + 6 间距 + -(32)
             // 距 header 右边缘的偏移（pivot=1,0.5，anchoredPosition.x 为负值）
+            // 控制组垂直居中于 Top Row
             const float BtnSize = 32f;
             const float ResetWidth = 40f;
             const float GapSmall = 6f;
@@ -288,15 +326,19 @@ namespace ElectricalSim.UI
             float resetRight = zoomInRight - BtnSize - GapSmall;
             float zoomOutRight = resetRight - ResetWidth - GapSmall;
 
-            ApplyHeaderButtonStyle(zoomOutButton, zoomOutRight, BtnSize, false);
-            ApplyHeaderButtonStyle(resetButton, resetRight, ResetWidth, true);
-            ApplyHeaderButtonStyle(zoomInButton, zoomInRight, BtnSize, false);
-            ApplyHeaderButtonStyle(closeButton, closeRight, BtnSize, false, true);
+            // 控制组垂直偏移：Top Row 中心相对于 Header 中心
+            // Header 中心 y=0，Top Row 中心 y = nameRowHeight/2
+            float controlVerticalOffset = nameRowHeight / 2f;
+
+            ApplyHeaderButtonStyle(zoomOutButton, zoomOutRight, BtnSize, false, controlVerticalOffset);
+            ApplyHeaderButtonStyle(resetButton, resetRight, ResetWidth, true, controlVerticalOffset);
+            ApplyHeaderButtonStyle(zoomInButton, zoomInRight, BtnSize, false, controlVerticalOffset);
+            ApplyHeaderButtonStyle(closeButton, closeRight, BtnSize, false, controlVerticalOffset, true);
 
             headerRect.SetAsLastSibling();
         }
 
-        private static void ApplyHeaderButtonStyle(Button button, float rightOffset, float width, bool isReset, bool isClose = false)
+        private static void ApplyHeaderButtonStyle(Button button, float rightOffset, float width, bool isReset, float verticalOffset, bool isClose = false)
         {
             if (button == null)
             {
@@ -307,8 +349,8 @@ namespace ElectricalSim.UI
             rect.anchorMin = new Vector2(1f, 0.5f);
             rect.anchorMax = new Vector2(1f, 0.5f);
             rect.pivot = new Vector2(1f, 0.5f);
-            rect.sizeDelta = new Vector2(width, 32f);
-            rect.anchoredPosition = new Vector2(rightOffset, 0f);
+            rect.sizeDelta = new Vector2(width, 28f);
+            rect.anchoredPosition = new Vector2(rightOffset, verticalOffset);
 
             // 复用项目现有圆角按钮样式（UiThemeTokens.GetRoundedSprite），与对话框按钮风格一致
             var bg = button.GetComponent<Image>();
@@ -590,6 +632,20 @@ namespace ElectricalSim.UI
             if (referenceTitle == null)
             {
                 referenceTitle = FindByName(texts, "ReferenceTitle");
+            }
+
+            if (prefixText == null)
+            {
+                prefixText = FindByName(texts, "ReferencePrefix");
+            }
+
+            if (prefixText == null && panelRect != null)
+            {
+                // 创建 Prefix Text 对象用于两层 Header 的 Top Row
+                var prefixObject = new GameObject("ReferencePrefix", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+                prefixObject.transform.SetParent(panelRect, false);
+                prefixText = prefixObject.GetComponent<Text>();
+                prefixText.raycastTarget = false;
             }
 
             if (referenceRecommendations == null)
