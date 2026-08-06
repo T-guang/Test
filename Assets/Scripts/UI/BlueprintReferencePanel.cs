@@ -291,10 +291,13 @@ namespace ElectricalSim.UI
 
             if (prefixText != null)
             {
-                // Prefix 占用 Top Row 左侧，右边界限制在控制组左侧
+                // Prefix Row 占据 Header 顶部 prefixRowHeight 区域：
+                // yMin = nameRowHeight, yMax = headerHeight（在 Header 本地坐标系中）
+                // anchorMin/Max 沿用 (0,0)-(1,1) stretch，offsetMin.y=nameRowHeight 抬高底部，
+                // offsetMax.y=0 保持顶部对齐 Header 顶边
                 SetStretchRect(prefixText.rectTransform,
                     new Vector2(0f, 0f), new Vector2(1f, 1f),
-                    new Vector2(8f, 0f), new Vector2(-TitleRightOffset, -nameRowHeight));
+                    new Vector2(8f, nameRowHeight), new Vector2(-TitleRightOffset, 0f));
                 prefixText.alignment = TextAnchor.MiddleLeft;
                 prefixText.horizontalOverflow = HorizontalWrapMode.Overflow;
                 prefixText.verticalOverflow = VerticalWrapMode.Truncate;
@@ -302,10 +305,12 @@ namespace ElectricalSim.UI
 
             if (referenceTitle != null)
             {
-                // Name Row：完整模板名称独占底部，占用 Header 几乎全部宽度
+                // Name Row 占据 Header 底部 nameRowHeight 区域：
+                // yMin = 0, yMax = nameRowHeight
+                // anchorMin/Max=(0,0)-(1,0) 锚定底部，offsetMax.y=nameRowHeight 抬高顶部
                 SetStretchRect(referenceTitle.rectTransform,
                     new Vector2(0f, 0f), new Vector2(1f, 0f),
-                    new Vector2(8f, 0f), new Vector2(-8f, prefixRowHeight));
+                    new Vector2(8f, 0f), new Vector2(-8f, nameRowHeight));
                 referenceTitle.alignment = TextAnchor.MiddleLeft;
                 // 不依赖中文 Wrap，名称独占完整宽度，Overflow 允许单行显示
                 referenceTitle.horizontalOverflow = HorizontalWrapMode.Overflow;
