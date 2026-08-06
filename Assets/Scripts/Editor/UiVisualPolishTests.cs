@@ -244,16 +244,52 @@ namespace ElectricalSim.Editor
                             notTested.Add($"[{sizeNames[s]}] 模板'{templateName}': closeButton 未填充（NOT_TESTED_RUNTIME_TEXT_RENDERING: 隔离场景下按钮未序列化）。");
                         }
 
-                        // 5. prefixText 应位于 Top Row（顶部），referenceTitle 应位于 Name Row（底部）
+                        // 5. prefixText 与 referenceTitle 世界矩形严格分离
                         if (prefix != null && headerRect != null)
                         {
                             var prefixWorld = GetWorldRect(prefix.rectTransform);
                             var titleWorld2 = GetWorldRect(title.rectTransform);
-                            // Name Row 应在 Prefix Row 下方（y 值更小）
-                            if (titleWorld2.center.y > prefixWorld.center.y + 1f)
+
+                            // 5a. 两矩形不得相交
+                            if (RectsOverlap(prefixWorld, titleWorld2))
                             {
-                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': referenceTitle 应位于 prefixText 下方（Name Row），实际 title.y={titleWorld2.center.y} > prefix.y={prefixWorld.center.y}。");
+                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': prefixText 世界矩形与 referenceTitle 相交。prefix={prefixWorld} title={titleWorld2}");
                             }
+
+                            // 5b. prefix.center.y 必须大于 title.center.y（Prefix Row 在顶部）
+                            if (!(prefixWorld.center.y > titleWorld2.center.y))
+                            {
+                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': prefix.center.y({prefixWorld.center.y}) 应大于 title.center.y({titleWorld2.center.y})。");
+                            }
+
+                            // 5c. prefix.yMin 应等于或高于 title.yMax，允许 0~2px 间距
+                            // Unity Rect: yMin 为底边，yMax 为顶边；世界坐标中 prefix 底边应 >= title 顶边 - 1px
+                            if (prefixWorld.yMin < titleWorld2.yMax - 1f)
+                            {
+                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': prefix.yMin({prefixWorld.yMin}) 应 >= title.yMax({titleWorld2.yMax}) - 1px。");
+                            }
+
+                            // 5d. referenceTitle 高度应等于 nameRowHeight（Header 总高减去 PrefixRowHeight）
+                            // 使用 rectTransform.rect.height（本地坐标），避免 CanvasScaler 缩放干扰
+                            // Small: 64-30=34, Medium: 66-32=34, Large: 68-32=36
+                            float expectedNameRow = (s == 0) ? 34f : (s == 1) ? 34f : 36f;
+                            float titleLocalHeight = title.rectTransform.rect.height;
+                            if (Mathf.Abs(titleLocalHeight - expectedNameRow) > 0.5f)
+                            {
+                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': referenceTitle 高度({titleLocalHeight}) 应为 nameRowHeight({expectedNameRow})。");
+                            }
+
+                            // 5e. prefixText 高度应等于 prefixRowHeight
+                            float expectedPrefixRow = (s == 0) ? 30f : 32f;
+                            float prefixLocalHeight = prefix.rectTransform.rect.height;
+                            if (Mathf.Abs(prefixLocalHeight - expectedPrefixRow) > 0.5f)
+                            {
+                                failures.Add($"[{sizeNames[s]}] 模板'{templateName}': prefixText 高度({prefixLocalHeight}) 应为 prefixRowHeight({expectedPrefixRow})。");
+                            }
+                        }
+                        else
+                        {
+                            notTested.Add($"[{sizeNames[s]}] 模板'{templateName}': prefixText 或 headerRect 未填充（NOT_TESTED_RUNTIME_TEXT_RENDERING: 隔离场景下字段未序列化）。");
                         }
 
                         // 6. 文本字段不含省略号
@@ -376,7 +412,12 @@ namespace ElectricalSim.Editor
         // =========================================================================
 
         /// <summary>
-        /// 加载 Assets/Data/ 下的真实 ComponentDefinition，验证 GetPaletteDisplayName 返回 UI-only 名称。
+        /// 加载 Assets/Data/ 下的真实 ComponentDefinition，验证：
+        /// 1. GetPaletteDisplayName 返回非空；
+        /// 2. 去除换行并统一全角/半角括号后，文本内容必须与原 displayName 等价；
+        /// 3. 四个 Breaker 显示"空气开关"，不得出现"断路器"；
+        /// 4. Single_Control_Switch 保留"单开单控开关"；
+        /// 5. LimitSwitch_Compound 保留"限位开关"。
         /// </summary>
         private static void TestPaletteDisplayNamesWithRealDefinitions(List<string> failures, List<string> notTested)
         {
@@ -395,7 +436,6 @@ namespace ElectricalSim.Editor
                 return;
             }
 
-            int mappedCount = 0;
             foreach (var guid in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
@@ -409,18 +449,69 @@ namespace ElectricalSim.Editor
                     continue;
                 }
 
-                // 如果返回值与 displayName 不同，说明启用了 UI-only 映射
-                if (result != def.displayName)
+                // 名称归一化：去除换行，统一全角/半角括号
+                var normalizedResult = NormalizeForCompare(result);
+                var normalizedOriginal = NormalizeForCompare(def.displayName);
+
+                // 去除换行并统一括号后，必须与原 displayName 等价
+                if (normalizedResult != normalizedOriginal)
                 {
-                    mappedCount++;
+                    failures.Add($"Definition '{def.name}' UI 名称归一化后与 displayName 不等价。result='{result}' normalized='{normalizedResult}' vs displayName='{def.displayName}' normalized='{normalizedOriginal}'。");
+                }
+
+                // 四个 Breaker 必须显示"空气开关"，不得出现"断路器"
+                if (def.name.StartsWith("Breaker_"))
+                {
+                    if (!result.Contains("空气开关"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 应包含 '空气开关'。");
+                    }
+                    if (result.Contains("断路器"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 不得包含 '断路器'。");
+                    }
+                }
+
+                // Single_Control_Switch 必须保留"单开单控开关"
+                if (def.name == "Single_Control_Switch")
+                {
+                    if (!result.Contains("单开单控开关"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 应保留 '单开单控开关'。");
+                    }
+                    if (result.Contains("单控开关") && !result.Contains("单开单控开关"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 不得简化为 '单控开关'。");
+                    }
+                }
+
+                // LimitSwitch_Compound 必须保留"限位开关"
+                if (def.name == "LimitSwitch_Compound")
+                {
+                    if (!result.Contains("限位开关"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 应保留 '限位开关'。");
+                    }
+                    if (result.Contains("限位型"))
+                    {
+                        failures.Add($"Definition '{def.name}' UI 名称 '{result}' 不得使用 '限位型'。");
+                    }
                 }
             }
+        }
 
-            // 至少应有 10 个以上元件启用 UI-only 映射
-            if (mappedCount < 10)
-            {
-                failures.Add($"UI-only 名称映射数量 {mappedCount} 少于预期（至少 10 个）。");
-            }
+        /// <summary>
+        /// 名称归一化：去除换行符，统一全角括号为半角，便于比较 UI 名称与原 displayName 是否等价。
+        /// </summary>
+        private static string NormalizeForCompare(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s
+                .Replace("\n", string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("（", "(")
+                .Replace("）", ")")
+                .Replace(" ", string.Empty);
         }
 
         /// <summary>
