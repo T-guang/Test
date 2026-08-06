@@ -940,7 +940,8 @@ namespace ElectricalSim.UI
             iconImage.raycastTarget = false;
 
             var label = EnsureChildText(rect, "Label");
-            label.text = GetPaletteDisplayName(definition);
+            var displayName = GetPaletteDisplayName(definition);
+            label.text = displayName;
             label.lineSpacing = 1.02f;
             MainUiTheme.ApplyTextRole(label, MainUiTheme.UiTextRole.PaletteCardTitle);
             // 允许长名称换行到第二行，超出两行时截断，防止文本溢出到相邻卡片
@@ -948,6 +949,19 @@ namespace ElectricalSim.UI
             label.verticalOverflow = VerticalWrapMode.Truncate;
             label.color = MainUiTheme.DeepText;
             label.raycastTarget = false;
+
+            // 对两行长名称启用有限自动字号（minSize=11, maxSize=15），短名称保持固定字号 15
+            var isMultiLineName = displayName != null && displayName.IndexOf('\n') >= 0;
+            if (isMultiLineName)
+            {
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = 11;
+                label.resizeTextMaxSize = 15;
+            }
+            else
+            {
+                label.resizeTextForBestFit = false;
+            }
 
             var labelRect = label.rectTransform;
             labelRect.anchorMin = new Vector2(0f, 0f);
@@ -1433,6 +1447,8 @@ namespace ElectricalSim.UI
             var id = definition.name;
             var voltage = definition.ratedVoltage;
 
+            // UI-only 名称映射：基于稳定 Definition ID 生成两行显示名，括号不单独成行。
+            // 不修改 ComponentDefinition.displayName，不影响模板、保存、导入和检查系统。
             if (id.StartsWith("Contactor_KM"))
             {
                 return $"交流接触器\nKM · {voltage}V";
@@ -1451,6 +1467,155 @@ namespace ElectricalSim.UI
                 if (id.Contains("Red")) return $"红色指示灯\n{voltage}V";
                 if (id.Contains("Yellow")) return $"黄色指示灯\n{voltage}V";
                 return $"指示灯\n{voltage}V";
+            }
+            // 刀开关：括号内 QS 提到独立行，避免括号单独成行
+            if (id.StartsWith("KnifeSwitch"))
+            {
+                return "刀开关\nQS";
+            }
+            // 按钮类：将括号内容提到第二行（全角括号避免单独成行）
+            if (id.StartsWith("Button_Compound_Green"))
+            {
+                return "复合按钮SB\n（绿）";
+            }
+            if (id.StartsWith("Button_Compound"))
+            {
+                return "复合按钮SB\n（红）";
+            }
+            if (id.StartsWith("Button_SelfLock_Green"))
+            {
+                return "自锁开关SB\n（绿）";
+            }
+            if (id.StartsWith("Button_SelfLock"))
+            {
+                return "自锁开关SB\n（红）";
+            }
+            if (id.StartsWith("Button_Start"))
+            {
+                return "启动按钮\n（NO）";
+            }
+            if (id.StartsWith("Button_Stop"))
+            {
+                return "停止按钮\n（NC）";
+            }
+            if (id.StartsWith("EmergencyStop"))
+            {
+                return "急停按钮\n（NC）";
+            }
+            // 熔断器：将（FU）提到第二行
+            if (id.StartsWith("Fuse_1P"))
+            {
+                return "熔断器1P\n（FU）";
+            }
+            if (id.StartsWith("Fuse_3P"))
+            {
+                return "熔断器3P\n（FU）";
+            }
+            // 热继电器：将（FR）和电压分两行
+            if (id.StartsWith("ThermalRelay"))
+            {
+                return $"热继电器FR\n{voltage}V";
+            }
+            // 行程开关：限位型
+            if (id.StartsWith("LimitSwitch_Compound"))
+            {
+                return "行程开关SQ\n（限位型）";
+            }
+            if (id.StartsWith("LimitSwitch_SelfLock"))
+            {
+                return "限位开关\n（自锁）";
+            }
+            // 其他带电压/参数的元件：将括号内容提到第二行（全角括号）
+            if (id.StartsWith("Fan_"))
+            {
+                return $"电风扇\n（{voltage}V）";
+            }
+            if (id.StartsWith("Lamp_"))
+            {
+                return $"电灯泡\n（{voltage}V）";
+            }
+            if (id.StartsWith("Single_Phase_Meter"))
+            {
+                return $"单相电能表\n（{voltage}V）";
+            }
+            // 电机类：全角括号电压
+            if (id.StartsWith("Motor_ThreePhase"))
+            {
+                return $"三相异步电动机\n（{voltage}V）";
+            }
+            if (id.StartsWith("Motor_StarDelta"))
+            {
+                return $"星三角电机\n（{voltage}V）";
+            }
+            if (id.StartsWith("StepperMotor"))
+            {
+                return $"步进电机\n（{voltage}V）";
+            }
+            if (id.StartsWith("StepperDriver"))
+            {
+                return $"步进驱动器\n（{voltage}V）";
+            }
+            if (id.StartsWith("SolenoidValve"))
+            {
+                return $"电磁阀\n（{voltage}V）";
+            }
+            if (id.StartsWith("PLC_Output"))
+            {
+                return $"PLC输出模块\n（{voltage}V）";
+            }
+            if (id.StartsWith("SwitchPower"))
+            {
+                return $"开关电源\n（{voltage}V）";
+            }
+            // 断路器：全角括号
+            if (id.StartsWith("Breaker_1P"))
+            {
+                return "断路器1P\n（QF）";
+            }
+            if (id.StartsWith("Breaker_2P"))
+            {
+                return "断路器2P\n（QF）";
+            }
+            if (id.StartsWith("Breaker_3P"))
+            {
+                return "断路器3P\n（QF）";
+            }
+            if (id.StartsWith("Breaker_4P"))
+            {
+                return "断路器4P\n（QF）";
+            }
+            // 端子排：全角括号
+            if (id.StartsWith("TerminalBlock_"))
+            {
+                var shortId = id.Replace("TerminalBlock_", "");
+                return $"端子排\n（{shortId}）";
+            }
+            // 交流电源
+            if (id.StartsWith("AC_ThreePhase_Power"))
+            {
+                return "三相交流电源\n（380V）";
+            }
+            if (id.StartsWith("AC_220V_Power"))
+            {
+                return "单相交流电源\n（220V）";
+            }
+            // 单开双控开关、单控开关
+            if (id.StartsWith("Two_Way_Switch"))
+            {
+                return "单开双控开关";
+            }
+            if (id.StartsWith("Single_Control_Switch"))
+            {
+                return "单控开关";
+            }
+            // 万用表、示波器
+            if (id.StartsWith("Tool_Multimeter"))
+            {
+                return "万用表";
+            }
+            if (id.StartsWith("Tool_Oscilloscope"))
+            {
+                return "示波器";
             }
 
             return definition.displayName;
