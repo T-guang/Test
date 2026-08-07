@@ -26,6 +26,7 @@ MonoBehaviour:
   canParticipateInParameterCalculation: 1
   startsClosed: 0
   togglable: 0
+  allowSameComponentJumper: 1
   controlledByTag: 
   outputTag: 
   sourceVoltage: 0
@@ -122,3 +123,13 @@ MonoBehaviour:
     role: 5
     normalizedPosition: {x: 1, y: 0.22}
     color: {r: 0.95, g: 0.12, b: 0.12, a: 1}
+  - id: 33
+    label: 33
+    role: 4
+    normalizedPosition: {x: 0, y: 0.08}
+    color: {r: 0.08, g: 0.65, b: 0.25, a: 1}
+  - id: 34
+    label: 34
+    role: 5
+    normalizedPosition: {x: 1, y: 0.08}
+    color: {r: 0.08, g: 0.65, b: 0.25, a: 1}

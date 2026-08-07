@@ -42,6 +42,10 @@ MonoBehaviour:
       localPosition: {x: -106.2, y: -65.1}
     - terminalId: 22
       localPosition: {x: 105.6, y: -65.1}
+    - terminalId: 33
+      localPosition: {x: -106.05, y: -106.5}
+    - terminalId: 34
+      localPosition: {x: 105.9, y: -107.1}
     terminalBindingsValidated: 1
     terminalBindingsComplete: 1
   - definitionName: KnifeSwitch_QS
@@ -248,6 +252,10 @@ MonoBehaviour:
       localPosition: {x: -106.2, y: -65.1}
     - terminalId: 22
       localPosition: {x: 105.6, y: -65.1}
+    - terminalId: 33
+      localPosition: {x: -106.05, y: -106.5}
+    - terminalId: 34
+      localPosition: {x: 105.9, y: -107.1}
     terminalBindingsValidated: 1
     terminalBindingsComplete: 1
   - definitionName: Fuse_1P

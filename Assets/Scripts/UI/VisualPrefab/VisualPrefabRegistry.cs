@@ -32,7 +32,9 @@ namespace ElectricalSim.Core
             new VisualPrefabTerminalPosition("13", new UnityEngine.Vector2(-106.2f, 1.2f)),
             new VisualPrefabTerminalPosition("14", new UnityEngine.Vector2(105.6f, 1.2f)),
             new VisualPrefabTerminalPosition("21", new UnityEngine.Vector2(-106.2f, -65.1f)),
-            new VisualPrefabTerminalPosition("22", new UnityEngine.Vector2(105.6f, -65.1f))
+            new VisualPrefabTerminalPosition("22", new UnityEngine.Vector2(105.6f, -65.1f)),
+            new VisualPrefabTerminalPosition("33", new UnityEngine.Vector2(-106.05f, -106.50f)),
+            new VisualPrefabTerminalPosition("34", new UnityEngine.Vector2(105.90f, -107.10f))
         };
 
         // 配置表使用 StringComparer.Ordinal，definitionName 大小写敏感。重复键会在类型初始化时失败而非自动合并；
