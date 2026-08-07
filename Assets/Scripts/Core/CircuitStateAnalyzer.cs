@@ -25,6 +25,7 @@ namespace ElectricalSim.Core
         private readonly Dictionary<string, string> friendlyNamesByInstanceId = new Dictionary<string, string>();
         private readonly HashSet<string> wiredTerminalKeys = new HashSet<string>();
         private readonly Dictionary<string, HashSet<string>> connectionGraph = new Dictionary<string, HashSet<string>>();
+        private readonly Dictionary<string, HashSet<string>> wireConnectionGraph = new Dictionary<string, HashSet<string>>();
         private TerminalUnionFind wireOnlyTopology;
         private TerminalUnionFind staticNcTopology;
         private bool traversalBudgetWarningLogged;
@@ -364,6 +365,7 @@ namespace ElectricalSim.Core
             terminalsByKey.Clear();
             wiredTerminalKeys.Clear();
             connectionGraph.Clear();
+            wireConnectionGraph.Clear();
 
             var result = new CircuitStateResult();
             var unionFind = new TerminalUnionFind();
@@ -643,6 +645,7 @@ namespace ElectricalSim.Core
                 ConnectTerminalKeys(startKey, endKey, unionFind);
                 wireOnlyTopology.Union(startKey, endKey);
                 staticNcTopology.Union(startKey, endKey);
+                AddWireGraphEdge(startKey, endKey);
                 wiredTerminalKeys.Add(startKey);
                 wiredTerminalKeys.Add(endKey);
             }
@@ -664,16 +667,15 @@ namespace ElectricalSim.Core
                 if (component == null || component.Definition == null) continue;
 
                 // 停止按钮 NC 11/12：未按下时闭合
+                // B2.1：去名称化，纯结构判断——PushButton + 有 11/12 + 无 23/24 即为 NC-only 停止按钮
                 if (component.Definition.kind == ComponentKind.PushButton &&
                     !IsLimitSwitchComponent(component) &&
                     !IsCompoundPushButton(component) &&
                     !IsSelfLockingButton(component))
                 {
                     var hasNC = component.GetTerminal("11") != null && component.GetTerminal("12") != null;
-                    var isStopButton = hasNC &&
-                        (component.GetTerminal("23") == null ||
-                         component.GetTerminal("24") == null ||
-                         DefinitionContains(component, "Stop", "停止"));
+                    var hasNO = component.GetTerminal("23") != null && component.GetTerminal("24") != null;
+                    var isStopButton = hasNC && !hasNO;
                     if (isStopButton && !component.IsClosed)
                     {
                         ConnectIfExistsInTopology(component, "11", "12", staticNcTopology);
@@ -716,7 +718,9 @@ namespace ElectricalSim.Core
 
         /// <summary>
         /// 判断是否为瞬时启动按钮（PushButton 有 23/24 NO，排除限位开关和停止按钮）。
-        /// 不依赖 instanceId、中文名称或模板 ID。
+        /// B2.1：去名称化，纯结构判断——PushButton + 有 23/24 + 非限位开关即为启动按钮。
+        /// 纯 NC-only 停止按钮（无 23/24）已通过 terminal 检查自动排除。
+        /// 复合按钮（有 11/12 + 23/24）在点动电路中合法作为启动按钮，不排除。
         /// </summary>
         private static bool IsStartPushButton(CircuitComponent component)
         {
@@ -724,8 +728,6 @@ namespace ElectricalSim.Core
             if (component.Definition.kind != ComponentKind.PushButton) return false;
             if (IsLimitSwitchComponent(component)) return false;
             if (component.GetTerminal("23") == null || component.GetTerminal("24") == null) return false;
-            // 排除停止按钮（有 11/12 且名称含 Stop/停止）
-            if (DefinitionContains(component, "Stop", "停止")) return false;
             return true;
         }
 
@@ -809,10 +811,13 @@ namespace ElectricalSim.Core
         }
 
         /// <summary>
-        /// 结构化识别接触器 NC 互锁触点对。
+        /// 结构化识别接触器 NC 互锁触点对（B2.1 side-aware / candidate-excluded 版本）。
         /// candidate 必须来自 ContactorTerminalSchema.NormallyClosedContactPairs，
-        /// 两端均必须有外部接线，且在 staticNcTopology 中（NC 默认闭合），
-        /// 该 NC 端子能到达另一个不同接触器的 A1/A2 线圈端子。
+        /// 两端均必须有外部接线。
+        /// 使用 candidate-excluded 拓扑（不闭合当前 candidate NC）证明：
+        ///   - 一端到达另一个不同接触器的 A1/A2（控制侧）；
+        ///   - 另一端到达有效控制上游（电源端子、停止按钮上游或启动按钮上游）。
+        /// 保守策略：无法证明完整控制支路 → 不认定为互锁。
         /// </summary>
         private bool TryFindInterlockContactPair(
             CircuitComponent contactor,
@@ -832,48 +837,284 @@ namespace ElectricalSim.Core
                     !IsTerminalExternallyWired(contactor, ncPair.EndTerminalId))
                     continue;
 
-                // 在 staticNcTopology 中，NC 21-22 已被连通（默认未得电时闭合）
-                var ncStartRoot = staticNcTopology.Find(TerminalKey(ncStart));
-                var ncEndRoot = staticNcTopology.Find(TerminalKey(ncEnd));
-                if (ncStartRoot == null || ncEndRoot == null) continue;
+                // 构建 candidate-excluded 拓扑：不闭合当前 candidate NC
+                var excludedTopology = BuildStaticControlTopologyExcluding(
+                    components, contactor, ncPair);
 
-                // 检查是否到达另一个不同接触器的 A1/A2
-                var reachesOtherKm = false;
-                for (var i = 0; i < components.Count; i++)
+                var ncStartRoot = excludedTopology.Find(TerminalKey(ncStart));
+                var ncEndRoot = excludedTopology.Find(TerminalKey(ncEnd));
+                if (ncStartRoot == null || ncEndRoot == null || ncStartRoot == ncEndRoot) continue;
+
+                // 检查是否一端到达另一个不同接触器的 A1/A2，另一端到达有效控制上游
+                var reachesOtherKmOnStart = ReachesOtherContactorCoil(
+                    excludedTopology, ncStartRoot, contactor, components);
+                var reachesOtherKmOnEnd = ReachesOtherContactorCoil(
+                    excludedTopology, ncEndRoot, contactor, components);
+                var reachesUpstreamOnStart = ReachesValidControlUpstream(
+                    excludedTopology, ncStartRoot, components);
+                var reachesUpstreamOnEnd = ReachesValidControlUpstream(
+                    excludedTopology, ncEndRoot, components);
+
+                var isInterlock =
+                    (reachesOtherKmOnStart && reachesUpstreamOnEnd) ||
+                    (reachesOtherKmOnEnd && reachesUpstreamOnStart);
+
+                if (isInterlock)
                 {
-                    var other = components[i];
-                    if (other == contactor || !IsContactorComponent(other)) continue;
+                    matchedPairLabel = ncPair.StartTerminalId + "/" + ncPair.EndTerminalId;
+                    return true;
+                }
+            }
 
-                    var otherA1 = other.GetTerminal("A1");
-                    var otherA2 = other.GetTerminal("A2");
+            return false;
+        }
 
-                    if (otherA1 != null)
+        /// <summary>
+        /// 构建静态控制拓扑，但排除指定接触器的指定 NC pair 内部连接。
+        /// 包含：外部 Wire、停止按钮 NC、复合按钮 NC、热继 NC、其他接触器 NC。
+        /// 不包含：candidate NC pair 的内部连接（使两端保持分离以便 side-aware 判断）。
+        /// </summary>
+        private TerminalUnionFind BuildStaticControlTopologyExcluding(
+            IReadOnlyList<CircuitComponent> components,
+            CircuitComponent excludedContactor,
+            ContactorContactPair excludedPair)
+        {
+            var topology = new TerminalUnionFind();
+
+            // 注册所有端子（复用 staticNcTopology 已注册的 key 集合）
+            // 并添加外部 Wire 连接
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component == null || component.Definition == null) continue;
+
+                var terminals = component.Terminals;
+                if (terminals != null)
+                {
+                    for (var j = 0; j < terminals.Count; j++)
                     {
-                        var otherA1Root = staticNcTopology.Find(TerminalKey(otherA1));
-                        if (otherA1Root != null &&
-                            (otherA1Root == ncStartRoot || otherA1Root == ncEndRoot))
+                        var t = terminals[j];
+                        if (t != null && !string.IsNullOrEmpty(t.TerminalId))
                         {
-                            reachesOtherKm = true;
-                            break;
+                            topology.Add(TerminalKey(t));
                         }
                     }
+                }
+            }
 
-                    if (otherA2 != null)
+            // 添加外部 Wire 连接（与 wireOnlyTopology 相同的外部导线）
+            AddExternalWireUnions(topology);
+
+            // 添加静态 NC 连接（排除 candidate）
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component == null || component.Definition == null) continue;
+
+                // 停止按钮 NC 11/12（去名称化结构判断）
+                if (component.Definition.kind == ComponentKind.PushButton &&
+                    !IsLimitSwitchComponent(component) &&
+                    !IsCompoundPushButton(component) &&
+                    !IsSelfLockingButton(component))
+                {
+                    var hasNC = component.GetTerminal("11") != null && component.GetTerminal("12") != null;
+                    var hasNO = component.GetTerminal("23") != null && component.GetTerminal("24") != null;
+                    if (hasNC && !hasNO && !component.IsClosed)
                     {
-                        var otherA2Root = staticNcTopology.Find(TerminalKey(otherA2));
-                        if (otherA2Root != null &&
-                            (otherA2Root == ncStartRoot || otherA2Root == ncEndRoot))
+                        ConnectIfExistsInTopology(component, "11", "12", topology);
+                    }
+                }
+
+                // 复合按钮 NC 11/12
+                if (IsCompoundPushButton(component) && !component.IsClosed)
+                {
+                    ConnectIfExistsInTopology(component, "11", "12", topology);
+                }
+
+                // 接触器 NC：排除 candidate pair
+                if (IsContactorComponent(component))
+                {
+                    foreach (var pair in ContactorTerminalSchema.NormallyClosedContactPairs)
+                    {
+                        if (component == excludedContactor &&
+                            pair.StartTerminalId == excludedPair.StartTerminalId &&
+                            pair.EndTerminalId == excludedPair.EndTerminalId)
                         {
-                            reachesOtherKm = true;
-                            break;
+                            continue;
+                        }
+                        ConnectIfExistsInTopology(component, pair.StartTerminalId, pair.EndTerminalId, topology);
+                    }
+                }
+
+                // 热继 NC 95/96
+                if (IsThermalRelay(component) && component.IsClosed)
+                {
+                    ConnectIfExistsInTopology(component, "95", "96", topology);
+                }
+            }
+
+            return topology;
+        }
+
+        /// <summary>
+        /// 将外部 Wire 的两端 Union 到指定拓扑（仅从 wireConnectionGraph 重建，不含内部 NC 连接）。
+        /// B2.1：必须使用 wireConnectionGraph 而非 connectionGraph，
+        /// 因为 connectionGraph 包含内部 NC 连接（如接触器 21/22），
+        /// 会导致 candidate-excluded 拓扑失效。
+        /// </summary>
+        private void AddExternalWireUnions(TerminalUnionFind topology)
+        {
+            if (topology == null || wireConnectionGraph == null) return;
+            foreach (var entry in wireConnectionGraph)
+            {
+                var key = entry.Key;
+                var neighbors = entry.Value;
+                if (neighbors == null) continue;
+                foreach (var neighbor in neighbors)
+                {
+                    if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(neighbor))
+                    {
+                        topology.Add(key);
+                        topology.Add(neighbor);
+                        topology.Union(key, neighbor);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 仅记录外部导线连接（不含内部触点连接），用于 candidate-excluded 拓扑重建。
+        /// </summary>
+        private void AddWireGraphEdge(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return;
+            }
+
+            if (!wireConnectionGraph.TryGetValue(a, out var from))
+            {
+                from = new HashSet<string>();
+                wireConnectionGraph.Add(a, from);
+            }
+
+            if (!wireConnectionGraph.TryGetValue(b, out var to))
+            {
+                to = new HashSet<string>();
+                wireConnectionGraph.Add(b, to);
+            }
+
+            from.Add(b);
+            to.Add(a);
+        }
+
+        /// <summary>
+        /// 判断给定 root 是否到达另一个不同接触器的 A1/A2 线圈端子。
+        /// </summary>
+        private static bool ReachesOtherContactorCoil(
+            TerminalUnionFind topology,
+            string root,
+            CircuitComponent excludedContactor,
+            IReadOnlyList<CircuitComponent> components)
+        {
+            if (topology == null || root == null || components == null) return false;
+
+            for (var i = 0; i < components.Count; i++)
+            {
+                var other = components[i];
+                if (other == excludedContactor || !IsContactorComponent(other)) continue;
+
+                var otherA1 = other.GetTerminal("A1");
+                var otherA2 = other.GetTerminal("A2");
+
+                if (otherA1 != null)
+                {
+                    var otherA1Root = topology.Find(TerminalKey(otherA1));
+                    if (otherA1Root != null && otherA1Root == root) return true;
+                }
+
+                if (otherA2 != null)
+                {
+                    var otherA2Root = topology.Find(TerminalKey(otherA2));
+                    if (otherA2Root != null && otherA2Root == root) return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 判断给定 root 是否到达有效控制上游。
+        /// 有效控制上游定义为：电源端子（PowerSource 的 L/L1/L2/L3/N），
+        /// 或停止按钮 11 端子（控制回路上游入口），
+        /// 或启动按钮 23 端子（启动支路上游）。
+        /// 保守策略：灯端子、孤立 Wire 不视为有效控制上游。
+        /// </summary>
+        private static bool ReachesValidControlUpstream(
+            TerminalUnionFind topology,
+            string root,
+            IReadOnlyList<CircuitComponent> components)
+        {
+            if (topology == null || root == null || components == null) return false;
+
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component == null || component.Definition == null) continue;
+
+                // 电源端子视为有效控制上游
+                if (component.Definition.kind == ComponentKind.PowerSource)
+                {
+                    var powerTerminals = new[] { "L", "L1", "L2", "L3", "N", "L2", "N2" };
+                    foreach (var tid in powerTerminals)
+                    {
+                        var t = component.GetTerminal(tid);
+                        if (t == null) continue;
+                        var tRoot = topology.Find(TerminalKey(t));
+                        if (tRoot != null && tRoot == root) return true;
+                    }
+                }
+
+                // 停止按钮 11 端子（控制回路上游入口）视为有效控制上游
+                if (component.Definition.kind == ComponentKind.PushButton &&
+                    !IsLimitSwitchComponent(component) &&
+                    !IsCompoundPushButton(component) &&
+                    !IsSelfLockingButton(component))
+                {
+                    var hasNC = component.GetTerminal("11") != null && component.GetTerminal("12") != null;
+                    var hasNO = component.GetTerminal("23") != null && component.GetTerminal("24") != null;
+                    if (hasNC && !hasNO)
+                    {
+                        var t11 = component.GetTerminal("11");
+                        if (t11 != null)
+                        {
+                            var t11Root = topology.Find(TerminalKey(t11));
+                            if (t11Root != null && t11Root == root) return true;
                         }
                     }
                 }
 
-                if (reachesOtherKm)
+                // 启动按钮 23/24 端子（启动支路上下游）均视为有效控制上游。
+                // 23 是 NO 上游（停止按钮侧），24 是 NO 下游（NC 互锁侧）。
+                // 标准互锁电路中 NC 串联在启动按钮 NO 之后，NC 的一端连接到 24，
+                // 因此 24 也必须被视为有效控制上游。
+                if (component.Definition.kind == ComponentKind.PushButton &&
+                    !IsLimitSwitchComponent(component) &&
+                    component.GetTerminal("23") != null)
                 {
-                    matchedPairLabel = ncPair.StartTerminalId + "/" + ncPair.EndTerminalId;
-                    return true;
+                    var t23 = component.GetTerminal("23");
+                    if (t23 != null)
+                    {
+                        var t23Root = topology.Find(TerminalKey(t23));
+                        if (t23Root != null && t23Root == root) return true;
+                    }
+
+                    var t24 = component.GetTerminal("24");
+                    if (t24 != null)
+                    {
+                        var t24Root = topology.Find(TerminalKey(t24));
+                        if (t24Root != null && t24Root == root) return true;
+                    }
                 }
             }
 
