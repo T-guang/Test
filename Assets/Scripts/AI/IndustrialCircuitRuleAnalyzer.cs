@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ElectricalSim.Core;
@@ -58,12 +58,23 @@ namespace ElectricalSim.AI
             facts.StopButtons = facts.Components.Where(IsStopButton).ToList();
             facts.CompoundButtons = facts.Components.Where(IsCompoundPushButton).ToList();
 
-            facts.HasSelfHold = facts.Contactors.Any(c => HasTerminalWire(facts, c, "13") || HasTerminalWire(facts, c, "14"));
+            // B3: 复用 CircuitStateAnalyzer 的结构事实，不在此层重建第二套端子编号简化识别器。
+            // Analyze 只调用一次，后续 HasSelfHold 和 HasMutualInterlock 均复用该结果。
+            var stateResult = new CircuitStateAnalyzer().Analyze(facts.Components, facts.Wires);
+
+            facts.HasSelfHold = facts.Contactors.Any(c =>
+            {
+                var info = stateResult.FindComponent(c.InstanceId);
+                return info != null && info.HasSelfHoldStructure;
+            });
             facts.HasThermalControlContact = facts.ThermalRelays.Any(r => HasTerminalWire(facts, r, "95") || HasTerminalWire(facts, r, "96"));
             facts.IsForwardReverseControl = HasForwardReverseRoles(facts.Components);
+            // B3: 互锁泛化。严格限定双 KM 场景（Count == 2），此时 HasInterlockStructure
+            // 中的 "other contactor" 只能是对方 KM，可安全复用 B2 结构事实。
+            // 3+ KM 场景因 target identity 不确定而返回 false。
             facts.HasMutualInterlock = facts.IsForwardReverseControl &&
-                facts.Contactors.Count >= 2 &&
-                HasMutualInterlockWiring(facts, facts.Contactors[0], facts.Contactors[1]);
+                facts.Contactors.Count == 2 &&
+                HasMutualInterlockByStructure(stateResult, facts.Contactors[0], facts.Contactors[1]);
             facts.HasButtonInterlock = facts.CompoundButtons.Count >= 2 && HasCompoundButtonInterlockWiring(facts);
             facts.IsIndustrial = facts.PowerSources.Count > 0 || facts.Motors.Count > 0 || facts.Contactors.Count > 0 || facts.ThermalRelays.Count > 0;
             facts.CircuitType = ResolveCircuitType(facts);
@@ -130,7 +141,7 @@ namespace ElectricalSim.AI
             {
                 if (!facts.HasMutualInterlock)
                 {
-                    result.Warnings.Add("正反转控制回路未检测到完整的 21/22 电气互锁。KM1 线圈支路应串入 KM2 的 21/22，KM2 线圈支路应串入 KM1 的 21/22。 ");
+                    result.Warnings.Add("正反转控制回路未检测到完整的电气互锁。两个接触器线圈支路应分别串入对方的辅助常闭触点，防止同时吸合。 ");
                 }
 
                 if (facts.StartButtons.Count(b => b.IsClosed) >= 2)
@@ -155,11 +166,11 @@ namespace ElectricalSim.AI
             if (facts.IsForwardReverseControl && facts.Contactors.Count >= 2)
             {
                 result.TeachingTips.Add("正反转电路应把主回路和控制回路分开理解：主回路决定电机相序，控制回路决定哪个接触器吸合。 ");
-                result.TeachingTips.Add("21/22 是接触器辅助常闭触点，一侧接触器吸合后应切断另一侧线圈回路，防止两个方向同时吸合。 ");
+                result.TeachingTips.Add("接触器辅助常闭触点用于电气互锁，一侧接触器吸合后应切断另一侧线圈回路，防止两个方向同时吸合。 ");
             }
             else if (facts.Contactors.Count == 1 && facts.HasSelfHold)
             {
-                result.TeachingTips.Add("13/14 是接触器辅助常开触点，通常并联启动按钮形成自锁回路。 ");
+                result.TeachingTips.Add("接触器辅助常开触点通常并联启动按钮形成自锁回路。 ");
             }
             else if (facts.Contactors.Count == 1)
             {
@@ -211,6 +222,26 @@ namespace ElectricalSim.AI
             }
 
             return HasNcAuxiliaryInCoilBranch(facts, first, second) && HasNcAuxiliaryInCoilBranch(facts, second, first);
+        }
+
+        /// <summary>
+        /// B3: 基于 CircuitStateAnalyzer 结构事实判断双 KM 互锁。
+        /// 仅在严格双 KM 场景下使用，此时 HasInterlockStructure 的 "other contactor" 唯一确定。
+        /// </summary>
+        private static bool HasMutualInterlockByStructure(
+            CircuitStateResult stateResult,
+            CircuitComponent first,
+            CircuitComponent second)
+        {
+            if (stateResult == null || first == null || second == null)
+            {
+                return false;
+            }
+
+            var firstInfo = stateResult.FindComponent(first.InstanceId);
+            var secondInfo = stateResult.FindComponent(second.InstanceId);
+            return firstInfo != null && firstInfo.HasInterlockStructure &&
+                   secondInfo != null && secondInfo.HasInterlockStructure;
         }
 
         internal static bool HasCompoundButtonInterlockWiring(IndustrialCircuitFacts facts)
