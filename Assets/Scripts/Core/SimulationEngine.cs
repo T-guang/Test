@@ -832,17 +832,33 @@ namespace ElectricalSim.Core
 
             var button11 = button.GetTerminal("11");
             var button12 = button.GetTerminal("12");
-            var contactor13 = contactor.GetTerminal("13");
-            var contactor14 = contactor.GetTerminal("14");
-            if (button11 == null || button12 == null || contactor13 == null || contactor14 == null)
+            if (button11 == null || button12 == null)
             {
                 return false;
             }
 
-            return AreConnected(button11, contactor13) ||
-                AreConnected(button11, contactor14) ||
-                AreConnected(button12, contactor13) ||
-                AreConnected(button12, contactor14);
+            // 泛化：遍历 ContactorTerminalSchema.NormallyOpenContactPairs（13/14、33/34…），
+            // 任意一组 NO 辅助触点与按钮 11/12 相连即判定为点动按钮。
+            // 不再硬编码 13/14，也不假设第一组 NO 与第二组 NO 有固定用途。
+            foreach (var pair in ContactorTerminalSchema.NormallyOpenContactPairs)
+            {
+                var noStart = contactor.GetTerminal(pair.StartTerminalId);
+                var noEnd = contactor.GetTerminal(pair.EndTerminalId);
+                if (noStart == null || noEnd == null)
+                {
+                    continue;
+                }
+
+                if (AreConnected(button11, noStart) ||
+                    AreConnected(button11, noEnd) ||
+                    AreConnected(button12, noStart) ||
+                    AreConnected(button12, noEnd))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
         private bool IsClosedContinuousStartComponent(CircuitComponent component)
         {
@@ -921,17 +937,33 @@ namespace ElectricalSim.Core
         {
             var a1 = contactor.GetTerminal("A1");
             var a2 = contactor.GetTerminal("A2");
-            var nc21 = auxiliaryOwner.GetTerminal("21");
-            var nc22 = auxiliaryOwner.GetTerminal("22");
-            if (a1 == null || a2 == null || nc21 == null || nc22 == null)
+            if (a1 == null || a2 == null || auxiliaryOwner == null)
             {
                 return false;
             }
 
-            return AreConnected(a1, nc21) ||
-                AreConnected(a1, nc22) ||
-                AreConnected(a2, nc21) ||
-                AreConnected(a2, nc22);
+            // 泛化：遍历 ContactorTerminalSchema.NormallyClosedContactPairs（当前 21/22…），
+            // 任意一组 NC 辅助触点与接触器线圈 A1/A2 相连即判定存在 NC 互锁依赖。
+            // 当前 Schema 只有 21/22 一组 NC，因此泛化前后所有现有电路运行结果完全一致。
+            foreach (var pair in ContactorTerminalSchema.NormallyClosedContactPairs)
+            {
+                var ncStart = auxiliaryOwner.GetTerminal(pair.StartTerminalId);
+                var ncEnd = auxiliaryOwner.GetTerminal(pair.EndTerminalId);
+                if (ncStart == null || ncEnd == null)
+                {
+                    continue;
+                }
+
+                if (AreConnected(a1, ncStart) ||
+                    AreConnected(a1, ncEnd) ||
+                    AreConnected(a2, ncStart) ||
+                    AreConnected(a2, ncEnd))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool IsThreePhaseMotorEnergized(CircuitComponent motor)
