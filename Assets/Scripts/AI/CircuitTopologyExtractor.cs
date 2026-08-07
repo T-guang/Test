@@ -17,7 +17,7 @@ namespace ElectricalSim.AI
                     var component = components[i];
                     if (component == null || component.Definition == null) continue;
                     indices[component] = graph.Nodes.Count;
-                    graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = component.Definition.name });
+                    graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = component.Definition.name, Kind = component.Definition.kind });
                 }
             }
 

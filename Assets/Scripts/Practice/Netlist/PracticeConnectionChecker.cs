@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ElectricalSim.AI;
 using ElectricalSim.Core;
 using ElectricalSim.Templates;
 
@@ -209,7 +210,53 @@ namespace ElectricalSim.Practice.Netlist
                 }
             }
 
-            return new StableTerminalMap(componentMap.StandardToStudent, componentMap.StudentToStandard, swappedStandardLampIds);
+            // 接触器常开辅助触点对置换：复用 ContactorNoPairPermutation 的同一套 schema 和排列语义，
+            // 不在 Practice 层散写 13/14/33/34。仅对 ComponentKind.ContactorCoil 的实例尝试 NO pair remap，
+            // 选择使标准侧直接连接匹配数最高的映射；identity 与 swap 同分时保持 identity，避免放宽错误接线。
+            var contactorStudentIds = new HashSet<string>();
+            if (workspace != null)
+            {
+                foreach (var component in workspace.Components)
+                {
+                    if (component != null && component.Definition != null && component.Definition.kind == ComponentKind.ContactorCoil)
+                    {
+                        contactorStudentIds.Add(component.InstanceId);
+                    }
+                }
+            }
+
+            var contactorRemaps = new Dictionary<string, ContactorTerminalRemap>();
+            foreach (var pair in componentMap.StandardToStudent)
+            {
+                var standardId = pair.Key;
+                var studentId = pair.Value;
+                if (!contactorStudentIds.Contains(studentId)) continue;
+
+                var usedTerminals = CollectUsedNoPairTerminals(student, studentId);
+                if (usedTerminals.Count == 0) continue;
+
+                var options = ContactorNoPairPermutation.GenerateSingleComponentNoPairMappings(usedTerminals);
+
+                ContactorTerminalRemap bestRemap = null;
+                var bestScore = int.MinValue;
+                foreach (var option in options)
+                {
+                    var remap = new ContactorTerminalRemap(option);
+                    var score = ScoreContactorOrientation(standard, student, componentMap.StandardToStudent, standardId, remap);
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestRemap = remap;
+                    }
+                }
+
+                if (bestRemap != null && !bestRemap.IsIdentity)
+                {
+                    contactorRemaps[standardId] = bestRemap;
+                }
+            }
+
+            return new StableTerminalMap(componentMap.StandardToStudent, componentMap.StudentToStandard, swappedStandardLampIds, contactorRemaps);
         }
 
         private static bool HasLampWorkingTerminals(PracticeNetlist netlist, string componentId)
@@ -281,24 +328,151 @@ namespace ElectricalSim.Practice.Netlist
             return terminalId;
         }
 
+        // 收集学生在某个接触器实例上实际使用的 NO pair 端子。仅依据 ContactorTerminalSchema.NormallyOpenContactPairs，
+        // 不散写 13/14/33/34，用于向 ContactorNoPairPermutation 请求同一套置换映射。
+        private static HashSet<string> CollectUsedNoPairTerminals(PracticeNetlist student, string studentComponentId)
+        {
+            var terminals = new HashSet<string>();
+            var noPairs = ContactorTerminalSchema.NormallyOpenContactPairs;
+            foreach (var connection in student.DirectConnections)
+            {
+                ComponentMappingSolver.SplitTerminalKey(connection.StartKey, out var startCompId, out var startTermId);
+                ComponentMappingSolver.SplitTerminalKey(connection.EndKey, out var endCompId, out var endTermId);
+
+                if (startCompId == studentComponentId)
+                {
+                    foreach (var pair in noPairs)
+                    {
+                        if (startTermId == pair.StartTerminalId || startTermId == pair.EndTerminalId)
+                            terminals.Add(startTermId);
+                    }
+                }
+
+                if (endCompId == studentComponentId)
+                {
+                    foreach (var pair in noPairs)
+                    {
+                        if (endTermId == pair.StartTerminalId || endTermId == pair.EndTerminalId)
+                            terminals.Add(endTermId);
+                    }
+                }
+            }
+
+            return terminals;
+        }
+
+        // 对单个接触器尝试一种 NO pair remap，计标准侧直接连接在学生侧匹配的数量。得分越高表示该 remap 越接近正确接线。
+        private static int ScoreContactorOrientation(
+            PracticeNetlist standard,
+            PracticeNetlist student,
+            Dictionary<string, string> standardToStudentComponentMap,
+            string standardContactorId,
+            ContactorTerminalRemap remap)
+        {
+            var score = 0;
+            foreach (var connection in standard.DirectConnections)
+            {
+                ComponentMappingSolver.SplitTerminalKey(connection.StartKey, out var startCompId, out _);
+                ComponentMappingSolver.SplitTerminalKey(connection.EndKey, out var endCompId, out _);
+                if (startCompId != standardContactorId && endCompId != standardContactorId) continue;
+
+                if (!TryMapStandardTerminalForContactorScore(connection.StartKey, standardToStudentComponentMap, standardContactorId, remap, out var mappedStart) ||
+                    !TryMapStandardTerminalForContactorScore(connection.EndKey, standardToStudentComponentMap, standardContactorId, remap, out var mappedEnd))
+                    continue;
+
+                if (student.AreConnected(mappedStart, mappedEnd))
+                    score++;
+            }
+
+            return score;
+        }
+
+        private static bool TryMapStandardTerminalForContactorScore(
+            string standardTerminalKey,
+            Dictionary<string, string> standardToStudentComponentMap,
+            string standardContactorId,
+            ContactorTerminalRemap remap,
+            out string studentTerminalKey)
+        {
+            studentTerminalKey = null;
+            ComponentMappingSolver.SplitTerminalKey(standardTerminalKey, out var componentId, out var terminalId);
+            if (string.IsNullOrWhiteSpace(componentId) || !standardToStudentComponentMap.TryGetValue(componentId, out var studentComponentId))
+                return false;
+
+            if (componentId == standardContactorId)
+            {
+                terminalId = remap.MapStandardToStudent(terminalId);
+            }
+
+            studentTerminalKey = PracticeNetlistTerminal.MakeKey(studentComponentId, terminalId);
+            return true;
+        }
+
         /// <summary>
-        /// 保存一次 Check 调用内确定的灯泡端子映射。它不改变组件映射规则，也不把 L/N 合并为同一端子，
-        /// 仅确保缺失、接错和额外节点检查都使用同一个普通灯泡端子方向。
+        /// 单个接触器实例的 NO pair 端子双向映射。forward remap 来自
+        /// <see cref="ContactorNoPairPermutation.GenerateSingleComponentNoPairMappings"/>（student→standard），
+        /// inverse 自动反转为 standard→student。不散写 13/14/33/34。
+        /// </summary>
+        private sealed class ContactorTerminalRemap
+        {
+            private readonly Dictionary<string, string> studentToStandard;
+            private readonly Dictionary<string, string> standardToStudent;
+
+            public ContactorTerminalRemap(Dictionary<string, string> forwardRemap)
+            {
+                studentToStandard = forwardRemap;
+                standardToStudent = new Dictionary<string, string>();
+                foreach (var kvp in forwardRemap)
+                {
+                    standardToStudent[kvp.Value] = kvp.Key;
+                }
+            }
+
+            public string MapStudentToStandard(string studentTerminal)
+            {
+                return studentToStandard.TryGetValue(studentTerminal, out var standardTerminal) ? standardTerminal : studentTerminal;
+            }
+
+            public string MapStandardToStudent(string standardTerminal)
+            {
+                return standardToStudent.TryGetValue(standardTerminal, out var studentTerminal) ? studentTerminal : standardTerminal;
+            }
+
+            public bool IsIdentity
+            {
+                get
+                {
+                    foreach (var kvp in studentToStandard)
+                    {
+                        if (kvp.Key != kvp.Value) return false;
+                    }
+
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 保存一次 Check 调用内确定的灯泡端子映射和接触器 NO pair 端子映射。它不改变组件映射规则，
+        /// 也不把 L/N 或 NO pair 合并为同一端子，仅确保缺失、接错和额外节点检查都使用同一个端子方向。
         /// </summary>
         private sealed class StableTerminalMap
         {
             private readonly Dictionary<string, string> standardToStudent;
             private readonly Dictionary<string, string> studentToStandard;
             private readonly HashSet<string> swappedStandardLampIds;
+            private readonly Dictionary<string, ContactorTerminalRemap> contactorRemaps;
 
             public StableTerminalMap(
                 Dictionary<string, string> standardToStudent,
                 Dictionary<string, string> studentToStandard,
-                HashSet<string> swappedStandardLampIds)
+                HashSet<string> swappedStandardLampIds,
+                Dictionary<string, ContactorTerminalRemap> contactorRemaps)
             {
                 this.standardToStudent = standardToStudent;
                 this.studentToStandard = studentToStandard;
                 this.swappedStandardLampIds = swappedStandardLampIds;
+                this.contactorRemaps = contactorRemaps;
             }
 
             public bool TryMapStandardToStudent(string standardTerminalKey, out string studentTerminalKey)
@@ -308,6 +482,11 @@ namespace ElectricalSim.Practice.Netlist
                 if (string.IsNullOrWhiteSpace(standardComponentId) || !standardToStudent.TryGetValue(standardComponentId, out var studentComponentId))
                 {
                     return false;
+                }
+
+                if (contactorRemaps.TryGetValue(standardComponentId, out var remap))
+                {
+                    terminalId = remap.MapStandardToStudent(terminalId);
                 }
 
                 if (swappedStandardLampIds.Contains(standardComponentId))
@@ -326,6 +505,11 @@ namespace ElectricalSim.Practice.Netlist
                 if (string.IsNullOrWhiteSpace(studentComponentId) || !studentToStandard.TryGetValue(studentComponentId, out var standardComponentId))
                 {
                     return false;
+                }
+
+                if (contactorRemaps.TryGetValue(standardComponentId, out var remap))
+                {
+                    terminalId = remap.MapStudentToStandard(terminalId);
                 }
 
                 if (swappedStandardLampIds.Contains(standardComponentId))

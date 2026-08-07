@@ -56,9 +56,29 @@ namespace ElectricalSim.AI
         }
 
         /// <summary>
+        /// 为单个接触器实例生成所有合法的 NO pair 端子置换映射，供拓扑识别和练习网表比对复用。
+        /// 输入该接触器实际使用的端子集合，返回每种置换下的 原端子id→目标端子id 映射。
+        /// 第一个映射始终是 identity。不散写 13/14/33/34，完全以
+        /// <see cref="ContactorTerminalSchema.NormallyOpenContactPairs"/> 为唯一依据。
+        /// </summary>
+        public static List<Dictionary<string, string>> GenerateSingleComponentNoPairMappings(
+            IReadOnlyCollection<string> usedTerminals)
+        {
+            var terminalSet = usedTerminals as HashSet<string> ?? new HashSet<string>(usedTerminals);
+            var usedPairs = GetUsedNoPairs(terminalSet);
+            if (usedPairs.Count == 0)
+            {
+                return new List<Dictionary<string, string>> { new Dictionary<string, string>() };
+            }
+
+            return GeneratePairOptions(usedPairs);
+        }
+
+        /// <summary>
         /// 识别 graph 中使用了 NO pair 端子的 node，并记录每个 node 实际使用的 NO pair 列表。
-        /// 判断依据完全来自 <see cref="ContactorTerminalSchema.NormallyOpenContactPairs"/>，
-        /// 不散写端子编号。
+        /// 仅处理 <see cref="ComponentKind.ContactorCoil"/> 的 node，非接触器即使使用了 13/14、33/34 端子也不参与置换。
+        /// 判断依据完全来自 <see cref="ContactorTerminalSchema.NormallyOpenContactPairs"/> 和 node.Kind，
+        /// 不散写端子编号，不使用 DefinitionName 字符串启发式。
         /// </summary>
         private static List<ContactorNodeInfo> FindContactorNodesWithNoPairs(CircuitTopologyGraph graph)
         {
@@ -72,6 +92,8 @@ namespace ElectricalSim.AI
             var result = new List<ContactorNodeInfo>();
             foreach (var kvp in nodeTerminals)
             {
+                if (kvp.Key < 0 || kvp.Key >= graph.Nodes.Count) continue;
+                if (graph.Nodes[kvp.Key].Kind != ComponentKind.ContactorCoil) continue;
                 var usedPairs = GetUsedNoPairs(kvp.Value);
                 if (usedPairs.Count > 0)
                 {
@@ -246,7 +268,7 @@ namespace ElectricalSim.AI
             var result = new CircuitTopologyGraph();
             foreach (var node in graph.Nodes)
             {
-                result.Nodes.Add(new ComponentTopologyNode { DefinitionName = node.DefinitionName });
+                result.Nodes.Add(new ComponentTopologyNode { DefinitionName = node.DefinitionName, Kind = node.Kind });
             }
 
             foreach (var edge in graph.Edges)

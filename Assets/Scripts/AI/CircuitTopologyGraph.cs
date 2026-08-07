@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ElectricalSim.Core;
 
 namespace ElectricalSim.AI
 {
@@ -44,6 +45,7 @@ namespace ElectricalSim.AI
     public sealed class ComponentTopologyNode
     {
         public string DefinitionName;
+        public ComponentKind Kind;
     }
 
     public sealed class TerminalTopologyEdge

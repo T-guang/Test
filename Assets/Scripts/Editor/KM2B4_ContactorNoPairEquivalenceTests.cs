@@ -102,7 +102,7 @@ namespace ElectricalSim.Editor
             var template = BuildSingleKmGraph("13", "14", "33", "34");
             // self-hold 和 linkage 都挂到 NO1(13/14)，NO2(33/34) 不用
             var candidate = new CircuitTopologyGraph();
-            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });
+            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });
             candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef });
             candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = LoadDef });
             candidate.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = "13", NodeB = 1, TerminalB = "23" });
@@ -157,8 +157,8 @@ namespace ElectricalSim.Editor
             const string scenario = "T09-CrossKmReject";
             // Template: KM1 用 NO1(13/14)→Start, NO2(33/34)→Load; KM2 用 NO1(13/14)→Start
             var template = new CircuitTopologyGraph();
-            template.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });     // 0: KM1
-            template.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });     // 1: KM2
+            template.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });     // 0: KM1
+            template.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });     // 1: KM2
             template.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef });  // 2: Start
             template.Nodes.Add(new ComponentTopologyNode { DefinitionName = LoadDef });   // 3: Load
             template.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = "13", NodeB = 2, TerminalB = "23" });
@@ -173,8 +173,8 @@ namespace ElectricalSim.Editor
             // KM2 signature: 33:1,34:1 (2 terminals) vs template KM2: 13:1,14:1 (2 terminals) → 不匹配
             // per-component permutation 无法跨 KM 修复
             var candidate = new CircuitTopologyGraph();
-            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });     // 0: KM1
-            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });     // 1: KM2
+            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });     // 0: KM1
+            candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });     // 1: KM2
             candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef });  // 2: Start
             candidate.Nodes.Add(new ComponentTopologyNode { DefinitionName = LoadDef });   // 3: Load
             candidate.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = "33", NodeB = 2, TerminalB = "23" });
@@ -229,7 +229,7 @@ namespace ElectricalSim.Editor
             string loadTerm1, string loadTerm2)
         {
             var graph = new CircuitTopologyGraph();
-            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });    // 0: KM
+            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });    // 0: KM
             graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef }); // 1: Start
             graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = LoadDef });  // 2: Load
             graph.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = startTerm1, NodeB = 1, TerminalB = "23" });
@@ -243,7 +243,7 @@ namespace ElectricalSim.Editor
         private static CircuitTopologyGraph BuildSingleNoGraph(string term1, string term2)
         {
             var graph = new CircuitTopologyGraph();
-            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });    // 0: KM
+            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });    // 0: KM
             graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef }); // 1: Start
             graph.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = term1, NodeB = 1, TerminalB = "23" });
             graph.Edges.Add(new TerminalTopologyEdge { NodeA = 0, TerminalA = term2, NodeB = 1, TerminalB = "24" });
@@ -258,8 +258,8 @@ namespace ElectricalSim.Editor
             string km2Load1, string km2Load2)
         {
             var graph = new CircuitTopologyGraph();
-            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });    // 0: KM1
-            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef });    // 1: KM2
+            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });    // 0: KM1
+            graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = KmDef, Kind = ComponentKind.ContactorCoil });    // 1: KM2
             graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = StartDef }); // 2: Start
             graph.Nodes.Add(new ComponentTopologyNode { DefinitionName = LoadDef });  // 3: Load
             // KM1
