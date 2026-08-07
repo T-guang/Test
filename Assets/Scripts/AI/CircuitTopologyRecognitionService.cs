@@ -64,39 +64,76 @@ namespace ElectricalSim.AI
 
             if (matches.Count == 0)
             {
-                // 直接 Wire 可能只是同一电气节点的另一棵生成树；复用练习网表检查器，不复制映射和并查集逻辑。
-                var equivalentMatches = new List<CircuitTemplateCatalogItemDto>();
+                // B4: 先尝试 per-component NO pair 置换等价（拓扑级，比电气节点级更精确）。
+                // 仅允许同一 Contactor 内部完整 NO pair 互换，不跨元件、不半 pair。
+                var noPairMatches = new List<CircuitTemplateCatalogItemDto>();
                 foreach (var item in standardTemplates)
                 {
                     if (!CircuitTemplateLoader.TryLoad(item.resourcePath, out var template, out _)) continue;
                     var templateGraph = CircuitTopologyExtractor.FromTemplate(template);
                     if (!CircuitTopologyMatcher.PassesPrefilter(graph, templateGraph)) continue;
                     result.EquivalentCheckCount++;
-                    var equivalent = PracticeConnectionChecker.Check(workspace, template);
-                    if (equivalent.Passed) equivalentMatches.Add(item);
+                    if (ContactorNoPairPermutation.IsNoPairEquivalentMatch(graph, templateGraph, out var noPairSteps))
+                    {
+                        result.BacktrackSteps += noPairSteps;
+                        noPairMatches.Add(item);
+                    }
                 }
 
-                result.EquivalentCandidateCount = equivalentMatches.Count;
-                if (equivalentMatches.Count == 1)
+                if (noPairMatches.Count == 1)
                 {
-                    var match = equivalentMatches[0];
+                    var match = noPairMatches[0];
                     result.Status = CircuitRecognitionStatus.EquivalentMatch;
                     result.MatchedTemplateId = match.templateId;
                     result.MatchedTemplateName = match.templateName;
                     result.Source = TemplateEditSession.HasSystemTemplateLoaded && TemplateEditSession.CurrentTemplateId == match.templateId
                         ? CircuitRecognitionSource.LoadedTemplate : CircuitRecognitionSource.TopologyMatch;
-                    result.Reason = "当前元件及电气节点连接与标准模板等价。";
+                    result.Reason = "接触器常开辅助触点对置换后与标准模板拓扑一致。";
+                    result.EquivalentCandidateCount = 1;
                 }
-                else if (equivalentMatches.Count > 1)
+                else if (noPairMatches.Count > 1)
                 {
                     result.Status = CircuitRecognitionStatus.Ambiguous;
-                    foreach (var match in equivalentMatches) result.CandidateTemplateIds.Add(match.templateId);
-                    result.Reason = "多个标准模板具有等价的元件及电气节点连接。";
+                    foreach (var match in noPairMatches) result.CandidateTemplateIds.Add(match.templateId);
+                    result.Reason = "多个标准模板在 NO pair 置换后具有相同拓扑。";
+                    result.EquivalentCandidateCount = noPairMatches.Count;
                 }
                 else
                 {
-                    result.Reason = TemplateEditSession.HasSystemTemplateLoaded
-                        ? "当前拓扑已偏离原始系统模板。" : "未匹配到标准模板。";
+                    // 直接 Wire 可能只是同一电气节点的另一棵生成树；复用练习网表检查器，不复制映射和并查集逻辑。
+                    var equivalentMatches = new List<CircuitTemplateCatalogItemDto>();
+                    foreach (var item in standardTemplates)
+                    {
+                        if (!CircuitTemplateLoader.TryLoad(item.resourcePath, out var template, out _)) continue;
+                        var templateGraph = CircuitTopologyExtractor.FromTemplate(template);
+                        if (!CircuitTopologyMatcher.PassesPrefilter(graph, templateGraph)) continue;
+                        result.EquivalentCheckCount++;
+                        var equivalent = PracticeConnectionChecker.Check(workspace, template);
+                        if (equivalent.Passed) equivalentMatches.Add(item);
+                    }
+
+                    result.EquivalentCandidateCount = equivalentMatches.Count;
+                    if (equivalentMatches.Count == 1)
+                    {
+                        var match = equivalentMatches[0];
+                        result.Status = CircuitRecognitionStatus.EquivalentMatch;
+                        result.MatchedTemplateId = match.templateId;
+                        result.MatchedTemplateName = match.templateName;
+                        result.Source = TemplateEditSession.HasSystemTemplateLoaded && TemplateEditSession.CurrentTemplateId == match.templateId
+                            ? CircuitRecognitionSource.LoadedTemplate : CircuitRecognitionSource.TopologyMatch;
+                        result.Reason = "当前元件及电气节点连接与标准模板等价。";
+                    }
+                    else if (equivalentMatches.Count > 1)
+                    {
+                        result.Status = CircuitRecognitionStatus.Ambiguous;
+                        foreach (var match in equivalentMatches) result.CandidateTemplateIds.Add(match.templateId);
+                        result.Reason = "多个标准模板具有等价的元件及电气节点连接。";
+                    }
+                    else
+                    {
+                        result.Reason = TemplateEditSession.HasSystemTemplateLoaded
+                            ? "当前拓扑已偏离原始系统模板。" : "未匹配到标准模板。";
+                    }
                 }
             }
 
