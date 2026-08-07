@@ -33,6 +33,10 @@ namespace ElectricalSim.Core
         public const string AuxNC21 = "21";
         public const string AuxNC22 = "22";
 
+        // KM 第二组常开辅助触点（KM-1 引入），与 13/14 语义一致：线圈得电时闭合。
+        public const string AuxNO33 = "33";
+        public const string AuxNO34 = "34";
+
         public const string ThermalNC95 = "95";
         public const string ThermalNC96 = "96";
         public const string ThermalNO97 = "97";

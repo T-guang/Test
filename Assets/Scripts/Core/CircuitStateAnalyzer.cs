@@ -781,13 +781,9 @@ namespace ElectricalSim.Core
                 var isEnergized = contactorCoilStates != null &&
                     contactorCoilStates.TryGetValue(SafeInstanceId(component), out var state) &&
                     state;
-                if (isEnergized)
+                foreach (var pair in ContactorTerminalSchema.EnumerateClosedPairs(isEnergized))
                 {
-                    ConnectIfExists(component, "13", "14", unionFind);
-                }
-                else
-                {
-                    ConnectIfExists(component, "21", "22", unionFind);
+                    ConnectIfExists(component, pair.StartTerminalId, pair.EndTerminalId, unionFind);
                 }
             }
         }

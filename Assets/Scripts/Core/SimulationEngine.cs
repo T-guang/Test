@@ -1472,16 +1472,9 @@ namespace ElectricalSim.Core
                     ConnectPairs(terms, true);
                     break;
                 case ComponentKind.ContactorCoil:
-                    if (closedContactors.Contains(component))
+                    foreach (var pair in ContactorTerminalSchema.EnumerateClosedPairs(closedContactors.Contains(component)))
                     {
-                        ConnectById(component, "L1", "T1");
-                        ConnectById(component, "L2", "T2");
-                        ConnectById(component, "L3", "T3");
-                        ConnectById(component, "13", "14");
-                    }
-                    else
-                    {
-                        ConnectById(component, "21", "22");
+                        ConnectById(component, pair.StartTerminalId, pair.EndTerminalId);
                     }
                     break;
                 case ComponentKind.Switch:
