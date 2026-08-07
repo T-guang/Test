@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ElectricalSim.Core
@@ -40,24 +40,19 @@ namespace ElectricalSim.Core
                 return false;
             }
 
+            // 不同元件接线保持原逻辑：直接允许。
+            // duplicate wire、画布锁定等由 CreateWire 和上层 CircuitComponent/WorkspaceController 负责。
             if (start.Owner != end.Owner)
             {
                 return true;
             }
 
+            // 同一元件：委托集中策略 SameComponentWirePolicy，不再使用本地星三角白名单或字符串特判。
             var component = start.Owner;
-            if (component == null ||
-                component.Definition == null ||
-                !component.Definition.allowSameComponentJumper ||
-                component.Definition.name.IndexOf("Motor_StarDelta", System.StringComparison.OrdinalIgnoreCase) < 0)
+            var definition = component != null ? component.Definition : null;
+            if (!SameComponentWirePolicy.CanConnect(definition, start.TerminalId, end.TerminalId, out var policyReason))
             {
-                rejectionReason = "当前元件不允许同一器件内部端子跳线。";
-                return false;
-            }
-
-            if (!IsStarDeltaJumperTerminal(start.TerminalId) || !IsStarDeltaJumperTerminal(end.TerminalId))
-            {
-                rejectionReason = "星三角电机只允许 U1/V1/W1/U2/V2/W2 参与跳线，PE 不参与。";
+                rejectionReason = policyReason;
                 return false;
             }
 
@@ -91,16 +86,6 @@ namespace ElectricalSim.Core
             wires.Add(wire);
             ReflowOffsets();
             return wire;
-        }
-
-        private static bool IsStarDeltaJumperTerminal(string terminalId)
-        {
-            return terminalId == "U1" ||
-                terminalId == "V1" ||
-                terminalId == "W1" ||
-                terminalId == "U2" ||
-                terminalId == "V2" ||
-                terminalId == "W2";
         }
 
         public void DeleteWire(WireView wire)

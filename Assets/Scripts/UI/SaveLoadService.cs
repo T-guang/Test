@@ -211,7 +211,7 @@ namespace ElectricalSim.UI
             }
 
             // F1-A：导线前置校验。在清空画布前完成所有 DTO 级判断，避免无效 JSON 覆盖学习者当前电路。
-            // 规则与 WireManager.CanCreateWire 保持一致：同端子拒绝、同元件跳线仅允许 Motor_StarDelta 的 U1/V1/W1/U2/V2/W2、PE 不放开。
+            // 规则与 WireManager.CanCreateWire 保持一致：同端子拒绝、同元件跳线由集中策略 SameComponentWirePolicy 判定。
             // 不复制更宽松的接线规则，也不修改 WireManager。
             var wireEndpointPairs = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in drawing.wires)
@@ -256,22 +256,13 @@ namespace ElectricalSim.UI
                     return false;
                 }
 
-                // F1-A：同一元件内部跳线遵守 WireManager 既有规则。
-                // 仅 Motor_StarDelta 且 allowSameComponentJumper=true 时允许 U1/V1/W1/U2/V2/W2 之间跳线；PE 不放开。
+                // F1-A：同一元件内部跳线委托集中策略 SameComponentWirePolicy，不再使用本地星三角白名单或字符串特判。
+                // 预检失败发生在 StopSimulation/ClearDrawing 之前，失败时旧画布、旧 Wire、旧运行态、锁定状态和模板身份保持。
                 if (item.startComponentId == item.endComponentId)
                 {
-                    if (startDef == null ||
-                        !startDef.allowSameComponentJumper ||
-                        startDef.name.IndexOf("Motor_StarDelta", StringComparison.OrdinalIgnoreCase) < 0)
+                    if (!SameComponentWirePolicy.CanConnect(startDef, item.startTerminalId, item.endTerminalId, out var policyReason))
                     {
-                        error = $"导入失败：元件 '{item.startComponentId}' 不允许同一器件内部端子跳线。";
-                        workspace.SetStatus(error);
-                        return false;
-                    }
-
-                    if (!IsStarDeltaJumperTerminal(item.startTerminalId) || !IsStarDeltaJumperTerminal(item.endTerminalId))
-                    {
-                        error = $"导入失败：星三角电机只允许 U1/V1/W1/U2/V2/W2 参与跳线，PE 不参与。";
+                        error = $"导入失败：{policyReason}";
                         workspace.SetStatus(error);
                         return false;
                     }
@@ -330,18 +321,6 @@ namespace ElectricalSim.UI
                 workspace.SetStatus(error);
                 return false;
             }
-        }
-
-        // F1-A：与 WireManager.IsStarDeltaJumperTerminal 保持一致的 DTO 级判断，
-        // 仅用于导入前置校验，不修改 WireManager 也不扩大跳线白名单。
-        private static bool IsStarDeltaJumperTerminal(string terminalId)
-        {
-            return terminalId == "U1" ||
-                terminalId == "V1" ||
-                terminalId == "W1" ||
-                terminalId == "U2" ||
-                terminalId == "V2" ||
-                terminalId == "W2";
         }
 
         // F1-A：构建无向端点对的规范化键，使 (A→B) 与 (B→A) 视为同一对。
