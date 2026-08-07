@@ -25,6 +25,8 @@ namespace ElectricalSim.Core
         private readonly Dictionary<string, string> friendlyNamesByInstanceId = new Dictionary<string, string>();
         private readonly HashSet<string> wiredTerminalKeys = new HashSet<string>();
         private readonly Dictionary<string, HashSet<string>> connectionGraph = new Dictionary<string, HashSet<string>>();
+        private TerminalUnionFind wireOnlyTopology;
+        private TerminalUnionFind staticNcTopology;
         private bool traversalBudgetWarningLogged;
 
         public CircuitStateResult Analyze(
@@ -365,8 +367,11 @@ namespace ElectricalSim.Core
 
             var result = new CircuitStateResult();
             var unionFind = new TerminalUnionFind();
+            wireOnlyTopology = new TerminalUnionFind();
+            staticNcTopology = new TerminalUnionFind();
             RegisterTerminals(components, unionFind, result);
             AddWireConnections(wires, unionFind, result);
+            BuildStaticNcTopology(components);
             AddInternalConnections(components, unionFind);
             AddTimerRelayDelayedContacts(components, unionFind, timerRelayCoilStates);
             AddDynamicContactorAuxiliaryContacts(components, unionFind, contactorCoilStates);
@@ -601,6 +606,8 @@ namespace ElectricalSim.Core
 
                     terminalsByKey.Add(key, terminal);
                     unionFind.Add(key);
+                    wireOnlyTopology.Add(key);
+                    staticNcTopology.Add(key);
                 }
             }
         }
@@ -634,9 +641,243 @@ namespace ElectricalSim.Core
                 }
 
                 ConnectTerminalKeys(startKey, endKey, unionFind);
+                wireOnlyTopology.Union(startKey, endKey);
+                staticNcTopology.Union(startKey, endKey);
                 wiredTerminalKeys.Add(startKey);
                 wiredTerminalKeys.Add(endKey);
             }
+        }
+
+        /// <summary>
+        /// 构建"外部导线 + 静态常闭控制路径"拓扑（staticNcTopology）。
+        /// 仅包含外部 Wire 连通 + 默认闭合的 NC 控制触点（停止按钮 11/12、接触器 NC 21/22、热继电器 95/96）。
+        /// 不包含任何 NO 触点，也不包含候选 NO 自身的动态闭合。
+        /// 用于判断"启动按钮下游属于哪个 KM 线圈控制路径"。
+        /// </summary>
+        private void BuildStaticNcTopology(IReadOnlyList<CircuitComponent> components)
+        {
+            if (components == null) return;
+
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component == null || component.Definition == null) continue;
+
+                // 停止按钮 NC 11/12：未按下时闭合
+                if (component.Definition.kind == ComponentKind.PushButton &&
+                    !IsLimitSwitchComponent(component) &&
+                    !IsCompoundPushButton(component) &&
+                    !IsSelfLockingButton(component))
+                {
+                    var hasNC = component.GetTerminal("11") != null && component.GetTerminal("12") != null;
+                    var isStopButton = hasNC &&
+                        (component.GetTerminal("23") == null ||
+                         component.GetTerminal("24") == null ||
+                         DefinitionContains(component, "Stop", "停止"));
+                    if (isStopButton && !component.IsClosed)
+                    {
+                        ConnectIfExistsInTopology(component, "11", "12", staticNcTopology);
+                    }
+                }
+
+                // 复合按钮 NC 11/12：未按下时闭合
+                if (IsCompoundPushButton(component) && !component.IsClosed)
+                {
+                    ConnectIfExistsInTopology(component, "11", "12", staticNcTopology);
+                }
+
+                // 接触器 NC 21/22：默认未得电时闭合
+                if (IsContactorComponent(component))
+                {
+                    foreach (var pair in ContactorTerminalSchema.NormallyClosedContactPairs)
+                    {
+                        ConnectIfExistsInTopology(component, pair.StartTerminalId, pair.EndTerminalId, staticNcTopology);
+                    }
+                }
+
+                // 热继电器 NC 95/96：未跳闸时闭合
+                if (IsThermalRelay(component) && component.IsClosed)
+                {
+                    ConnectIfExistsInTopology(component, "95", "96", staticNcTopology);
+                }
+            }
+        }
+
+        private void ConnectIfExistsInTopology(
+            CircuitComponent component, string firstTerminalId, string secondTerminalId,
+            TerminalUnionFind topology)
+        {
+            if (component == null) return;
+            var first = component.GetTerminal(firstTerminalId);
+            var second = component.GetTerminal(secondTerminalId);
+            if (first == null || second == null) return;
+            topology.Union(TerminalKey(first), TerminalKey(second));
+        }
+
+        /// <summary>
+        /// 判断是否为瞬时启动按钮（PushButton 有 23/24 NO，排除限位开关和停止按钮）。
+        /// 不依赖 instanceId、中文名称或模板 ID。
+        /// </summary>
+        private static bool IsStartPushButton(CircuitComponent component)
+        {
+            if (component == null || component.Definition == null) return false;
+            if (component.Definition.kind != ComponentKind.PushButton) return false;
+            if (IsLimitSwitchComponent(component)) return false;
+            if (component.GetTerminal("23") == null || component.GetTerminal("24") == null) return false;
+            // 排除停止按钮（有 11/12 且名称含 Stop/停止）
+            if (DefinitionContains(component, "Stop", "停止")) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// 结构化识别接触器自锁触点对。
+        /// candidate 必须来自 ContactorTerminalSchema.NormallyOpenContactPairs，
+        /// 两端均必须有外部接线，且与某个启动按钮的 23/24 NO 在 wire-only topology 中形成并联，
+        /// 同时该并联节点通过 staticNcTopology 能到达该接触器自身的 A1/A2 线圈端子。
+        /// </summary>
+        private bool TryFindSelfHoldContactPair(
+            CircuitComponent contactor,
+            IReadOnlyList<CircuitComponent> components,
+            out string matchedPairLabel)
+        {
+            matchedPairLabel = null;
+            if (contactor == null || components == null) return false;
+
+            var a1 = contactor.GetTerminal("A1");
+            var a2 = contactor.GetTerminal("A2");
+            var a1Key = a1 != null ? TerminalKey(a1) : null;
+            var a2Key = a2 != null ? TerminalKey(a2) : null;
+            var a1Root = a1Key != null ? staticNcTopology.Find(a1Key) : null;
+            var a2Root = a2Key != null ? staticNcTopology.Find(a2Key) : null;
+
+            // 遍历启动按钮
+            for (var bi = 0; bi < components.Count; bi++)
+            {
+                var button = components[bi];
+                if (!IsStartPushButton(button)) continue;
+
+                var btn23 = button.GetTerminal("23");
+                var btn24 = button.GetTerminal("24");
+                if (btn23 == null || btn24 == null) continue;
+
+                var btn23Root = wireOnlyTopology.Find(TerminalKey(btn23));
+                var btn24Root = wireOnlyTopology.Find(TerminalKey(btn24));
+                if (btn23Root == null || btn24Root == null) continue;
+
+                // 检查该启动按钮是否控制当前 contactor 的线圈
+                // 在 staticNcTopology 中，按钮 23/24 的节点应能到达 A1 或 A2
+                var btn23ControlsThisCoil =
+                    (a1Root != null && staticNcTopology.Find(TerminalKey(btn23)) == a1Root) ||
+                    (a2Root != null && staticNcTopology.Find(TerminalKey(btn23)) == a2Root);
+                var btn24ControlsThisCoil =
+                    (a1Root != null && staticNcTopology.Find(TerminalKey(btn24)) == a1Root) ||
+                    (a2Root != null && staticNcTopology.Find(TerminalKey(btn24)) == a2Root);
+
+                if (!btn23ControlsThisCoil && !btn24ControlsThisCoil) continue;
+
+                // 遍历 NO candidate pairs
+                foreach (var noPair in ContactorTerminalSchema.NormallyOpenContactPairs)
+                {
+                    var noStart = contactor.GetTerminal(noPair.StartTerminalId);
+                    var noEnd = contactor.GetTerminal(noPair.EndTerminalId);
+                    if (noStart == null || noEnd == null) continue;
+
+                    if (!IsTerminalExternallyWired(contactor, noPair.StartTerminalId) ||
+                        !IsTerminalExternallyWired(contactor, noPair.EndTerminalId))
+                        continue;
+
+                    var noStartRoot = wireOnlyTopology.Find(TerminalKey(noStart));
+                    var noEndRoot = wireOnlyTopology.Find(TerminalKey(noEnd));
+                    if (noStartRoot == null || noEndRoot == null) continue;
+
+                    // 并联判断：noStart ↔ btn23 AND noEnd ↔ btn24
+                    // 或：noStart ↔ btn24 AND noEnd ↔ btn23
+                    var isParallel =
+                        (noStartRoot == btn23Root && noEndRoot == btn24Root) ||
+                        (noStartRoot == btn24Root && noEndRoot == btn23Root);
+
+                    if (!isParallel) continue;
+
+                    // 确认并联节点通过 staticNcTopology 到达自身线圈
+                    // （按钮已确认控制此线圈，且 NO 与按钮并联，故 NO 节点也能到达线圈）
+                    matchedPairLabel = noPair.StartTerminalId + "/" + noPair.EndTerminalId;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 结构化识别接触器 NC 互锁触点对。
+        /// candidate 必须来自 ContactorTerminalSchema.NormallyClosedContactPairs，
+        /// 两端均必须有外部接线，且在 staticNcTopology 中（NC 默认闭合），
+        /// 该 NC 端子能到达另一个不同接触器的 A1/A2 线圈端子。
+        /// </summary>
+        private bool TryFindInterlockContactPair(
+            CircuitComponent contactor,
+            IReadOnlyList<CircuitComponent> components,
+            out string matchedPairLabel)
+        {
+            matchedPairLabel = null;
+            if (contactor == null || components == null) return false;
+
+            foreach (var ncPair in ContactorTerminalSchema.NormallyClosedContactPairs)
+            {
+                var ncStart = contactor.GetTerminal(ncPair.StartTerminalId);
+                var ncEnd = contactor.GetTerminal(ncPair.EndTerminalId);
+                if (ncStart == null || ncEnd == null) continue;
+
+                if (!IsTerminalExternallyWired(contactor, ncPair.StartTerminalId) ||
+                    !IsTerminalExternallyWired(contactor, ncPair.EndTerminalId))
+                    continue;
+
+                // 在 staticNcTopology 中，NC 21-22 已被连通（默认未得电时闭合）
+                var ncStartRoot = staticNcTopology.Find(TerminalKey(ncStart));
+                var ncEndRoot = staticNcTopology.Find(TerminalKey(ncEnd));
+                if (ncStartRoot == null || ncEndRoot == null) continue;
+
+                // 检查是否到达另一个不同接触器的 A1/A2
+                var reachesOtherKm = false;
+                for (var i = 0; i < components.Count; i++)
+                {
+                    var other = components[i];
+                    if (other == contactor || !IsContactorComponent(other)) continue;
+
+                    var otherA1 = other.GetTerminal("A1");
+                    var otherA2 = other.GetTerminal("A2");
+
+                    if (otherA1 != null)
+                    {
+                        var otherA1Root = staticNcTopology.Find(TerminalKey(otherA1));
+                        if (otherA1Root != null &&
+                            (otherA1Root == ncStartRoot || otherA1Root == ncEndRoot))
+                        {
+                            reachesOtherKm = true;
+                            break;
+                        }
+                    }
+
+                    if (otherA2 != null)
+                    {
+                        var otherA2Root = staticNcTopology.Find(TerminalKey(otherA2));
+                        if (otherA2Root != null &&
+                            (otherA2Root == ncStartRoot || otherA2Root == ncEndRoot))
+                        {
+                            reachesOtherKm = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (reachesOtherKm)
+                {
+                    matchedPairLabel = ncPair.StartTerminalId + "/" + ncPair.EndTerminalId;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void AddInternalConnections(
@@ -920,10 +1161,13 @@ namespace ElectricalSim.Core
                     continue;
                 }
 
-                info.HasSelfHoldStructure = IsTerminalExternallyWired(component, "13") &&
-                    IsTerminalExternallyWired(component, "14");
-                info.HasInterlockStructure = IsTerminalExternallyWired(component, "21") &&
-                    IsTerminalExternallyWired(component, "22");
+                TryFindSelfHoldContactPair(component, components, out var selfHoldPair);
+                info.HasSelfHoldStructure = selfHoldPair != null;
+                info.SelfHoldContactPair = selfHoldPair;
+
+                TryFindInterlockContactPair(component, components, out var interlockPair);
+                info.HasInterlockStructure = interlockPair != null;
+                info.InterlockContactPair = interlockPair;
 
                 var isEnergized = contactorCoilStates != null &&
                     contactorCoilStates.TryGetValue(info.InstanceId, out var state) &&
@@ -946,11 +1190,12 @@ namespace ElectricalSim.Core
                     isEnergized,
                     isInterlockConflict,
                     energizedContactorCount);
+                var interlockLabel = interlockPair ?? "常闭辅助触点";
                 info.InterlockStatus = !info.HasInterlockStructure
-                    ? "未检测到 21/22 互锁结构"
+                    ? "未检测到常闭辅助触点互锁结构"
                     : isEnergized
-                        ? "线圈得电，21/22 常闭辅助触点按断开处理"
-                        : "线圈未得电，21/22 常闭辅助触点按闭合处理";
+                        ? "线圈得电，" + interlockLabel + " 常闭辅助触点按断开处理"
+                        : "线圈未得电，" + interlockLabel + " 常闭辅助触点按闭合处理";
 
                 if (conflictContactorIds == null || !conflictContactorIds.Contains(info.InstanceId))
                 {
@@ -973,34 +1218,38 @@ namespace ElectricalSim.Core
             bool isInterlockConflict,
             int energizedContactorCount)
         {
+            var pairLabel = string.IsNullOrEmpty(info.SelfHoldContactPair)
+                ? "常开辅助触点"
+                : info.SelfHoldContactPair;
+
             if (!info.HasSelfHoldStructure)
             {
-                return "未检测到 13/14 自锁结构";
+                return "未检测到常开辅助触点自锁结构";
             }
 
             if (isInterlockConflict || info.IsCompoundButtonInterlockConflict)
             {
-                return "方向同时动作触发按钮联锁或互锁冲突；13/14 未作为正常闭合状态处理，不处于自锁保持状态";
+                return "方向同时动作触发按钮联锁或互锁冲突；" + pairLabel + " 未作为正常闭合状态处理，不处于自锁保持状态";
             }
 
             if (info.IsSelfHoldCutByStopOrControlOpen)
             {
-                return "检测到 13/14 自锁结构，但停止按钮已断开，控制电源与自锁保持路径当前被切断";
+                return "检测到 " + pairLabel + " 自锁结构，但停止按钮已断开，控制电源与自锁保持路径当前被切断";
             }
 
             if (isEnergized)
             {
-                return "13/14 已按线圈得电状态闭合，具备自锁保持条件";
+                return pairLabel + " 已按线圈得电状态闭合，具备自锁保持条件";
             }
 
             if (info.IsInactiveDirectionInForwardReversePair)
             {
                 return energizedContactorCount > 0
-                    ? "当前方向未启动或被另一方向互锁切断；线圈未得电，13/14 未闭合，不处于自锁保持状态"
-                    : "当前方向未启动或控制路径未闭合；线圈未得电，13/14 未闭合，不处于自锁保持状态";
+                    ? "当前方向未启动或被另一方向互锁切断；线圈未得电，" + pairLabel + " 未闭合，不处于自锁保持状态"
+                    : "当前方向未启动或控制路径未闭合；线圈未得电，" + pairLabel + " 未闭合，不处于自锁保持状态";
             }
 
-            return "检测到接触器 13/14 自锁结构。当前检查面板为静态拓扑分析，不读取画布 RUN 历史；若该接触器此前已经吸合，则可能通过自锁支路保持运行。请以冷启动状态或重置运行状态后再判断是否会自行启动";
+            return "检测到接触器 " + pairLabel + " 自锁结构。当前检查面板为静态拓扑分析，不读取画布 RUN 历史；若该接触器此前已经吸合，则可能通过自锁支路保持运行。请以冷启动状态或重置运行状态后再判断是否会自行启动";
         }
 
         private static int CountContactors(IReadOnlyList<CircuitComponent> components)
@@ -3232,7 +3481,7 @@ namespace ElectricalSim.Core
 
                 if (component.HasSelfHoldHistoryAmbiguity)
                 {
-                    builder.AppendLine("   - 静态分析说明：" + SelfHoldHistoryExplanation());
+                    builder.AppendLine("   - 静态分析说明：" + SelfHoldHistoryExplanation(component.SelfHoldContactPair));
                 }
 
                 if (component.IsContactorCoilEnergizedByAnalyzer)
@@ -3249,7 +3498,7 @@ namespace ElectricalSim.Core
             }
 
             builder.AppendLine("- V1.2 当前只判断接触器 A1/A2 线圈是否获得有效控制电压。");
-            builder.AppendLine("- V1.4 通过有限轮迭代动态处理 13/14 自锁与 21/22 互锁，线圈状态不读取 SimulationEngine 运行结果。");
+            builder.AppendLine("- V1.4 通过有限轮迭代动态处理常开辅助触点自锁与常闭辅助触点互锁，线圈状态不读取 SimulationEngine 运行结果。");
             if (energizedCount > 1)
             {
                 builder.AppendLine("- 提醒：检测到多个接触器线圈同时获得启动路径，请结合 V1.4 互锁状态检查。");
@@ -3283,7 +3532,7 @@ namespace ElectricalSim.Core
 
                 if (component.HasSelfHoldHistoryAmbiguity)
                 {
-                    builder.AppendLine("   - 静态分析说明：" + SelfHoldHistoryExplanation());
+                    builder.AppendLine("   - 静态分析说明：" + SelfHoldHistoryExplanation(component.SelfHoldContactPair));
                 }
 
                 if (component.IsContactorMainContactsClosedByAnalyzer)
@@ -3321,8 +3570,8 @@ namespace ElectricalSim.Core
                 }
 
                 builder.AppendLine(index + ". " + component.DisplayName);
-                builder.AppendLine("   - 13/14 自锁触点：" + component.SelfHoldStatus);
-                builder.AppendLine("   - 21/22 互锁触点：" + component.InterlockStatus);
+                builder.AppendLine("   - 常开辅助触点自锁：" + component.SelfHoldStatus);
+                builder.AppendLine("   - 常闭辅助触点互锁：" + component.InterlockStatus);
                 index++;
             }
 
@@ -3339,7 +3588,7 @@ namespace ElectricalSim.Core
 
             if (HasCompoundButtonInterlockConflict)
             {
-                builder.AppendLine("- 检测到两个方向复合按钮同时按下；按钮联锁使两个接触器线圈均不能作为正常得电状态，13/14 均不闭合。");
+                builder.AppendLine("- 检测到两个方向复合按钮同时按下；按钮联锁使两个接触器线圈均不能作为正常得电状态，常开辅助触点均不闭合。");
                 builder.AppendLine("- 历史运行说明：" + InterlockHistoryExplanation());
             }
 
@@ -3577,9 +3826,10 @@ namespace ElectricalSim.Core
             return false;
         }
 
-        private static string SelfHoldHistoryExplanation()
+        private static string SelfHoldHistoryExplanation(string pairLabel = null)
         {
-            return "检测到接触器 13/14 自锁结构。当前检查面板为静态拓扑分析，不读取画布 RUN 历史；若该接触器此前已经吸合，则可能通过自锁支路保持运行。请以冷启动状态或重置运行状态后再判断是否会自行启动。";
+            var label = string.IsNullOrEmpty(pairLabel) ? "常开辅助触点" : pairLabel;
+            return "检测到接触器 " + label + " 自锁结构。当前检查面板为静态拓扑分析，不读取画布 RUN 历史；若该接触器此前已经吸合，则可能通过自锁支路保持运行。请以冷启动状态或重置运行状态后再判断是否会自行启动。";
         }
 
         private static string InterlockHistoryExplanation()
@@ -3946,6 +4196,8 @@ namespace ElectricalSim.Core
         public bool HasSelfHoldHistoryAmbiguity;
         public string SelfHoldStatus;
         public string InterlockStatus;
+        public string SelfHoldContactPair;
+        public string InterlockContactPair;
         public bool IsMotorDeferredByContactorOutput;
         public string MotorFeederContactorNames;
         public bool BreakerInputHasSupply;
