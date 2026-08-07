@@ -912,6 +912,8 @@ namespace ElectricalSim.Core
                 if (component == null || component.Definition == null) continue;
 
                 // 停止按钮 NC 11/12（去名称化结构判断）
+                // B2.2 修复：静态结构分析中 NC 总是连接（与接触器 NC 一致），
+                // 不管 IsClosed 当前状态。这是结构识别，不是运行时状态判断。
                 if (component.Definition.kind == ComponentKind.PushButton &&
                     !IsLimitSwitchComponent(component) &&
                     !IsCompoundPushButton(component) &&
@@ -919,7 +921,7 @@ namespace ElectricalSim.Core
                 {
                     var hasNC = component.GetTerminal("11") != null && component.GetTerminal("12") != null;
                     var hasNO = component.GetTerminal("23") != null && component.GetTerminal("24") != null;
-                    if (hasNC && !hasNO && !component.IsClosed)
+                    if (hasNC && !hasNO)
                     {
                         ConnectIfExistsInTopology(component, "11", "12", topology);
                     }
@@ -1049,8 +1051,62 @@ namespace ElectricalSim.Core
         /// 或停止按钮 11 端子（控制回路上游入口），
         /// 或启动按钮 23 端子（启动支路上游）。
         /// 保守策略：灯端子、孤立 Wire 不视为有效控制上游。
+        /// B2.2 修复：Start.24 不再直接作为 valid upstream，
+        /// 需要同按钮 Start.23 到达 base upstream 才作为 valid upstream。
         /// </summary>
         private static bool ReachesValidControlUpstream(
+            TerminalUnionFind topology,
+            string root,
+            IReadOnlyList<CircuitComponent> components)
+        {
+            if (topology == null || root == null || components == null) return false;
+
+            // 1. 直接检查 base upstream（PowerSource 或停止按钮 11 端子）
+            if (ReachesBaseControlUpstream(topology, root, components)) return true;
+
+            // 2. 如果 root 命中启动按钮 24 端子，找同按钮 23 端子，
+            //    检查 23 是否到达 base upstream。
+            //    这避免了 Start.23 悬空时 Start.24 被误当作 valid upstream。
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component == null || component.Definition == null) continue;
+
+                if (component.Definition.kind == ComponentKind.PushButton &&
+                    !IsLimitSwitchComponent(component) &&
+                    component.GetTerminal("23") != null &&
+                    component.GetTerminal("24") != null)
+                {
+                    var t24 = component.GetTerminal("24");
+                    if (t24 != null)
+                    {
+                        var t24Root = topology.Find(TerminalKey(t24));
+                        if (t24Root != null && t24Root == root)
+                        {
+                            // root 命中 Start.24，检查同按钮 Start.23 是否到达 base upstream
+                            var t23 = component.GetTerminal("23");
+                            if (t23 != null)
+                            {
+                                var t23Root = topology.Find(TerminalKey(t23));
+                                if (t23Root != null &&
+                                    ReachesBaseControlUpstream(topology, t23Root, components))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 检查 root 是否到达基础控制上游锚点（不依赖 Start.23/24 自身身份）。
+        /// 仅检查：PowerSource 合法控制端、停止按钮 11 端子（控制回路上游入口）。
+        /// </summary>
+        private static bool ReachesBaseControlUpstream(
             TerminalUnionFind topology,
             string root,
             IReadOnlyList<CircuitComponent> components)
@@ -1091,29 +1147,6 @@ namespace ElectricalSim.Core
                             var t11Root = topology.Find(TerminalKey(t11));
                             if (t11Root != null && t11Root == root) return true;
                         }
-                    }
-                }
-
-                // 启动按钮 23/24 端子（启动支路上下游）均视为有效控制上游。
-                // 23 是 NO 上游（停止按钮侧），24 是 NO 下游（NC 互锁侧）。
-                // 标准互锁电路中 NC 串联在启动按钮 NO 之后，NC 的一端连接到 24，
-                // 因此 24 也必须被视为有效控制上游。
-                if (component.Definition.kind == ComponentKind.PushButton &&
-                    !IsLimitSwitchComponent(component) &&
-                    component.GetTerminal("23") != null)
-                {
-                    var t23 = component.GetTerminal("23");
-                    if (t23 != null)
-                    {
-                        var t23Root = topology.Find(TerminalKey(t23));
-                        if (t23Root != null && t23Root == root) return true;
-                    }
-
-                    var t24 = component.GetTerminal("24");
-                    if (t24 != null)
-                    {
-                        var t24Root = topology.Find(TerminalKey(t24));
-                        if (t24Root != null && t24Root == root) return true;
                     }
                 }
             }
