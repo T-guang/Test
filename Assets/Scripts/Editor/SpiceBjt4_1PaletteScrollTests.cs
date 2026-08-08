@@ -120,19 +120,22 @@ namespace ElectricalSim.Editor
 
         private static void S04_BottomBjtCardsReachable()
         {
-            WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
+            foreach (var size in new[] { new Vector2(1366f, 768f), new Vector2(1920f, 1080f), new Vector2(2560f, 1440f) })
             {
-                var scroll = GetPaletteScroll(bindings);
-                Canvas.ForceUpdateCanvases();
-                scroll.verticalNormalizedPosition = 0f;
-                scroll.Rebuild(CanvasUpdate.PostLayout);
-                Canvas.ForceUpdateCanvases();
+                WithWorkspace(size, (bindings, _) =>
+                {
+                    var scroll = GetPaletteScroll(bindings);
+                    Canvas.ForceUpdateCanvases();
+                    scroll.verticalNormalizedPosition = 0f;
+                    scroll.Rebuild(CanvasUpdate.PostLayout);
+                    Canvas.ForceUpdateCanvases();
 
-                var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
-                var npn = scroll.content.Find(SpiceComponentKind.GenericNpnBjt + "Card") as RectTransform;
-                CheckTrue(IsFullyInside(pnp, scroll.viewport), "滚动到底部后 PNP 卡片必须完整进入 Viewport。");
-                CheckTrue(IsFullyInside(npn, scroll.viewport), "滚动到底部后 NPN 卡片必须完整进入 Viewport。");
-            });
+                    var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
+                    var npn = scroll.content.Find(SpiceComponentKind.GenericNpnBjt + "Card") as RectTransform;
+                    CheckTrue(IsFullyInside(pnp, scroll.viewport), size + " 下 PNP 卡片必须完整进入 Viewport。");
+                    CheckTrue(IsFullyInside(npn, scroll.viewport), size + " 下 NPN 卡片必须完整进入 Viewport。");
+                });
+            }
         }
 
         private static void S05_ContentHeightTracksActualRows()
