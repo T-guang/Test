@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ElectricalSim.Core;
 using ElectricalSim.Rules;
 
@@ -42,6 +43,10 @@ namespace ElectricalSim.AI
 
             if (IndustrialCircuitRuleAnalyzer.TryAnalyze(workspace, out var industrialResult) && industrialResult.IsIndustrial)
             {
+                // B5: 工业电路也需执行接触器旁路安全规则；复用 CircuitRuleChecker 共享窄 detector，不运行完整 Check()。
+                // bypass issues 必须在 summary/debug/formatter 构建之前合入 industrialResult，保证 ErrorCount/WarningCount 一致。
+                MergeContactorBypassIssues(industrialResult, CircuitRuleChecker.DetectContactorBypassIssues(workspace));
+
                 var currentCircuitName = runtimeAdapter.ResolveCurrentCircuitName();
                 if (!string.IsNullOrWhiteSpace(currentCircuitName))
                 {
@@ -187,6 +192,72 @@ namespace ElectricalSim.AI
             }
             var text = "搭建来源：" + source + "\n模板匹配：" + recognition.Reason;
             return InspectionReportComposer.CreateTeaching(text);
+        }
+
+        /// <summary>
+        /// 将 B5 接触器旁路 issues 按 severity 合入 industrialResult.Errors/Warnings。
+        /// 合入时执行 Trim 级唯一去重，保证 ErrorCount/WarningCount 与最终可见内容不因重复产生偏差。
+        /// learner-facing 文本至少包含 issue.title + "：" + issue.message，不能只取通用 message。
+        /// </summary>
+        private static void MergeContactorBypassIssues(
+            CircuitAnalysisResult industrialResult,
+            IReadOnlyList<CircuitIssue> bypassIssues)
+        {
+            if (industrialResult == null || bypassIssues == null || bypassIssues.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < bypassIssues.Count; i++)
+            {
+                var issue = bypassIssues[i];
+                if (issue == null)
+                {
+                    continue;
+                }
+
+                var title = string.IsNullOrWhiteSpace(issue.title) ? string.Empty : issue.title.Trim();
+                var message = string.IsNullOrWhiteSpace(issue.message) ? string.Empty : issue.message.Trim();
+                var text = string.IsNullOrEmpty(title)
+                    ? message
+                    : string.IsNullOrEmpty(message) ? title : title + "：" + message;
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                if (issue.severity == CircuitIssueSeverity.Error)
+                {
+                    AddUniqueTrim(industrialResult.Errors, text);
+                }
+                else if (issue.severity == CircuitIssueSeverity.Warning)
+                {
+                    AddUniqueTrim(industrialResult.Warnings, text);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Trim 级唯一合并：比较时对已有条目和新条目都做 Trim，避免尾部空格导致重复计数。
+        /// </summary>
+        private static void AddUniqueTrim(List<string> target, string text)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var normalized = text.Trim();
+            for (var i = 0; i < target.Count; i++)
+            {
+                if (target[i] != null && target[i].Trim() == normalized)
+                {
+                    return;
+                }
+            }
+
+            target.Add(normalized);
         }
     }
 }

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using ElectricalSim.Core;
 
+[assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 namespace ElectricalSim.Rules
 {
     /// <summary>
@@ -1202,17 +1204,24 @@ namespace ElectricalSim.Rules
         /// </summary>
         private void CheckContactorBypass()
         {
-            var wires = workspace.WireManager != null ? workspace.WireManager.Wires : null;
-            if (wires == null)
-            {
-                return;
-            }
-
-            var bypassIssues = DetectContactorBypassIssues(wires);
+            var bypassIssues = DetectContactorBypassIssues(workspace);
             for (var i = 0; i < bypassIssues.Count; i++)
             {
                 result.Add(bypassIssues[i]);
             }
+        }
+
+        /// <summary>
+        /// 窄 B5 detector：仅执行接触器旁路安全规则，不运行完整 Check()。
+        /// 供工业检查工作流（InspectionWorkflowService）在 IndustrialCircuitRuleAnalyzer
+        /// 之后调用，避免工业路径跳过 B5 旁路检测。与 CheckContactorBypass 共用同一
+        /// DetectContactorBypassIssues(IReadOnlyList{WireView}) 核心实现，不复制端子判断。
+        /// 设为 public 以避免与 private 重载在反射调用中产生 AmbiguousMatchException。
+        /// </summary>
+        public static IReadOnlyList<CircuitIssue> DetectContactorBypassIssues(WorkspaceController workspace)
+        {
+            var wires = workspace != null && workspace.WireManager != null ? workspace.WireManager.Wires : null;
+            return DetectContactorBypassIssues(wires);
         }
 
         /// <summary>

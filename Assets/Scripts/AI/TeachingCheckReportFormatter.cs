@@ -19,8 +19,12 @@ namespace ElectricalSim.AI
             string debugDetails,
             bool showDeveloperDebugInfo = false)
         {
-            // 教学结论以 Analyzer 的状态结果为准；工业专项分析原文仅作为开发调试详情保留，避免它覆盖当前运行态结论。
-            return Build(stateResult, null, null, debugDetails, showDeveloperDebugInfo);
+            // 工业专项分析的 Errors/Warnings 必须进入"问题与风险"段落，否则顶部计数与正文不一致。
+            // AppendProblems 的 AddRangeUnique 会按 Trim 精确文本去重，不会与 stateResult.Errors 重复。
+            return Build(stateResult,
+                industrialResult != null ? industrialResult.Errors : null,
+                industrialResult != null ? industrialResult.Warnings : null,
+                debugDetails, showDeveloperDebugInfo);
         }
 
         public static string Format(
