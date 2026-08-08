@@ -49,6 +49,7 @@ namespace ElectricalSim.Rules
             CheckOpenDevicesAffectLoads();
             CheckBypassedDevices();
             CheckSingleSwitchTerminals();
+            CheckContactorBypass();
             return result;
         }
 
@@ -1189,6 +1190,95 @@ namespace ElectricalSim.Rules
             }
 
             return terminal.Owner.InstanceId + "." + terminal.TerminalId;
+        }
+
+        /// <summary>
+        /// KM-2B5 Gate A: 接触器旁路安全规则。
+        /// 直接遍历 workspace.WireManager.Wires 中的真实外部导线，检测同一接触器
+        /// 受控触点对被直接短接的危险接线。不从 structuralGraph 或 liveGraph 推断，
+        /// 因为 graph 中含有正常接触器内部触点边。同一根 Wire 只产生一次 issue。
+        /// Main 触点短接 → CONTACTOR_MAIN_CONTACT_BYPASS (Error)；
+        /// NO/NC 辅助触点短接 → CONTACTOR_AUX_CONTACT_BYPASS (Warning)。
+        /// </summary>
+        private void CheckContactorBypass()
+        {
+            var wires = workspace.WireManager != null ? workspace.WireManager.Wires : null;
+            if (wires == null)
+            {
+                return;
+            }
+
+            var bypassIssues = DetectContactorBypassIssues(wires);
+            for (var i = 0; i < bypassIssues.Count; i++)
+            {
+                result.Add(bypassIssues[i]);
+            }
+        }
+
+        /// <summary>
+        /// 基于 WireManager 真实外部 Wire 检测接触器受控触点直接旁路。
+        /// 遍历每根 Wire，判断两端是否属于同一 ContactorCoil 元件且构成完整受控触点对。
+        /// 不散写 "L1"/"T1"/"13"/"14" 等端子 ID，统一通过 ContactorTerminalSchema.TryFindPair 查询。
+        /// </summary>
+        private static List<CircuitIssue> DetectContactorBypassIssues(IReadOnlyList<WireView> wires)
+        {
+            var issues = new List<CircuitIssue>();
+            if (wires == null)
+            {
+                return issues;
+            }
+
+            for (var i = 0; i < wires.Count; i++)
+            {
+                var wire = wires[i];
+                if (wire == null || wire.StartTerminal == null || wire.EndTerminal == null)
+                {
+                    continue;
+                }
+
+                var start = wire.StartTerminal;
+                var end = wire.EndTerminal;
+                var owner = start.Owner;
+
+                // 两端必须属于同一元件
+                if (owner == null || end.Owner != owner)
+                {
+                    continue;
+                }
+
+                // 元件必须是接触器线圈
+                if (owner.Definition == null || owner.Definition.kind != ComponentKind.ContactorCoil)
+                {
+                    continue;
+                }
+
+                // 两端必须构成完整的受控触点对
+                if (!ContactorTerminalSchema.TryFindPair(start.TerminalId, end.TerminalId, out var pair))
+                {
+                    continue;
+                }
+
+                var isMain = pair.ContactType == ContactorContactType.Main;
+                var code = isMain
+                    ? "CONTACTOR_MAIN_CONTACT_BYPASS"
+                    : "CONTACTOR_AUX_CONTACT_BYPASS";
+                var severity = isMain
+                    ? CircuitIssueSeverity.Error
+                    : CircuitIssueSeverity.Warning;
+
+                issues.Add(new CircuitIssue
+                {
+                    code = code,
+                    severity = severity,
+                    title = ComponentName(owner) + " " + pair.StartTerminalId + "/" + pair.EndTerminalId + " 触点被直接短接",
+                    message = "外部导线直接连接了接触器的受控触点端子，可能导致电路失控或保护失效。",
+                    suggestion = "请移除该导线或重新设计控制逻辑。",
+                    componentId = owner.InstanceId,
+                    componentName = ComponentName(owner)
+                });
+            }
+
+            return issues;
         }
 
         private void AddIssue(CircuitIssueSeverity severity, string code, string title, string message, string suggestion, CircuitComponent component = null)
