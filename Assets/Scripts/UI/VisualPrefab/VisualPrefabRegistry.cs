@@ -37,6 +37,17 @@ namespace ElectricalSim.Core
             new VisualPrefabTerminalPosition("34", new UnityEngine.Vector2(105.90f, -107.10f))
         };
 
+        // 三相交流电源的 Body 在 Prefab 中以 1.5 倍显示，而 TerminalAnchors 保持原始 1.0
+        // 坐标。这里显式采用放大后的圆心坐标，使 TerminalView 的命中层与可见端子重合。
+        private static readonly VisualPrefabTerminalPosition[] ThreePhasePowerTerminalPositionOverrides =
+        {
+            new VisualPrefabTerminalPosition("L1", new UnityEngine.Vector2(-119.085f, 0.900f)),
+            new VisualPrefabTerminalPosition("L2", new UnityEngine.Vector2(-59.415f, 0.900f)),
+            new VisualPrefabTerminalPosition("L3", new UnityEngine.Vector2(0.270f, 0.900f)),
+            new VisualPrefabTerminalPosition("N", new UnityEngine.Vector2(59.925f, 0.900f)),
+            new VisualPrefabTerminalPosition("PE", new UnityEngine.Vector2(119.985f, 0.900f))
+        };
+
         // 配置表使用 StringComparer.Ordinal，definitionName 大小写敏感。重复键会在类型初始化时失败而非自动合并；
         // 表项顺序不参与 TryGetConfig 查找。删除表项不等于删除 ComponentDefinition，Catalog 缺项也不等于元件定义不存在。
         private static readonly Dictionary<string, VisualPrefabConfig> Configs = new Dictionary<string, VisualPrefabConfig>(StringComparer.Ordinal)
@@ -143,7 +154,8 @@ namespace ElectricalSim.Core
                 new VisualPrefabConfig(
                     "AC_ThreePhase_Power",
                     "Assets/Prefab/AC_ThreePhase_Power_Visual.prefab",
-                    "Assets/Art/Components/AC_ThreePhase_Power_Visual.png")
+                    "Assets/Art/Components/AC_ThreePhase_Power_Visual.png",
+                    terminalPositionOverrides: ThreePhasePowerTerminalPositionOverrides)
             },
             {
                 "Breaker_1P",
