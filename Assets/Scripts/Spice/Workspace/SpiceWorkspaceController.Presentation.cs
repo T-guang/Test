@@ -47,22 +47,23 @@ namespace ElectricalSim.Spice.Workspace
             var palette = bindings.PaletteRoot;
             var paletteTitle = SpiceWorkspaceUi.CreateText(palette.transform, "Title", "基础元件", 20, FontStyle.Bold, TextAnchor.MiddleLeft, MainUiTheme.DeepText);
             SpiceWorkspaceUi.Anchor(paletteTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(18f, -48f), new Vector2(-18f, -8f));
-            CreatePaletteCard(palette.transform, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.SiliconDiode, "通用硅二极管", "D_GENERIC", 1, 3);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.Resistor, "电阻", "1 kOhm", 1, 0);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.Capacitor, "电容", "1 uF", 0, 1);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
+            var paletteContent = CreatePaletteScroll(palette);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.SiliconDiode, "通用硅二极管", "D_GENERIC", 1, 3);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.Resistor, "电阻", "1 kOhm", 1, 0);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.Capacitor, "电容", "1 uF", 0, 1);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
-            CreatePaletteCard(palette.transform, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
-            CreatePaletteCard(palette.transform, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
-            CreatePaletteCard(palette.transform, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
+            CreatePaletteCard(paletteContent, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
 
             var workspace = bindings.WorkspaceViewport;
             viewportRect = workspace;
@@ -316,12 +317,83 @@ namespace ElectricalSim.Spice.Workspace
                 $"ComponentLayer={bindings?.ComponentLayer?.rect.size}; WireLayer={WireLayer?.rect.size}; OverlayLayer={OverlayLayer?.rect.size}; Workspace={WorkspaceRect?.rect.size}";
         }
 
-        private void CreatePaletteCard(Transform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
+        /// <summary>
+        /// 创建左侧元件池的滚动容器。标题保留在 PaletteRoot，只有卡片 Content 参与滚动，
+        /// 这样内容超过可视区域时不会遮住标题，也不会挤压卡片本身的视觉规格。
+        /// </summary>
+        private static RectTransform CreatePaletteScroll(RectTransform paletteRoot)
+        {
+            var scrollTransform = paletteRoot.Find("PaletteScroll") as RectTransform;
+            var created = scrollTransform == null;
+            if (scrollTransform == null)
+            {
+                scrollTransform = new GameObject("PaletteScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect)).GetComponent<RectTransform>();
+                scrollTransform.SetParent(paletteRoot, false);
+            }
+
+            SpiceWorkspaceUi.Anchor(scrollTransform, Vector2.zero, Vector2.one, new Vector2(0f, 0f), new Vector2(0f, -56f));
+            var scrollImage = scrollTransform.GetComponent<Image>();
+            scrollImage.color = new Color(1f, 1f, 1f, 0f);
+            scrollImage.raycastTarget = true;
+
+            var scroll = scrollTransform.GetComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false;
+            scroll.scrollSensitivity = 32f;
+
+            var viewport = scrollTransform.Find("Viewport") as RectTransform;
+            if (viewport == null)
+            {
+                viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
+                viewport.SetParent(scrollTransform, false);
+            }
+
+            SpiceWorkspaceUi.Stretch(viewport, Vector2.zero, Vector2.zero);
+            var content = viewport.Find("Content") as RectTransform;
+            if (content == null)
+            {
+                content = new GameObject("Content", typeof(RectTransform)).GetComponent<RectTransform>();
+                content.SetParent(viewport, false);
+            }
+
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new Vector2(0f, content.sizeDelta.y);
+            scroll.viewport = viewport;
+            scroll.content = content;
+
+            // 兼容已有运行时层级：如果旧卡片尚在根节点，统一迁入 Content，避免重复生成 UI。
+            for (var index = paletteRoot.childCount - 1; index >= 0; index--)
+            {
+                var child = paletteRoot.GetChild(index);
+                if (child != scrollTransform && child.name.EndsWith("Card", StringComparison.Ordinal))
+                    child.SetParent(content, false);
+            }
+
+            // 只在真正首次构建时重置到顶部；普通 Apply/结果刷新不会改变用户滚动位置。
+            if (created)
+                scroll.verticalNormalizedPosition = 1f;
+
+            return content;
+        }
+
+        private void CreatePaletteCard(RectTransform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
         {
             var card = SpiceWorkspaceUi.CreateImage(parent, kind + "Card", MainUiTheme.SelectedBlue);
-            var x = 16f + column * 132f;
-            var y = -66f - row * 100f;
-            SpiceWorkspaceUi.Anchor(card.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, y - 82f), new Vector2(x + 116f, y));
+            const float cardWidth = 120f;
+            const float cardHeight = 116f;
+            const float cardGap = 12f;
+            const float topPadding = 10f;
+            const float bottomPadding = 16f;
+            var x = 16f + column * (cardWidth + cardGap);
+            var top = -topPadding - row * (cardHeight + cardGap);
+            SpiceWorkspaceUi.Anchor(card.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, top - cardHeight), new Vector2(x + cardWidth, top));
+            var requiredHeight = topPadding + (row + 1) * cardHeight + row * cardGap + bottomPadding;
+            parent.sizeDelta = new Vector2(0f, Mathf.Max(parent.sizeDelta.y, requiredHeight));
             var outline = card.gameObject.AddComponent<Outline>();
             outline.effectColor = MainUiTheme.Divider;
             outline.effectDistance = new Vector2(1f, -1f);

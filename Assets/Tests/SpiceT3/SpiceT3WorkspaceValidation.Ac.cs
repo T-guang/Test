@@ -392,8 +392,10 @@ namespace ElectricalSim.Spice.T3
                         throw new InvalidOperationException("AC-C1 layout geometry contract failed at " + size + ": " + geometryError);
                     var toolbar = bindings.RunButton.transform.parent as RectTransform;
                     var modeToggle = workspace.GetAnalysisModeToggleButtonForTesting();
+                    var paletteScroll = bindings.PaletteRoot.Find("PaletteScroll")?.GetComponent<ScrollRect>();
                     if (toolbar == null || toolbar.Find("AnalysisControls") != null || modeToggle == null || modeToggle.transform.parent != toolbar ||
-                        bindings.PaletteRoot.Find("AcVoltageSourceCard") == null || bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null)
+                        paletteScroll == null || paletteScroll.viewport == null || paletteScroll.content == null ||
+                        paletteScroll.content.Find("AcVoltageSourceCard") == null || bindings.ResultRoot.Find("ResultScrollView/Viewport/Content/ResultText") == null)
                         throw new InvalidOperationException("AC-C1 layout structure smoke did not create required controls at " + size + ".");
                     var buttons = toolbar.GetComponentsInChildren<Button>(true).Where(button => button.gameObject.activeInHierarchy).ToArray();
                     if (buttons.Any(button => !ContainsRect(toolbar, button.GetComponent<RectTransform>())) ||

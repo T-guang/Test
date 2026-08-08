@@ -17,6 +17,8 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardWidth = 120f;
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
+        private const float PaletteCardTopPadding = 10f;
+        private const float PaletteCardBottomPadding = 16f;
         private const float AssistantSectionHeaderHeight = 42f;
         private const float ParameterSectionHeight = 166f;
         private const float NetlistSectionHeight = 180f;
@@ -47,22 +49,24 @@ namespace ElectricalSim.Spice.Workspace
             StyleZoomLabel(bindings);
             StyleStatusTextRightPadding(bindings);
 
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.SiliconDiode, "通用硅二极管", "D_GENERIC", 1, 3);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Resistor, "电阻", "1 kΩ", 1, 0);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Capacitor, "电容", "1 μF", 0, 1);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
+            var paletteContent = FindPaletteContent(bindings.PaletteRoot);
+            StylePaletteCard(paletteContent, SpiceComponentKind.DcVoltageSource, "直流电压源", "10 V", 0, 0);
+            StylePaletteCard(paletteContent, SpiceComponentKind.DcCurrentSource, "直流电流源", "1 mA", 1, 2);
+            StylePaletteCard(paletteContent, SpiceComponentKind.IdealSwitch, "理想开关", "断开", 0, 3);
+            StylePaletteCard(paletteContent, SpiceComponentKind.SiliconDiode, "通用硅二极管", "D_GENERIC", 1, 3);
+            StylePaletteCard(paletteContent, SpiceComponentKind.Resistor, "电阻", "1 kΩ", 1, 0);
+            StylePaletteCard(paletteContent, SpiceComponentKind.Capacitor, "电容", "1 μF", 0, 1);
+            StylePaletteCard(paletteContent, SpiceComponentKind.Inductor, "电感", "10 mH", 1, 1);
+            StylePaletteCard(paletteContent, SpiceComponentKind.Ground, "接地", "GND", 0, 2);
+            StylePaletteCard(paletteContent, SpiceComponentKind.VoltageProbe, "电压探针", "V+ - V-", 0, 4);
+            StylePaletteCard(paletteContent, SpiceComponentKind.CurrentProbe, "电流探针", "IN → OUT", 1, 4);
 
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
+            StylePaletteCard(paletteContent, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
+            StylePaletteCard(paletteContent, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
-            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
+            StylePaletteCard(paletteContent, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
+            StylePaletteCard(paletteContent, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
+            RefreshPaletteContentHeight(paletteContent);
 
             StyleAssistant(bindings);
         }
@@ -159,15 +163,35 @@ namespace ElectricalSim.Spice.Workspace
             text.alignment = TextAnchor.MiddleCenter;
         }
 
-        private static void StylePaletteCard(RectTransform paletteRoot, SpiceComponentKind kind, string title, string summary, int column, int row)
+        private static RectTransform FindPaletteContent(RectTransform paletteRoot)
         {
-            if (paletteRoot == null) return;
+            return paletteRoot == null ? null : paletteRoot.Find("PaletteScroll/Viewport/Content") as RectTransform;
+        }
 
-            var cardTransform = paletteRoot.Find(kind + "Card") as RectTransform;
+        private static void RefreshPaletteContentHeight(RectTransform content)
+        {
+            if (content == null) return;
+
+            var lowestCardEdge = -PaletteCardTopPadding;
+            for (var index = 0; index < content.childCount; index++)
+            {
+                var card = content.GetChild(index) as RectTransform;
+                if (card != null && card.name.EndsWith("Card", System.StringComparison.Ordinal))
+                    lowestCardEdge = Mathf.Min(lowestCardEdge, card.offsetMin.y);
+            }
+
+            content.sizeDelta = new Vector2(0f, -lowestCardEdge + PaletteCardBottomPadding);
+        }
+
+        private static void StylePaletteCard(RectTransform paletteContent, SpiceComponentKind kind, string title, string summary, int column, int row)
+        {
+            if (paletteContent == null) return;
+
+            var cardTransform = paletteContent.Find(kind + "Card") as RectTransform;
             if (cardTransform == null) return;
 
             var left = 16f + column * (PaletteCardWidth + PaletteCardGap);
-            var top = -66f - row * (PaletteCardHeight + PaletteCardGap);
+            var top = -PaletteCardTopPadding - row * (PaletteCardHeight + PaletteCardGap);
             Anchor(cardTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(left, top - PaletteCardHeight), new Vector2(left + PaletteCardWidth, top));
 
             var image = cardTransform.GetComponent<Image>() ?? cardTransform.gameObject.AddComponent<Image>();
