@@ -67,6 +67,7 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(paletteContent, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
             StylePaletteCard(paletteContent, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
             RefreshPaletteContentHeight(paletteContent);
+            RequestPaletteScrollBoundsRefresh(paletteContent);
 
             StyleAssistant(bindings);
         }
@@ -181,6 +182,59 @@ namespace ElectricalSim.Spice.Workspace
             }
 
             content.sizeDelta = new Vector2(0f, -lowestCardEdge + PaletteCardBottomPadding);
+        }
+
+        /// <summary>
+        /// 卡片由 Controller 创建、再由 Adapter 调整位置和 Content 高度。ScrollRect 的 bounds
+        /// 可能早于这次最终布局缓存，尤其在页面激活或分辨率变化的同一帧。这里复用一次性刷新器，
+        /// 在最终 Canvas 布局后重建 bounds；不改变卡片尺寸、间距或用户已有的滚动位置。
+        /// </summary>
+        private static void RequestPaletteScrollBoundsRefresh(RectTransform content)
+        {
+            var viewport = content != null ? content.parent as RectTransform : null;
+            var scroll = viewport != null ? viewport.parent.GetComponent<ScrollRect>() : null;
+            if (scroll == null || scroll.viewport != viewport || scroll.content != content) return;
+
+            var refresher = scroll.GetComponent<PaletteScrollBoundsRefresher>() ?? scroll.gameObject.AddComponent<PaletteScrollBoundsRefresher>();
+            refresher.RequestRefresh(scroll);
+        }
+
+        /// <summary>
+        /// 仅在 UI 初建、重新 Apply 或 RectTransform 实际变更后，延后一帧执行一次标准 UGUI
+        /// 布局与 ScrollRect bounds 重建。避免 Content 已变高而最大滚动距离仍沿用旧缓存。
+        /// </summary>
+        private sealed class PaletteScrollBoundsRefresher : MonoBehaviour
+        {
+            private ScrollRect scroll;
+            private bool refreshPending;
+
+            internal void RequestRefresh(ScrollRect target)
+            {
+                scroll = target;
+                refreshPending = true;
+            }
+
+            private void OnEnable()
+            {
+                refreshPending = true;
+            }
+
+            private void OnRectTransformDimensionsChange()
+            {
+                refreshPending = true;
+            }
+
+            private void LateUpdate()
+            {
+                if (!refreshPending || scroll == null || scroll.viewport == null || scroll.content == null || !scroll.isActiveAndEnabled)
+                    return;
+
+                refreshPending = false;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+                scroll.Rebuild(CanvasUpdate.PostLayout);
+            }
         }
 
         private static void StylePaletteCard(RectTransform paletteContent, SpiceComponentKind kind, string title, string summary, int column, int row)

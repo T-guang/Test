@@ -7,6 +7,7 @@ using ElectricalSim.Spice.Results;
 using ElectricalSim.Spice.Workspace;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.T3
 {
@@ -30,6 +31,12 @@ namespace ElectricalSim.Spice.T3
         public bool analysisModeTogglePassed;
         public bool acFrequencySettingsPassed;
         public bool modeIncompatibilityDiagnosticPassed;
+        public bool paletteBottomRowFullyVisible;
+        public float paletteViewportHeight;
+        public float paletteContentHeight;
+        public float paletteMaxScroll;
+        public float paletteBottomPosition;
+        public float pnpVisibleHeight;
         public string failure;
     }
 
@@ -53,6 +60,7 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("Spice workspace was not initialized by Bootstrap.Awake.");
                 workspace.ValidateAssistantPanelLayout();
                 ValidateWorkspaceGeometry(workspace, report);
+                ValidatePaletteBottomRowGeometry(bootstrap.GetComponent<SpiceWorkspaceViewBindings>(), report);
                 ValidateWorkspaceUiControls(workspace, report);
                 var source = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, new Vector2(-160f, 40f));
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, new Vector2(120f, 40f));
@@ -107,7 +115,8 @@ namespace ElectricalSim.Spice.T3
                     !report.verticalDraggingPassed || !report.zoomDraggingPassed || !report.toolbarLayoutPassed ||
                     !report.analysisModeTogglePassed || !report.acFrequencySettingsPassed || !report.d1StaleDiscardPassed || !report.d2ImportLimitsPassed ||
                     !report.d3ClearStatePassed || !report.d3NetlistRevisionPassed ||
-                    !report.unexpectedErrorSanitizationPassed || !report.modeIncompatibilityDiagnosticPassed)
+                    !report.unexpectedErrorSanitizationPassed || !report.modeIncompatibilityDiagnosticPassed ||
+                    !report.paletteBottomRowFullyVisible)
                     throw new InvalidOperationException("One or more stabilization Player checks did not pass.");
                 report.success = true;
             }
@@ -221,6 +230,74 @@ namespace ElectricalSim.Spice.T3
             Debug.Log("[Spice][Player-UI] 网格几何：通过");
             Debug.Log("[Spice][Player-UI] 工作区激活后布局：通过");
             Debug.Log("[Spice][Player-UI] 网格显示契约：通过");
+        }
+
+        /// <summary>
+        /// 真实 Player 中在最终 Canvas/ScrollRect 布局完成后验证元件池最后一排。
+        /// 仅以 Viewport 的实际可见区域判断，避免用理论 Content 高度掩盖底部裁切。
+        /// </summary>
+        private static void ValidatePaletteBottomRowGeometry(SpiceWorkspaceViewBindings bindings, SpiceT3PlayerValidationReport report)
+        {
+            if (bindings == null)
+                throw new InvalidOperationException("Player 元件池验证缺少 SpiceWorkspaceViewBindings。");
+
+            var scroll = bindings.PaletteRoot.Find("PaletteScroll")?.GetComponent<ScrollRect>();
+            var viewport = scroll?.viewport;
+            var content = scroll?.content;
+            var npn = content?.Find(SpiceComponentKind.GenericNpnBjt + "Card") as RectTransform;
+            var pnp = content?.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
+            if (scroll == null || viewport == null || content == null || npn == null || pnp == null)
+                throw new InvalidOperationException("Player 元件池滚动层级或 BJT 卡片不完整。");
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(viewport);
+            scroll.Rebuild(CanvasUpdate.PostLayout);
+            scroll.verticalNormalizedPosition = 0f;
+            Canvas.ForceUpdateCanvases();
+            scroll.Rebuild(CanvasUpdate.PostLayout);
+
+            const float safeMargin = 8f;
+            var viewportBounds = ViewportVerticalBounds(viewport, viewport);
+            var npnBounds = ViewportVerticalBounds(npn, viewport);
+            var pnpBounds = ViewportVerticalBounds(pnp, viewport);
+            var visibleHeight = Mathf.Max(0f, Mathf.Min(pnpBounds.top, viewportBounds.top) - Mathf.Max(pnpBounds.bottom, viewportBounds.bottom));
+            var fullyVisible = pnpBounds.bottom >= viewportBounds.bottom + safeMargin && pnpBounds.top <= viewportBounds.top + 0.1f;
+            var canvas = bindings.PaletteRoot.GetComponentInParent<Canvas>();
+            report.paletteViewportHeight = viewport.rect.height;
+            report.paletteContentHeight = content.rect.height;
+            report.paletteMaxScroll = Mathf.Max(0f, content.rect.height - viewport.rect.height);
+            report.paletteBottomPosition = content.anchoredPosition.y;
+            report.pnpVisibleHeight = visibleHeight;
+            report.paletteBottomRowFullyVisible = fullyVisible;
+
+            Debug.Log($"PALETTE_SCREEN={Screen.width}x{Screen.height}; PALETTE_CANVAS_SCALE={canvas?.scaleFactor ?? 0f:F3}; " +
+                      $"PALETTE_ROOT_HEIGHT={bindings.PaletteRoot.rect.height:F3}; PALETTE_SCROLL_HEIGHT={(scroll.transform as RectTransform).rect.height:F3}; " +
+                      $"PALETTE_VIEWPORT_HEIGHT={report.paletteViewportHeight:F3}; PALETTE_CONTENT_HEIGHT={report.paletteContentHeight:F3}; " +
+                      $"PALETTE_MAX_SCROLL={report.paletteMaxScroll:F3}; PALETTE_BOTTOM_POSITION={report.paletteBottomPosition:F3}; " +
+                      $"PALETTE_NORMALIZED={scroll.verticalNormalizedPosition:F3}; " +
+                      $"NPN_BOTTOM={npnBounds.bottom:F3}; NPN_TOP={npnBounds.top:F3}; PNP_BOTTOM={pnpBounds.bottom:F3}; PNP_TOP={pnpBounds.top:F3}; " +
+                      $"VIEWPORT_BOTTOM={viewportBounds.bottom:F3}; VIEWPORT_TOP={viewportBounds.top:F3}; " +
+                      $"PNP_VISIBLE_HEIGHT={visibleHeight:F3}; PNP_FULLY_VISIBLE={fullyVisible}");
+
+            if (!fullyVisible)
+                throw new InvalidOperationException("Player 元件池滚至底部后 PNP 卡片未完整进入 Viewport 安全区。");
+        }
+
+        private static (float bottom, float top) ViewportVerticalBounds(RectTransform rect, RectTransform viewport)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var bottom = float.MaxValue;
+            var top = float.MinValue;
+            for (var index = 0; index < corners.Length; index++)
+            {
+                var local = viewport.InverseTransformPoint(corners[index]);
+                bottom = Mathf.Min(bottom, local.y);
+                top = Mathf.Max(top, local.y);
+            }
+
+            return (bottom, top);
         }
 
         /// <summary>

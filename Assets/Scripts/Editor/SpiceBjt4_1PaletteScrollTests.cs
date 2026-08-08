@@ -47,7 +47,7 @@ namespace ElectricalSim.Editor
             passed = 0;
             failed = 0;
             Summary.Clear();
-            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S08)");
+            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S09)");
 
             Run("S01_HierarchyAndScrollSettings", S01_HierarchyAndScrollSettings);
             Run("S02_TitleRemainsFixed", S02_TitleRemainsFixed);
@@ -57,6 +57,7 @@ namespace ElectricalSim.Editor
             Run("S06_ReapplyDoesNotDuplicateHierarchy", S06_ReapplyDoesNotDuplicateHierarchy);
             Run("S07_AdapterKeepsCardsInContentAndOrder", S07_AdapterKeepsCardsInContentAndOrder);
             Run("S08_PaletteCardsRetainDragAndClickComponents", S08_PaletteCardsRetainDragAndClickComponents);
+            Run("S09_FinalScrollBoundsKeepBottomRowInsideSafeArea", S09_FinalScrollBoundsKeepBottomRowInsideSafeArea);
 
             var total = passed + failed;
             Summary.AppendLine();
@@ -125,17 +126,37 @@ namespace ElectricalSim.Editor
                 WithWorkspace(size, (bindings, _) =>
                 {
                     var scroll = GetPaletteScroll(bindings);
-                    Canvas.ForceUpdateCanvases();
-                    scroll.verticalNormalizedPosition = 0f;
-                    scroll.Rebuild(CanvasUpdate.PostLayout);
-                    Canvas.ForceUpdateCanvases();
+                    FinalizeBottomScrollLayout(scroll);
 
                     var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
                     var npn = scroll.content.Find(SpiceComponentKind.GenericNpnBjt + "Card") as RectTransform;
+                    CheckTrue(IsInsideBottomSafeArea(pnp, scroll.viewport, 8f), size + " PNP card must enter the viewport bottom safe area.");
+                    CheckTrue(IsInsideBottomSafeArea(npn, scroll.viewport, 8f), size + " NPN card must enter the viewport bottom safe area.");
+                    CheckNear(Mathf.Max(0f, scroll.content.rect.height - scroll.viewport.rect.height), scroll.content.anchoredPosition.y, 0.2f,
+                        size + " content must reach the actual maximum scroll position.");
                     CheckTrue(IsFullyInside(pnp, scroll.viewport), size + " 下 PNP 卡片必须完整进入 Viewport。");
                     CheckTrue(IsFullyInside(npn, scroll.viewport), size + " 下 NPN 卡片必须完整进入 Viewport。");
                 });
             }
+        }
+
+        private static void S09_FinalScrollBoundsKeepBottomRowInsideSafeArea()
+        {
+            WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
+            {
+                var scroll = GetPaletteScroll(bindings);
+                FinalizeBottomScrollLayout(scroll);
+                var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
+                var viewport = scroll.viewport;
+                var pnpBounds = BoundsInViewport(pnp, viewport);
+                var viewportBounds = BoundsInViewport(viewport, viewport);
+                var visible = Mathf.Max(0f, Mathf.Min(pnpBounds.top, viewportBounds.top) - Mathf.Max(pnpBounds.bottom, viewportBounds.bottom));
+                Debug.Log($"[BJT4.1] PaletteGeometry Viewport={viewport.rect.height:F3}; Content={scroll.content.rect.height:F3}; " +
+                          $"MaxScroll={Mathf.Max(0f, scroll.content.rect.height - viewport.rect.height):F3}; BottomPosition={scroll.content.anchoredPosition.y:F3}; " +
+                          $"PnpBottom={pnpBounds.bottom:F3}; PnpTop={pnpBounds.top:F3}; ViewportBottom={viewportBounds.bottom:F3}; ViewportTop={viewportBounds.top:F3}; Visible={visible:F3}");
+                CheckTrue(visible >= pnp.rect.height - 0.1f, "PNP card must be fully visible after scrolling to the bottom.");
+                CheckTrue(pnpBounds.bottom >= viewportBounds.bottom + 8f, "PNP card must retain an 8 UI-unit bottom safety margin.");
+            });
         }
 
         private static void S05_ContentHeightTracksActualRows()
@@ -269,17 +290,43 @@ namespace ElectricalSim.Editor
             apply.Invoke(null, new object[] { bindings });
         }
 
-        private static bool IsFullyInside(RectTransform child, RectTransform container)
+        private static void FinalizeBottomScrollLayout(ScrollRect scroll)
         {
-            if (child == null || container == null) return false;
-            var childCorners = new Vector3[4];
-            var containerCorners = new Vector3[4];
-            child.GetWorldCorners(childCorners);
-            container.GetWorldCorners(containerCorners);
-            const float tolerance = 0.1f;
-            return childCorners.All(corner =>
-                corner.x >= containerCorners[0].x - tolerance && corner.x <= containerCorners[2].x + tolerance &&
-                corner.y >= containerCorners[0].y - tolerance && corner.y <= containerCorners[2].y + tolerance);
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+            scroll.Rebuild(CanvasUpdate.PostLayout);
+            scroll.verticalNormalizedPosition = 0f;
+            Canvas.ForceUpdateCanvases();
+            scroll.Rebuild(CanvasUpdate.PostLayout);
+        }
+
+        private static bool IsInsideBottomSafeArea(RectTransform card, RectTransform viewport, float safeMargin)
+        {
+            var cardBounds = BoundsInViewport(card, viewport);
+            var viewportBounds = BoundsInViewport(viewport, viewport);
+            return cardBounds.bottom >= viewportBounds.bottom + safeMargin && cardBounds.top <= viewportBounds.top + 0.1f;
+        }
+
+        private static bool IsFullyInside(RectTransform card, RectTransform viewport)
+        {
+            return IsInsideBottomSafeArea(card, viewport, 0f);
+        }
+
+        private static (float bottom, float top) BoundsInViewport(RectTransform rect, RectTransform viewport)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var bottom = float.MaxValue;
+            var top = float.MinValue;
+            for (var index = 0; index < corners.Length; index++)
+            {
+                var local = viewport.InverseTransformPoint(corners[index]);
+                bottom = Mathf.Min(bottom, local.y);
+                top = Mathf.Max(top, local.y);
+            }
+
+            return (bottom, top);
         }
 
         private static int CountNamed(Transform root, string name)
