@@ -104,6 +104,26 @@ namespace ElectricalSim.Spice.Core
                     };
                     continue;
                 }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    // BJT 三端器件：Voltage = V(C)-V(E) 相量；Current 经内部 0V 探针源 i() 支路读取复数小信号 collector 电流。
+                    // 方向约定：C-to-E；流入 collector 为正（探针源正极接 collector 网络、负极接 Q collector 脚）。
+                    var collectorNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)];
+                    var emitterNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)];
+                    var probeName = SpiceAcNetlistBuilder.GetBjtCollectorProbeName(graph.SpiceNameByComponentId[component.InstanceId]);
+                    result.AcComponentResults[component.InstanceId] = new SpiceAcComponentResult
+                    {
+                        ComponentId = component.InstanceId,
+                        ComponentKind = component.Kind.ToString(),
+                        Voltage = GetNodeVoltage(result.AcNodeVoltages, collectorNode).Subtract(GetNodeVoltage(result.AcNodeVoltages, emitterNode)),
+                        Current = branchValues[probeName],
+                        VoltageDirection = "C-to-E",
+                        CurrentDirection = "collector small-signal current via internal 0V probe, positive flowing into collector",
+                        ResultStatus = SpiceResultStatus.Available,
+                        Notes = "小信号 AC collector 电流（经内部 0V 探针源 i() 读取），非 DC 工作点电流；@q[ic] 在 .ac 下只输出 DC 标量，故采用探针 fallback。模型卡无动态参数，响应纯阻性、虚部≈0。"
+                    };
+                    continue;
+                }
                 var positiveNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negativeNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 var voltage = GetNodeVoltage(result.AcNodeVoltages, positiveNode).Subtract(GetNodeVoltage(result.AcNodeVoltages, negativeNode));
@@ -140,6 +160,12 @@ namespace ElectricalSim.Spice.Core
                     case SpiceComponentKind.AcVoltageSource:
                         componentResult.Current = branchValues[graph.SpiceNameByComponentId[component.InstanceId]];
                         componentResult.CurrentDirection = "positive-to-negative (ngspice branch convention)";
+                        break;
+                    case SpiceComponentKind.DcVoltageSource:
+                        // DC 偏置源：AC 小信号激励为 0，仅提供工作点偏置；支路电流为小信号流经偏置源的电流。
+                        componentResult.Current = branchValues[graph.SpiceNameByComponentId[component.InstanceId]];
+                        componentResult.CurrentDirection = "positive-to-negative (ngspice branch convention)";
+                        componentResult.Notes = "DC bias source; AC small-signal excitation is 0; current is the small-signal current through the bias source";
                         break;
                     case SpiceComponentKind.VoltageProbe:
                         componentResult.Current = SpicePhasor.Zero;

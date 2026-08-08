@@ -404,11 +404,15 @@ namespace ElectricalSim.Spice.Topology
         private static bool IsSupportedForAnalysis(SpiceComponentKind kind, SpiceAnalysisMode mode)
         {
             if (mode == SpiceAnalysisMode.DcOperatingPoint) return kind != SpiceComponentKind.AcVoltageSource;
+            // AC 白名单：Generic NPN/PNP BJT 与 DcVoltageSource（仅作偏置，AC 小信号激励为 0）自 BJT-2 起受支持；
+            // DcCurrentSource、SiliconDiode 等其他器件仍不受支持，不得顺手放开。
             return kind == SpiceComponentKind.AcVoltageSource || kind == SpiceComponentKind.Resistor ||
                 kind == SpiceComponentKind.Capacitor || kind == SpiceComponentKind.Inductor ||
                 kind == SpiceComponentKind.Ground || kind == SpiceComponentKind.IdealSwitch ||
                 kind == SpiceComponentKind.VoltageProbe || kind == SpiceComponentKind.CurrentProbe ||
-                kind == SpiceComponentKind.IdealOperationalAmplifier;
+                kind == SpiceComponentKind.IdealOperationalAmplifier ||
+                kind == SpiceComponentKind.GenericNpnBjt || kind == SpiceComponentKind.GenericPnpBjt ||
+                kind == SpiceComponentKind.DcVoltageSource;
         }
 
         private sealed class NodeGroup

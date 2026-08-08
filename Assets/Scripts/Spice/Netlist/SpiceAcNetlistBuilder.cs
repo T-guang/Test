@@ -57,9 +57,25 @@ namespace ElectricalSim.Spice.Netlist
                     AppendIdealOperationalAmplifierLine(builder, component, pair.Value, graph);
                     continue;
                 }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    AppendBjtLines(builder, component, pair.Value, graph);
+                    continue;
+                }
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 AppendComponentLine(builder, component, pair.Value, positive, negative);
+            }
+
+            // 与 DC builder 一致的按需 .model 发射：每种通用 BJT 模型只发一次；
+            // 模型卡不含动态参数（TF/CJE/CJC 默认 0），AC 响应纯阻性且与频率无关，教学可接受。
+            if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.GenericNpnBjt))
+            {
+                builder.AppendLine(".model " + SpiceComponentDefaults.NpnGenericModelName + " " + SpiceComponentDefaults.NpnGenericModelParameters);
+            }
+            if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.GenericPnpBjt))
+            {
+                builder.AppendLine(".model " + SpiceComponentDefaults.PnpGenericModelName + " " + SpiceComponentDefaults.PnpGenericModelParameters);
             }
 
             var requests = new List<SpiceAcOutputRequest>();
@@ -74,9 +90,15 @@ namespace ElectricalSim.Spice.Netlist
             var branchNames = ordered
                 .Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.AcVoltageSource ||
                                componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe ||
-                               componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier)
+                               componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier ||
+                               componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource)
                 .Select(pair => pair.Value)
                 .ToList();
+            // BJT collector 复数电流经内部 0V 探针源读取（@q[ic] 在 .ac 下只给 DC 工作点标量），故把探针源也加入 i() 请求。
+            branchNames.AddRange(ordered
+                .Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.GenericNpnBjt ||
+                               componentById[pair.Key].Kind == SpiceComponentKind.GenericPnpBjt)
+                .Select(pair => GetBjtCollectorProbeName(pair.Value)));
             foreach (var branch in branchNames)
                 requests.Add(new SpiceAcOutputRequest(SpiceAcOutputKind.BranchCurrent, "i(" + branch + ")", branch));
 
@@ -98,6 +120,11 @@ namespace ElectricalSim.Spice.Netlist
                     builder.Append(graphName).Append(' ').Append(positive).Append(' ').Append(negative).Append(" AC ")
                         .Append(component.GetRequiredParameter(SpiceParameterKey.AcMagnitude).ToString("R", CultureInfo.InvariantCulture)).Append(' ')
                         .Append(component.AcPhaseDegrees.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
+                    return;
+                case SpiceComponentKind.DcVoltageSource:
+                    // DC 偏置源：显式 DC 关键字且不带 AC 关键字，ngspice 语义下 AC 小信号幅值为 0，仅提供工作点偏置。
+                    builder.Append(graphName).Append(' ').Append(positive).Append(' ').Append(negative).Append(" DC ")
+                        .Append(component.GetRequiredParameter(SpiceParameterKey.DcVoltage).ToString("R", CultureInfo.InvariantCulture)).AppendLine();
                     return;
                 case SpiceComponentKind.CurrentProbe:
                     builder.Append(graphName).Append(' ').Append(positive).Append(' ').Append(negative).Append(" 0").AppendLine();
@@ -134,6 +161,42 @@ namespace ElectricalSim.Spice.Netlist
         {
             builder.Append(name).Append(' ').Append(positive).Append(' ').Append(negative).Append(' ')
                 .Append(value.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
+        }
+
+        /// <summary>
+        /// 发射 BJT 的 Q 行与其 collector 支路内部 0V 探针源。
+        /// Q 行端子顺序 collector/base/emitter（与 DC builder 一致）；collector 脚改接内部节点，
+        /// 由 <c>V&lt;QName&gt;C &lt;collector_net&gt; &lt;collector_int&gt; DC 0</c> 串联回真实 collector 网络，
+        /// 使 i(V&lt;QName&gt;C) 可读取复数小信号 collector 电流（实测 @q[ic] 在 .ac 下只输出 DC 工作点标量）。
+        /// </summary>
+        private static void AppendBjtLines(StringBuilder builder, SpiceComponentModel component, string graphName, SpiceCircuitGraph graph)
+        {
+            var collectorNet = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)];
+            var baseNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.BaseTerminalId)];
+            var emitter = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)];
+            var collectorInternal = GetBjtCollectorProbeNode(graphName);
+            var modelName = component.Kind == SpiceComponentKind.GenericNpnBjt
+                ? SpiceComponentDefaults.NpnGenericModelName
+                : SpiceComponentDefaults.PnpGenericModelName;
+            builder.Append(graphName).Append(' ').Append(collectorInternal).Append(' ').Append(baseNode).Append(' ').Append(emitter).Append(' ').Append(modelName).AppendLine();
+            builder.Append(GetBjtCollectorProbeName(graphName)).Append(' ').Append(collectorNet).Append(' ').Append(collectorInternal).Append(" DC 0").AppendLine();
+        }
+
+        /// <summary>
+        /// BJT collector 探针源的确定性命名：Q 名前置 V、后置 C（如 Q1 -> VQ1C）。
+        /// 与既有 SPICE 名（V+数字、VPROBE+数字、EOP+数字等）永不冲突。
+        /// </summary>
+        public static string GetBjtCollectorProbeName(string qSpiceName)
+        {
+            return "V" + qSpiceName + "C";
+        }
+
+        /// <summary>
+        /// BJT collector 探针源内部节点的确定性命名（如 Q1 -> qcq1），不与图节点 n001... 或参考节点 0 冲突。
+        /// </summary>
+        public static string GetBjtCollectorProbeNode(string qSpiceName)
+        {
+            return "qc" + qSpiceName.ToLowerInvariant();
         }
     }
 }
