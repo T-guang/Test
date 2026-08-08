@@ -70,6 +70,14 @@ namespace ElectricalSim.Spice.Core
             return result;
         }
 
+        /// <summary>
+        /// 将 ngspice 解析出的向量映射回各元件的 <see cref="SpiceComponentResult"/>。
+        /// BJT 方向约定（实测 ngspice-45.2 确认）：
+        /// Voltage = V(C) - V(E)，恒为此方向；
+        /// Current = IC = ngspice @q[ic]，符号约定为“流入 collector 端子为正”；
+        /// NPN 放大区 IC 为正（电流流入 collector）；PNP 放大区 IC 为负（电流实际流出 collector）；
+        /// ngspice 约定下 ic+ib+ie=0（流入为正），本闭环只报告 IC，不打印/不报告 ib、ie。
+        /// </summary>
         private static void BuildComponentResults(SpiceCircuitModel circuit, SpiceCircuitGraph graph, SpiceSimulationResult result, Dictionary<string, double> currents)
         {
             foreach (var component in circuit.Components.Where(component => component.Kind != SpiceComponentKind.Ground).OrderBy(component => component.InstanceId, StringComparer.Ordinal))
@@ -90,6 +98,24 @@ namespace ElectricalSim.Spice.Core
                         Notes = "线性 VCVS；固定开环增益 1e6"
                     };
                     result.ComponentResults[component.InstanceId] = opAmpResult;
+                    continue;
+                }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    var collectorNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)];
+                    var emitterNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)];
+                    var bjtResult = new SpiceComponentResult
+                    {
+                        ComponentId = component.InstanceId,
+                        ComponentKind = component.Kind.ToString(),
+                        Voltage = GetNodeVoltage(result.NodeVoltages, collectorNode) - GetNodeVoltage(result.NodeVoltages, emitterNode),
+                        Current = currents[graph.SpiceNameByComponentId[component.InstanceId]],
+                        VoltageDirection = "C-to-E",
+                        CurrentDirection = "collector terminal (ngspice convention: into-terminal positive)",
+                        ResultStatus = SpiceResultStatus.Available,
+                        Notes = "Voltage=V(C)-V(E); Current=IC; NPN active 区 IC>0、PNP active 区 IC<0（流入电极为正）"
+                    };
+                    result.ComponentResults[component.InstanceId] = bjtResult;
                     continue;
                 }
                 var positiveNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];

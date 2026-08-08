@@ -84,7 +84,7 @@ namespace ElectricalSim.Spice.Netlist
             }
 
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();
-            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode || componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier)
+            var branches = ordered.Where(pair => componentById[pair.Key].Kind == SpiceComponentKind.DcVoltageSource || componentById[pair.Key].Kind == SpiceComponentKind.CurrentProbe || componentById[pair.Key].Kind == SpiceComponentKind.Inductor || componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode || componentById[pair.Key].Kind == SpiceComponentKind.IdealOperationalAmplifier || componentById[pair.Key].Kind == SpiceComponentKind.GenericNpnBjt || componentById[pair.Key].Kind == SpiceComponentKind.GenericPnpBjt)
                 .Select(pair => pair.Value).ToList();
             // 只打印后续结果层需要的向量，并用唯一标记隔离 ngspice 自身日志。
             builder.AppendLine().AppendLine(".control").AppendLine("set noaskquit").AppendLine("op").AppendLine("echo " + BeginMarker);
@@ -92,7 +92,10 @@ namespace ElectricalSim.Spice.Netlist
             foreach (var branch in branches)
             {
                 var componentId = graph.ComponentIdBySpiceName[branch];
-                builder.AppendLine(componentById[componentId].Kind == SpiceComponentKind.SiliconDiode ? "print @" + branch + "[id]" : "print i(" + branch + ")");
+                var kind = componentById[componentId].Kind;
+                if (kind == SpiceComponentKind.SiliconDiode) builder.AppendLine("print @" + branch + "[id]");
+                else if (kind == SpiceComponentKind.GenericNpnBjt || kind == SpiceComponentKind.GenericPnpBjt) builder.AppendLine("print @" + branch + "[ic]");
+                else builder.AppendLine("print i(" + branch + ")");
             }
             builder.AppendLine("echo " + EndMarker).AppendLine("quit").AppendLine(".endc").AppendLine().AppendLine(".end");
             return new SpiceNetlistDocument { Content = builder.ToString(), PrintedNodes = nodes, PrintedBranchNames = branches };

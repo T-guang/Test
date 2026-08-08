@@ -11,6 +11,8 @@ namespace ElectricalSim.Spice.Results
     /// <summary>
     /// 单个元件的 DC 结果。电压固定为 positive/a 减 negative/b；普通元件电流同向，
     /// 电压源电流保留 ngspice 的符号约定。
+    /// BJT：Voltage = V(C)-V(E)；Current = IC（ngspice @q[ic]，流入 collector 端子为正），
+    /// NPN 放大区 IC 为正、PNP 放大区 IC 为负；仅报告 IC，不报告 ib/ie。
     /// </summary>
     public sealed class SpiceComponentResult
     {
