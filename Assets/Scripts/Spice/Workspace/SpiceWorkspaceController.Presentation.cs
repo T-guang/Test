@@ -61,6 +61,9 @@ namespace ElectricalSim.Spice.Workspace
             CreatePaletteCard(palette.transform, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
             CreatePaletteCard(palette.transform, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
+            CreatePaletteCard(palette.transform, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
+            CreatePaletteCard(palette.transform, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
+
             var workspace = bindings.WorkspaceViewport;
             viewportRect = workspace;
             // 为 Viewport 添加 RectMask2D 以裁剪缩放/平移后超出视口的内容
@@ -431,8 +434,9 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (Model.AnalysisMode == SpiceAnalysisMode.DcOperatingPoint)
                 return kind != SpiceComponentKind.AcVoltageSource;
-            return kind != SpiceComponentKind.DcVoltageSource &&
-                kind != SpiceComponentKind.DcCurrentSource &&
+            // 与求解层 GraphBuilder.IsSupportedForAnalysis 的 AC 白名单保持同步：
+            // DcVoltageSource 自 BJT-2 起作为偏置源受支持；通用 NPN/PNP 本就允许；DcCurrentSource/SiliconDiode 仍拒绝。
+            return kind != SpiceComponentKind.DcCurrentSource &&
                 kind != SpiceComponentKind.SiliconDiode;
         }
 
@@ -565,6 +569,18 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
             currentUnits = SpiceParameterUnits.UnitsFor(selectedComponent.Kind);
+            if (selectedComponent.Kind == SpiceComponentKind.GenericNpnBjt || selectedComponent.Kind == SpiceComponentKind.GenericPnpBjt)
+            {
+                // 教学级通用 BJT 模型参数固定（IS/BF），视图只呈现模型边界，与理想运放同样走无参数信息文本。
+                var isNpn = selectedComponent.Kind == SpiceComponentKind.GenericNpnBjt;
+                parameterTitle.text = selectedComponent.InstanceId + (isNpn ? " 通用 NPN 三极管" : " 通用 PNP 三极管");
+                parameterInput.gameObject.SetActive(false);
+                unitButton.gameObject.SetActive(false);
+                if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(false);
+                opAmpInfoText.text = "教学级模型：" + (isNpn ? SpiceComponentDefaults.NpnGenericModelName : SpiceComponentDefaults.PnpGenericModelName) + "\n端子：collector、base、emitter\n模型参数（IS、BF）固定\n无可编辑参数";
+                SetOpAmpInfoVisible(true);
+                return;
+            }
             if (selectedComponent.Kind == SpiceComponentKind.IdealOperationalAmplifier)
             {
                 // 这个固定 VCVS 没有可编辑参数；视图只呈现 Core 模型边界，任何电气改动仍须由 Controller 编排 Model API。

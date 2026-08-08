@@ -207,6 +207,16 @@ namespace ElectricalSim.Spice.Workspace
                 CreateReferenceLabel("InvertingReference", "IN-", new Vector2(-44f, -28f));
                 CreateReferenceLabel("OutputReference", "OUT", new Vector2(48f, 18f));
             }
+            else if (data.Kind == SpiceComponentKind.GenericNpnBjt || data.Kind == SpiceComponentKind.GenericPnpBjt)
+            {
+                // 三个可接线端子与符号引线端点重合；旋转只作用于 SymbolRoot，端子与导线方向始终同步。
+                CreateTerminal(SpiceComponentModel.CollectorTerminalId, new Vector2(46f, 40f));
+                CreateTerminal(SpiceComponentModel.BaseTerminalId, new Vector2(-66f, 0f));
+                CreateTerminal(SpiceComponentModel.EmitterTerminalId, new Vector2(46f, -40f));
+                CreateReferenceLabel("CollectorReference", "C", new Vector2(58f, 44f));
+                CreateReferenceLabel("BaseReference", "B", new Vector2(-54f, 15f));
+                CreateReferenceLabel("EmitterReference", "E", new Vector2(58f, -44f));
+            }
             else
             {
                 CreateTerminal(SpiceComponentModel.PositiveTerminalId, new Vector2(-82f, 0f));
@@ -334,6 +344,28 @@ namespace ElectricalSim.Spice.Workspace
                     CreateLine(symbol.transform, new Vector2(-18f, -8f), new Vector2(18f, -8f), 3f);
                     CreateLine(symbol.transform, new Vector2(-8f, -16f), new Vector2(8f, -16f), 3f);
                     break;
+                case SpiceComponentKind.GenericNpnBjt:
+                case SpiceComponentKind.GenericPnpBjt:
+                {
+                    var isNpn = data.Kind == SpiceComponentKind.GenericNpnBjt;
+                    // 标准教学 BJT 线框：竖直 base 线，base 引线自左侧水平接入；
+                    // collector/emitter 引线分别从 base 线上/下端斜向右上/右下至端子。
+                    CreateLine(symbol.transform, new Vector2(-14f, -24f), new Vector2(-14f, 24f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-66f, 0f), new Vector2(-14f, 0f), 3f);
+                    CreateLine(symbol.transform, new Vector2(-14f, 12f), new Vector2(46f, 40f), 3f);
+                    var emitterStart = new Vector2(-14f, -12f);
+                    var emitterEnd = new Vector2(46f, -40f);
+                    CreateLine(symbol.transform, emitterStart, emitterEnd, 3f);
+                    // emitter 箭头用 2 条短线段：NPN outward 沿 emitter 引线指向 emitter 端子，PNP inward 指向 base。
+                    // 箭头在符号局部坐标内定义，旋转由 SymbolRoot 整体处理，不叠加额外旋转逻辑。
+                    var emitterDirection = (emitterEnd - emitterStart).normalized;
+                    var emitterPerp = new Vector2(-emitterDirection.y, emitterDirection.x);
+                    var arrowTip = emitterStart + emitterDirection * (isNpn ? 40f : 16f);
+                    var barbRoot = isNpn ? arrowTip - emitterDirection * 11f : arrowTip + emitterDirection * 11f;
+                    CreateLine(symbol.transform, arrowTip, barbRoot + emitterPerp * 6.5f, 3f);
+                    CreateLine(symbol.transform, arrowTip, barbRoot - emitterPerp * 6.5f, 3f);
+                    break;
+                }
             }
         }
 
@@ -383,7 +415,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             var digits = component.InstanceId.Substring(component.InstanceId.LastIndexOf('-') + 1);
             var index = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 1;
-            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.AcVoltageSource ? "VAC" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : component.Kind == SpiceComponentKind.IdealOperationalAmplifier ? "OP" : "GND";
+            var prefix = component.Kind == SpiceComponentKind.DcVoltageSource ? "V" : component.Kind == SpiceComponentKind.AcVoltageSource ? "VAC" : component.Kind == SpiceComponentKind.DcCurrentSource ? "I" : component.Kind == SpiceComponentKind.IdealSwitch ? "SW" : component.Kind == SpiceComponentKind.SiliconDiode ? "D" : component.Kind == SpiceComponentKind.Resistor ? "R" : component.Kind == SpiceComponentKind.Capacitor ? "C" : component.Kind == SpiceComponentKind.Inductor ? "L" : component.Kind == SpiceComponentKind.VoltageProbe ? "VP" : component.Kind == SpiceComponentKind.CurrentProbe ? "IP" : component.Kind == SpiceComponentKind.IdealOperationalAmplifier ? "OP" : (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt) ? "Q" : "GND";
             return prefix + index.ToString(CultureInfo.InvariantCulture);
         }
     }
@@ -402,6 +434,8 @@ namespace ElectricalSim.Spice.Workspace
             if (kind == SpiceComponentKind.Resistor) return value >= 1000000d ? Format(value / 1000000d) + " MΩ" : value >= 1000d ? Format(value / 1000d) + " kΩ" : Format(value) + " Ω";
             if (kind == SpiceComponentKind.Capacitor) return value < 1e-9d ? Format(value / 1e-12d) + " pF" : value < 1e-6d ? Format(value / 1e-9d) + " nF" : value < 1e-3d ? Format(value / 1e-6d) + " μF" : value < 1d ? Format(value / 1e-3d) + " mF" : Format(value) + " F";
             if (kind == SpiceComponentKind.Inductor) return value < 1e-3d ? Format(value / 1e-6d) + " μH" : value < 1d ? Format(value / 1e-3d) + " mH" : Format(value) + " H";
+            if (kind == SpiceComponentKind.GenericNpnBjt) return SpiceComponentDefaults.NpnGenericModelName;
+            if (kind == SpiceComponentKind.GenericPnpBjt) return SpiceComponentDefaults.PnpGenericModelName;
             return "GND";
         }
 

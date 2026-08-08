@@ -125,7 +125,7 @@ namespace ElectricalSim.Spice.T3
             try
             {
                 var workspace = CreateInitializedWorkspaceForCopy(canvasRoot.transform, out _);
-                var dcKinds = new[] { SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.SiliconDiode, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe };
+                var dcKinds = new[] { SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.SiliconDiode, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe, SpiceComponentKind.GenericNpnBjt, SpiceComponentKind.GenericPnpBjt };
                 foreach (var kind in dcKinds)
                     if (workspace.GetPaletteCardForTesting(kind) == null || !workspace.GetPaletteCardForTesting(kind).interactable)
                         throw new InvalidOperationException("AC-C1 DC palette matrix disabled a supported card: " + kind + ".");
@@ -135,11 +135,12 @@ namespace ElectricalSim.Spice.T3
                 var resistor = workspace.CreateComponent(SpiceComponentKind.Resistor, Vector2.zero);
                 if (!workspace.TrySetAnalysisMode(SpiceAnalysisMode.AcSingleFrequency) || workspace.Model.FindComponent(resistor.InstanceId) == null)
                     throw new InvalidOperationException("AC-C1 mode switch removed an existing component.");
-                var acKinds = new[] { SpiceComponentKind.AcVoltageSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe };
+                // BJT-2 起 DcVoltageSource 作为偏置源进入 AC 白名单；BJT-3 起通用 NPN/PNP 同样受 AC 支持。
+                var acKinds = new[] { SpiceComponentKind.AcVoltageSource, SpiceComponentKind.DcVoltageSource, SpiceComponentKind.Resistor, SpiceComponentKind.Capacitor, SpiceComponentKind.Inductor, SpiceComponentKind.Ground, SpiceComponentKind.IdealSwitch, SpiceComponentKind.VoltageProbe, SpiceComponentKind.CurrentProbe, SpiceComponentKind.GenericNpnBjt, SpiceComponentKind.GenericPnpBjt };
                 foreach (var kind in acKinds)
                     if (workspace.GetPaletteCardForTesting(kind) == null || !workspace.GetPaletteCardForTesting(kind).interactable)
                         throw new InvalidOperationException("AC-C1 AC palette matrix disabled a supported card: " + kind + ".");
-                foreach (var kind in new[] { SpiceComponentKind.DcVoltageSource, SpiceComponentKind.DcCurrentSource, SpiceComponentKind.SiliconDiode })
+                foreach (var kind in new[] { SpiceComponentKind.DcCurrentSource, SpiceComponentKind.SiliconDiode })
                     if (workspace.GetPaletteCardForTesting(kind).interactable)
                         throw new InvalidOperationException("AC-C1 AC palette allowed an unsupported card: " + kind + ".");
             }
@@ -207,6 +208,7 @@ namespace ElectricalSim.Spice.T3
                     throw new InvalidOperationException("Returning to the AC source's compatible mode did not resume formal calculation.");
 
                 workspace.ClearWorkspace();
+                // BJT-2 起 DcVoltageSource 在 AC 下作为偏置源受支持：只有硅二极管仍须被运行前预检显式诊断。
                 var retainedDcSource = workspace.CreateComponent(SpiceComponentKind.DcVoltageSource, Vector2.left * 40f);
                 var retainedDiode = workspace.CreateComponent(SpiceComponentKind.SiliconDiode, Vector2.right * 40f);
                 var revisionBeforeAcBlock = workspace.ElectricalRevisionForTesting;
@@ -216,9 +218,9 @@ namespace ElectricalSim.Spice.T3
                     workspace.ElectricalRevisionForTesting != revisionBeforeAcBlock || workspace.IsDirty != dirtyBeforeAcBlock ||
                     workspace.ResultState != SpiceWorkspaceResultState.Current ||
                     workspace.Model.FindComponent(retainedDcSource.InstanceId) == null || workspace.Model.FindComponent(retainedDiode.InstanceId) == null ||
-                    !workspace.GetVisibleDiagnosticTextForTesting().Contains("直流电压源 " + retainedDcSource.InstanceId) ||
+                    workspace.GetVisibleDiagnosticTextForTesting().Contains("直流电压源 " + retainedDcSource.InstanceId) ||
                     !workspace.GetVisibleDiagnosticTextForTesting().Contains("硅二极管 " + retainedDiode.InstanceId))
-                    throw new InvalidOperationException("AC mode did not preserve and explicitly diagnose DC sources or diodes before simulation.");
+                    throw new InvalidOperationException("AC mode did not preserve and explicitly diagnose unsupported diodes before simulation.");
 
                 // V2 不承担模式兼容性裁决；往返后必须完整保留这些器件和分析设置。
                 var acDrawing = new SpiceWorkspaceModel();
@@ -1101,7 +1103,6 @@ namespace ElectricalSim.Spice.T3
 
             var unsupportedAcFactories = new Func<SpiceComponentModel>[]
             {
-                () => SpiceComponentModel.DcVoltageSource("source-001", 5d),
                 () => SpiceComponentModel.DcCurrentSource("current-source-001", 0.001d),
                 () => SpiceComponentModel.SiliconDiode("diode-001")
             };
@@ -1111,6 +1112,13 @@ namespace ElectricalSim.Spice.T3
                 unsupportedAc.Components.Add(createUnsupported());
                 AssertGraphHasDiagnostic(SpiceCircuitGraphBuilder.Build(unsupportedAc), "SPICE_AC_COMPONENT_UNSUPPORTED");
             }
+
+            // BJT-2 起 DcVoltageSource 进入 AC 白名单（仅作偏置，AC 小信号激励为 0），
+            // 旧期望其报 SPICE_AC_COMPONENT_UNSUPPORTED 已过时，此处反转为“不得再拒绝”。
+            var biasAc = CreateBasicAcCircuit();
+            biasAc.Components.Add(SpiceComponentModel.DcVoltageSource("source-001", 5d));
+            if (SpiceCircuitGraphBuilder.Build(biasAc).Diagnostics.Any(diagnostic => diagnostic.Code == "SPICE_AC_COMPONENT_UNSUPPORTED"))
+                throw new InvalidOperationException("AC bias DC voltage source was incorrectly flagged as unsupported.");
 
             var unsupportedDc = new SpiceCircuitModel();
             unsupportedDc.Components.AddRange(CreateBasicAcCircuit().Components);

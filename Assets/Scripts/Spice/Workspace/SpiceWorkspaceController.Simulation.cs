@@ -328,6 +328,8 @@ namespace ElectricalSim.Spice.Workspace
         {
             if (kind == SpiceComponentKind.AcVoltageSource) return "交流电压源";
             if (kind == SpiceComponentKind.IdealOperationalAmplifier) return "理想运算放大器";
+            if (kind == SpiceComponentKind.GenericNpnBjt) return "通用 NPN 三极管";
+            if (kind == SpiceComponentKind.GenericPnpBjt) return "通用 PNP 三极管";
             return kind == SpiceComponentKind.DcVoltageSource ? "直流电压源" : kind == SpiceComponentKind.DcCurrentSource ? "直流电流源" : kind == SpiceComponentKind.IdealSwitch ? "理想开关" : kind == SpiceComponentKind.SiliconDiode ? "通用硅二极管" : kind == SpiceComponentKind.Resistor ? "电阻" : kind == SpiceComponentKind.Capacitor ? "电容" : kind == SpiceComponentKind.Inductor ? "电感" : kind == SpiceComponentKind.VoltageProbe ? "电压探针" : kind == SpiceComponentKind.CurrentProbe ? "电流探针" : "接地";
         }
 

@@ -202,9 +202,10 @@ namespace ElectricalSim.Spice.Workspace
             if (double.IsNaN(value) || double.IsInfinity(value)) return false;
             if (kind == SpiceComponentKind.IdealSwitch) return value == 0d || value == 1d;
             if (kind == SpiceComponentKind.AcVoltageSource) return SpiceAnalysisLimits.IsValidAcMagnitude(value);
-            // 二极管使用固定 D_GENERIC 模型，GND、两类探针与理想运算放大器无参数；均不允许通过参数区写入内部值。
+            // 二极管使用固定 D_GENERIC 模型，GND、两类探针、理想运算放大器与通用 NPN/PNP 三极管无参数；均不允许通过参数区写入内部值。
             return kind == SpiceComponentKind.DcVoltageSource || kind == SpiceComponentKind.DcCurrentSource ||
-                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && kind != SpiceComponentKind.IdealOperationalAmplifier && value > 0d);
+                (kind != SpiceComponentKind.Ground && kind != SpiceComponentKind.SiliconDiode && kind != SpiceComponentKind.VoltageProbe && kind != SpiceComponentKind.CurrentProbe && kind != SpiceComponentKind.IdealOperationalAmplifier &&
+                kind != SpiceComponentKind.GenericNpnBjt && kind != SpiceComponentKind.GenericPnpBjt && value > 0d);
         }
 
         /// <summary>
@@ -236,6 +237,8 @@ namespace ElectricalSim.Spice.Workspace
                 case SpiceComponentKind.VoltageProbe: return "voltage-probe";
                 case SpiceComponentKind.CurrentProbe: return "current-probe";
                 case SpiceComponentKind.IdealOperationalAmplifier: return "opamp";
+                case SpiceComponentKind.GenericNpnBjt: return "npn";
+                case SpiceComponentKind.GenericPnpBjt: return "pnp";
                 default: return "ground";
             }
         }
@@ -344,6 +347,8 @@ namespace ElectricalSim.Spice.Workspace
                 case SpiceComponentKind.VoltageProbe: return SpiceComponentModel.VoltageProbe(InstanceId);
                 case SpiceComponentKind.CurrentProbe: return SpiceComponentModel.CurrentProbe(InstanceId);
                 case SpiceComponentKind.IdealOperationalAmplifier: return SpiceComponentModel.IdealOperationalAmplifier(InstanceId);
+                case SpiceComponentKind.GenericNpnBjt: return SpiceComponentModel.GenericNpnBjt(InstanceId);
+                case SpiceComponentKind.GenericPnpBjt: return SpiceComponentModel.GenericPnpBjt(InstanceId);
                 default: throw new ArgumentOutOfRangeException();
             }
         }

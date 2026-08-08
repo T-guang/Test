@@ -61,6 +61,9 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.AcVoltageSource, "交流电压源", "~  AC", 0, 5);
             StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.IdealOperationalAmplifier, "理想运算放大器", "OP  +  −", 1, 5);
 
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
+            StylePaletteCard(bindings.PaletteRoot, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
+
             StyleAssistant(bindings);
         }
 
@@ -285,6 +288,24 @@ namespace ElectricalSim.Spice.Workspace
                     AddLine(symbol, "CircleLeft", new Vector2(42f, -14f), new Vector2(42f, 14f));
                     AddLine(symbol, "CircleRight", new Vector2(58f, -14f), new Vector2(58f, 14f));
                     AddText(symbol, "ALabel", "A", new Vector2(50f, 0f), 13);
+                    break;
+                case SpiceComponentKind.GenericNpnBjt:
+                    // 教学 BJT 缩略符号：base 竖线 + 左侧水平引线，collector/emitter 斜引线；NPN 箭头沿 emitter 引线向外。
+                    AddLine(symbol, "BaseBar", new Vector2(40f, -14f), new Vector2(40f, 14f));
+                    AddLine(symbol, "BaseLead", new Vector2(16f, 0f), new Vector2(40f, 0f));
+                    AddLine(symbol, "CollectorLead", new Vector2(40f, 7f), new Vector2(68f, 19f));
+                    AddLine(symbol, "EmitterLead", new Vector2(40f, -7f), new Vector2(68f, -19f));
+                    AddLine(symbol, "ArrowBarbA", new Vector2(58f, -15f), new Vector2(52.5f, -8f));
+                    AddLine(symbol, "ArrowBarbB", new Vector2(58f, -15f), new Vector2(50f, -16.5f));
+                    break;
+                case SpiceComponentKind.GenericPnpBjt:
+                    // PNP 与 NPN 拓扑一致，仅 emitter 箭头改为指向 base（inward）。
+                    AddLine(symbol, "BaseBar", new Vector2(40f, -14f), new Vector2(40f, 14f));
+                    AddLine(symbol, "BaseLead", new Vector2(16f, 0f), new Vector2(40f, 0f));
+                    AddLine(symbol, "CollectorLead", new Vector2(40f, 7f), new Vector2(68f, 19f));
+                    AddLine(symbol, "EmitterLead", new Vector2(40f, -7f), new Vector2(68f, -19f));
+                    AddLine(symbol, "ArrowBarbA", new Vector2(48f, -10.5f), new Vector2(55f, -6.5f));
+                    AddLine(symbol, "ArrowBarbB", new Vector2(48f, -10.5f), new Vector2(53.5f, -14.5f));
                     break;
                 default:
                     AddLine(symbol, "Stem", new Vector2(51f, 20f), new Vector2(51f, -4f));

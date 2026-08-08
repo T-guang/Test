@@ -242,6 +242,14 @@ namespace ElectricalSim.Spice.Workspace
                 return;
             }
 
+            if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+            {
+                if (statusText != null) statusText.text = component.Kind == SpiceComponentKind.GenericNpnBjt
+                    ? "通用 NPN 三极管使用固定教学模型（NPN_GENERIC），无可编辑参数。"
+                    : "通用 PNP 三极管使用固定教学模型（PNP_GENERIC），无可编辑参数。";
+                return;
+            }
+
             ParameterDialogRequested?.Invoke(component.Data);
         }
 

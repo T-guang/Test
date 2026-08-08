@@ -138,7 +138,9 @@ namespace ElectricalSim.Spice.Workspace
                         ? "图纸格式 V1 不支持交流电压源。"
                         : component.Kind == SpiceComponentKind.IdealOperationalAmplifier
                             ? "当前图纸包含 V1 格式不支持的器件：理想运算放大器。"
-                            : "当前保存格式 V1 不支持此器件类型，未执行保存。";
+                            : component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt
+                                ? "当前图纸包含 V1 格式不支持的器件：通用三极管（NPN/PNP）。"
+                                : "当前保存格式 V1 不支持此器件类型，未执行保存。";
                     return false;
                 }
             }
@@ -459,7 +461,9 @@ namespace ElectricalSim.Spice.Workspace
                         ? "图纸格式 V1 不支持交流电压源。"
                         : kind == SpiceComponentKind.IdealOperationalAmplifier
                             ? "当前图纸包含 V1 格式不支持的器件：理想运算放大器。"
-                            : "图纸格式 V1 不支持该器件类型。";
+                            : kind == SpiceComponentKind.GenericNpnBjt || kind == SpiceComponentKind.GenericPnpBjt
+                                ? "图纸格式 V1 不支持通用三极管（NPN/PNP）。"
+                                : "图纸格式 V1 不支持该器件类型。";
                     return false;
                 }
 
