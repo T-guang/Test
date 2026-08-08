@@ -19,7 +19,9 @@ namespace ElectricalSim.Spice.Core
         VoltageProbe,
         CurrentProbe,
         AcVoltageSource,
-        IdealOperationalAmplifier
+        IdealOperationalAmplifier,
+        GenericNpnBjt,
+        GenericPnpBjt
     }
 
     public enum SpiceParameterKey
@@ -40,6 +42,8 @@ namespace ElectricalSim.Spice.Core
     {
         // 以有限 1e6 增益近似理想运放，既保留负反馈误差的可验证数值，也避免无穷增益在数值求解中形成不可定义的约束。
         public const double IdealOperationalAmplifierOpenLoopGain = 1e6d;
+        public const string NpnGenericModelName = "NPN_GENERIC";
+        public const string PnpGenericModelName = "PNP_GENERIC";
     }
 
     /// <summary>
@@ -57,13 +61,33 @@ namespace ElectricalSim.Spice.Core
         {
             if (!string.Equals(startComponentId, endComponentId, StringComparison.Ordinal)) return true;
             if (string.Equals(startTerminalId, endTerminalId, StringComparison.Ordinal)) return false;
-            if (startKind != SpiceComponentKind.IdealOperationalAmplifier || endKind != SpiceComponentKind.IdealOperationalAmplifier)
-                return false;
-            // 线性运放的 VCVS 允许 OUT 回授到高阻 IN-，以表达电压跟随器；任何其他内部短接都会改变控制输入语义。
-            return (string.Equals(startTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal) &&
-                    string.Equals(endTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal)) ||
-                   (string.Equals(startTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal) &&
-                    string.Equals(endTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal));
+            // 空端子或未知端子 → 拒绝
+            if (string.IsNullOrEmpty(startTerminalId) || string.IsNullOrEmpty(endTerminalId)) return false;
+            // 运放：仅 inverting↔output
+            if (startKind == SpiceComponentKind.IdealOperationalAmplifier && endKind == SpiceComponentKind.IdealOperationalAmplifier)
+            {
+                return (string.Equals(startTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal) &&
+                        string.Equals(endTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal)) ||
+                       (string.Equals(startTerminalId, SpiceComponentModel.OutputTerminalId, StringComparison.Ordinal) &&
+                        string.Equals(endTerminalId, SpiceComponentModel.InvertingTerminalId, StringComparison.Ordinal));
+            }
+            // BJT（NPN/PNP）：同元件不同端子均允许（C↔B、B↔E、C↔E），同端子已在上方拒绝。
+            // 必须两端 kind 一致且均为 BJT，防止 kind 不一致时误放行。
+            if ((startKind == SpiceComponentKind.GenericNpnBjt || startKind == SpiceComponentKind.GenericPnpBjt)
+                && (endKind == SpiceComponentKind.GenericNpnBjt || endKind == SpiceComponentKind.GenericPnpBjt))
+            {
+                var validBjtTerminals = new[] { SpiceComponentModel.CollectorTerminalId, SpiceComponentModel.BaseTerminalId, SpiceComponentModel.EmitterTerminalId };
+                var startValid = false;
+                var endValid = false;
+                foreach (var t in validBjtTerminals)
+                {
+                    if (string.Equals(startTerminalId, t, StringComparison.Ordinal)) startValid = true;
+                    if (string.Equals(endTerminalId, t, StringComparison.Ordinal)) endValid = true;
+                }
+                return startValid && endValid;
+            }
+            // 其他元件同元件不同端子 → 拒绝
+            return false;
         }
     }
 
@@ -79,6 +103,9 @@ namespace ElectricalSim.Spice.Core
         public const string NonInvertingTerminalId = "nonInverting";
         public const string InvertingTerminalId = "inverting";
         public const string OutputTerminalId = "output";
+        public const string CollectorTerminalId = "collector";
+        public const string BaseTerminalId = "base";
+        public const string EmitterTerminalId = "emitter";
 
         private readonly Dictionary<SpiceParameterKey, double> parameters = new Dictionary<SpiceParameterKey, double>();
 
@@ -145,6 +172,16 @@ namespace ElectricalSim.Spice.Core
             return new SpiceComponentModel(instanceId, SpiceComponentKind.IdealOperationalAmplifier);
         }
 
+        public static SpiceComponentModel GenericNpnBjt(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.GenericNpnBjt);
+        }
+
+        public static SpiceComponentModel GenericPnpBjt(string instanceId)
+        {
+            return new SpiceComponentModel(instanceId, SpiceComponentKind.GenericPnpBjt);
+        }
+
         /// <summary>
         /// 两端差分电压探针。positive=V+、negative=V-；测量定义为 Vprobe = V(V+) - V(V-)。
         /// 探针不产生 SPICE 元件行，不注入电流，不参与 component-graph 连通性判断。
@@ -182,6 +219,13 @@ namespace ElectricalSim.Spice.Core
                        string.Equals(terminalId, OutputTerminalId, StringComparison.Ordinal);
             }
 
+            if (Kind == SpiceComponentKind.GenericNpnBjt || Kind == SpiceComponentKind.GenericPnpBjt)
+            {
+                return string.Equals(terminalId, CollectorTerminalId, StringComparison.Ordinal) ||
+                       string.Equals(terminalId, BaseTerminalId, StringComparison.Ordinal) ||
+                       string.Equals(terminalId, EmitterTerminalId, StringComparison.Ordinal);
+            }
+
             return string.Equals(terminalId, PositiveTerminalId, StringComparison.Ordinal) ||
                    string.Equals(terminalId, NegativeTerminalId, StringComparison.Ordinal);
         }
@@ -192,6 +236,9 @@ namespace ElectricalSim.Spice.Core
             // 三端子顺序是稳定拓扑契约：IN+、IN-、OUT；网表 VCVS 也按该语义读取，不能按 UI 排列推断。
             if (kind == SpiceComponentKind.IdealOperationalAmplifier)
                 return new[] { NonInvertingTerminalId, InvertingTerminalId, OutputTerminalId };
+            // BJT 端子顺序是稳定拓扑契约：collector、base、emitter。
+            if (kind == SpiceComponentKind.GenericNpnBjt || kind == SpiceComponentKind.GenericPnpBjt)
+                return new[] { CollectorTerminalId, BaseTerminalId, EmitterTerminalId };
             return new[] { PositiveTerminalId, NegativeTerminalId };
         }
 
