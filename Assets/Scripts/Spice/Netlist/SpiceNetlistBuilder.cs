@@ -47,6 +47,18 @@ namespace ElectricalSim.Spice.Netlist
                         .Append(SpiceComponentDefaults.IdealOperationalAmplifierOpenLoopGain.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
                     continue;
                 }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    // SPICE 语法：Q<name> <C> <B> <E> <model>
+                    var collector = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)];
+                    var baseNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.BaseTerminalId)];
+                    var emitter = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)];
+                    var modelName = component.Kind == SpiceComponentKind.GenericNpnBjt
+                        ? SpiceComponentDefaults.NpnGenericModelName
+                        : SpiceComponentDefaults.PnpGenericModelName;
+                    builder.Append(pair.Value).Append(' ').Append(collector).Append(' ').Append(baseNode).Append(' ').Append(emitter).Append(' ').Append(modelName).AppendLine();
+                    continue;
+                }
                 var a = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var b = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 if (component.Kind == SpiceComponentKind.SiliconDiode)
@@ -61,6 +73,14 @@ namespace ElectricalSim.Spice.Netlist
             if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.SiliconDiode))
             {
                 builder.AppendLine(".model D_GENERIC D(IS=2.52e-9 N=1.752 RS=0.568)");
+            }
+            if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.GenericNpnBjt))
+            {
+                builder.AppendLine(".model " + SpiceComponentDefaults.NpnGenericModelName + " " + SpiceComponentDefaults.NpnGenericModelParameters);
+            }
+            if (ordered.Any(pair => componentById[pair.Key].Kind == SpiceComponentKind.GenericPnpBjt))
+            {
+                builder.AppendLine(".model " + SpiceComponentDefaults.PnpGenericModelName + " " + SpiceComponentDefaults.PnpGenericModelParameters);
             }
 
             var nodes = graph.NodeByTerminal.Values.Where(node => node != "0").Distinct(StringComparer.Ordinal).OrderBy(node => node, StringComparer.Ordinal).ToList();

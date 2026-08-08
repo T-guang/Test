@@ -44,6 +44,10 @@ namespace ElectricalSim.Spice.Core
         public const double IdealOperationalAmplifierOpenLoopGain = 1e6d;
         public const string NpnGenericModelName = "NPN_GENERIC";
         public const string PnpGenericModelName = "PNP_GENERIC";
+        // 通用教学级 SPICE Level-1 BJT 模型：仅启用 IS（饱和电流）与 BF（正向β）两个基础参数，
+        // 数值取教学常用量级，便于 IC=β·IB 手推验证；不代表任何真实器件的完整模型。
+        public const string NpnGenericModelParameters = "NPN(IS=1e-14 BF=100)";
+        public const string PnpGenericModelParameters = "PNP(IS=1e-14 BF=100)";
     }
 
     /// <summary>

@@ -145,6 +145,17 @@ namespace ElectricalSim.Spice.Topology
                     }
                     continue;
                 }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    // BJT 三端器件：跳过双端短路诊断；仅当 C 与 E 映射到同一节点时记录 Warning。
+                    var collectorNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)];
+                    var emitterNode = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)];
+                    if (collectorNode == emitterNode)
+                    {
+                        graph.Diagnostics.Add(new SpiceDiagnostic("SPICE_COMPONENT_SHORTED", SpiceDiagnosticSeverity.Warning, "The collector and emitter terminals resolve to the same node.", component.InstanceId));
+                    }
+                    continue;
+                }
                 var positive = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)];
                 var negative = graph.NodeByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.NegativeTerminalId)];
                 if (positive == negative && IsIdealVoltageConstraint(component.Kind))
@@ -199,6 +210,22 @@ namespace ElectricalSim.Spice.Topology
                         var terminalRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, terminalId)]);
                         componentIdsByRoot[terminalRoot].Add(component.InstanceId);
                     }
+                    continue;
+                }
+                if (component.Kind == SpiceComponentKind.GenericNpnBjt || component.Kind == SpiceComponentKind.GenericPnpBjt)
+                {
+                    // BJT 三个端子均为导电端。以 emitter 为中心建立导电边：C↔E 与 B↔E，
+                    // 只影响可达性 BFS 邻接，不改 Union-Find（避免把三端 Union 成同一网络造成内部短路）。
+                    var collectorRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.CollectorTerminalId)]);
+                    var baseRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.BaseTerminalId)]);
+                    var emitterRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.EmitterTerminalId)]);
+                    neighbors[collectorRoot].Add(emitterRoot);
+                    neighbors[emitterRoot].Add(collectorRoot);
+                    neighbors[baseRoot].Add(emitterRoot);
+                    neighbors[emitterRoot].Add(baseRoot);
+                    componentIdsByRoot[collectorRoot].Add(component.InstanceId);
+                    componentIdsByRoot[baseRoot].Add(component.InstanceId);
+                    componentIdsByRoot[emitterRoot].Add(component.InstanceId);
                     continue;
                 }
                 var positiveRoot = unionFind.Find(indexByTerminal[new SpiceTerminalRef(component.InstanceId, SpiceComponentModel.PositiveTerminalId)]);
@@ -326,6 +353,8 @@ namespace ElectricalSim.Spice.Topology
                 case SpiceComponentKind.Inductor: return "L";
                 case SpiceComponentKind.CurrentProbe: return "VPROBE";
                 case SpiceComponentKind.IdealOperationalAmplifier: return "EOP";
+                case SpiceComponentKind.GenericNpnBjt: return "Q";
+                case SpiceComponentKind.GenericPnpBjt: return "Q";
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }
         }
