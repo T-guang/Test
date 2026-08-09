@@ -10,6 +10,11 @@ namespace ElectricalSim.Core
     /// 副作用包括时间继电器、保护、运动、接触器及可视电气状态更新。
     /// 主要调用方是 WorkspaceController；修改后必须回归运行态模板。
     /// </summary>
+    /// <remarks>
+    /// 本类推进一次仿真运行所需的运行时效果：建立当前导通图、稳定动态控制器件、更新负载、保护与
+    /// 运动状态。CircuitStateAnalyzer 用相同画布事实生成分析快照和诊断，但不负责在这里写入的
+    /// 得电、延时或运动等运行时副作用；两者的职责不能互换。
+    /// </remarks>
     public sealed class SimulationEngine
     {
         private readonly List<CircuitComponent> components;
@@ -21,6 +26,8 @@ namespace ElectricalSim.Core
         private readonly AutoReciprocationRoleResolution autoReciprocationRoles;
         private bool timerRuntimeAdvancedThisRun;
         private bool traversalBudgetWarningLogged;
+        // 线圈得电会改变辅助/主触点，触点又会影响下一轮线圈路径。该上限防止异常反馈令一次 Run
+        // 无法结束；调整它或循环顺序会改变互锁、自保持和延时触点的可观察行为。
         private const int MaxContactorStabilizationIterations = 4;
         private static readonly Dictionary<int, bool> selfHoldEligibleContactors = new Dictionary<int, bool>();
 
@@ -40,6 +47,8 @@ namespace ElectricalSim.Core
 
         public string Run()
         {
+            // 运行顺序是电气语义的一部分：先收敛控制器件，再扩散电源连通性并更新负载。不要为了
+            // 合并代码把动态状态推进挪到 Flood 或测量计算之后。
             // 必须先稳定自保持、时间继电器、互锁与星三角状态，再进行图连通扩散和负载判断。
             // 调整该顺序会改变可观察到的运行行为。
             ResetTraversalBudgetState();
@@ -71,6 +80,8 @@ namespace ElectricalSim.Core
                 }
             }
 
+            // 热继电器动作会切断原先参与控制路径的 NC 触点；一旦它改变了状态，必须重新稳定动态器件
+            // 并重新扩散供电结果，不能仅在已有 Flood 结果上局部修改负载显示。
             if (UpdateThermalRelays())
             {
                 StabilizeDynamicControlDevices();
@@ -119,6 +130,7 @@ namespace ElectricalSim.Core
             SeedClosedContactorsFromRuntimeState();
             BuildGraph();
 
+            // 图必须在状态变化后重建：旧图中触点的导通边不能代表下一轮的闭合组合。
             for (var i = 0; i < MaxContactorStabilizationIterations; i++)
             {
                 var previousContactors = new HashSet<CircuitComponent>(closedContactors);
@@ -414,6 +426,8 @@ namespace ElectricalSim.Core
 
         private void SeedClosedContactorsFromRuntimeState()
         {
+            // 仅把已经得电且仍具备保持条件的接触器作为初始猜测；这不是最终结论，随后稳定循环会用
+            // 当前拓扑重新判定线圈状态，避免停止按钮或互锁状态被上一帧永久保留。
             foreach (var component in components)
             {
                 if (IsContactorComponent(component) && component.IsEnergized && IsSelfHoldEligible(component))
@@ -465,7 +479,7 @@ namespace ElectricalSim.Core
                 return IsIndicatorEnergized(component);
             }
 
-            // E4：普通交流灯泡无极性，L/N 端子互换不影响亮灯判断。
+            // 普通交流灯泡按无极性负载处理：工作端分别到达火线和零线即可得电，端子标签交换不改变判断。
             if (component.Definition.kind == ComponentKind.Lamp)
             {
                 return IsLampEnergized(component, powered, neutral);
@@ -503,7 +517,7 @@ namespace ElectricalSim.Core
         }
 
         /// <summary>
-        /// E4：普通交流灯泡无极性判断。两个工作端子分别落在火线节点和零线节点即可点亮，
+        /// 普通交流灯泡无极性判断：两个工作端子分别落在火线节点和零线节点即可点亮，
         /// 不区分 L/N 端子方向。不排除 Neutral 角色端子，允许 N 端子落在 powered 集合、
         /// L 端子落在 neutral 集合时正常亮灯。仅对 ComponentKind.Lamp 生效，不影响风扇、
         /// 二极管、直流器件或其他有极性器件。
@@ -562,12 +576,16 @@ namespace ElectricalSim.Core
                 }
             }
 
+            // 先从线圈路径得到候选闭合集合，再处理互锁和星三角冲突。冲突处理不能提前写入图，
+            // 否则同一轮的其他线圈会基于不一致的触点状态计算。
             ResolveMutualInterlockConflicts();
             SuppressStarDeltaConflictContactors();
         }
 
         private void SuppressStarDeltaConflictContactors()
         {
+            // 星三角冲突抑制只作用于当前运行时闭合集合，防止互斥主回路在同一轮被同时加入图中。
+            // 它不改写用户外部导线，也不抹除 Analyzer 需要展示的静态星/三角接线冲突证据。
             if (!HasAnyStarDeltaMotorConflict())
             {
                 return;
@@ -591,6 +609,8 @@ namespace ElectricalSim.Core
 
         private void UpdateEnergizedOnDelayTimers()
         {
+            // 定时器运行态由 RuntimeStateManager 保存，而触点是否已到时会反过来影响本轮图。这里仅推进
+            // 一次并由稳定循环比较触点状态，避免同一 Run 内重复累计延时。
             energizedOnDelayTimers.Clear();
             var timerDelta = timerRuntimeAdvancedThisRun ? 0f : simulationDeltaTime;
             foreach (var component in components)
@@ -725,6 +745,9 @@ namespace ElectricalSim.Core
 
         private void UpdateSelfHoldEligibility()
         {
+            // 自保持资格是稳定迭代中的运行时辅助状态，而不是接线图上的永久属性。
+            // 点动按钮闭合时必须压制保持资格；连续启动路径与已闭合辅助触点则可在下一轮参与线圈判定。
+            // 因而不能把这段求值挪到接触器状态更新之后，或改为只在首次运行时计算一次。
             foreach (var component in components)
             {
                 if (!IsContactorComponent(component))
@@ -880,6 +903,8 @@ namespace ElectricalSim.Core
 
         private void ResolveMutualInterlockConflicts()
         {
+            // 互锁冲突是在两个方向的线圈同一稳定轮内都请求吸合时的运行时裁决。
+            // 这里消除不允许共存的状态，不能把它替代为结构接线检查；后者属于 Analyzer/RuleChecker 的职责。
             if (closedContactors.Count < 2)
             {
                 return;
@@ -1200,6 +1225,8 @@ namespace ElectricalSim.Core
 
         private void UpdateMotorDirection(CircuitComponent component, bool active)
         {
+            // 电机方向是由已稳定的供电相序和控制器运行态导出的副作用状态，
+            // 不是 Flood 图本身的一条边；不要在连通性查询中通过写入方向来影响后续搜索。
             if (!IsThreePhaseMotorComponent(component))
             {
                 return;
@@ -1219,6 +1246,8 @@ namespace ElectricalSim.Core
 
         private void UpdateAutoReciprocatingMotionDirection(CircuitComponent component, bool active, float rotationDirection)
         {
+            // 往复运动在电机已有效运行后才推进。限位开关触发与方向切换之间依赖本轮稳定的控制状态，
+            // 因此不能把位置推进提前到接触器/限位触点尚未完成求值的阶段。
             if (!IsAutoReciprocatingMotionMotor(component))
             {
                 return;
@@ -1288,6 +1317,8 @@ namespace ElectricalSim.Core
 
         private bool UpdateThermalRelays()
         {
+            // 保护状态是运行时副作用。返回值仅表示它是否改变了后续拓扑，调用方据此决定是否需要重算，
+            // 不能把参数复位或跳闸状态更新混入纯连通性查询。
             var changed = false;
             foreach (var relay in components)
             {
@@ -1399,6 +1430,8 @@ namespace ElectricalSim.Core
 
         private void BuildGraph()
         {
+            // graph 是本次运行的瞬时可导通图：先放入外部 Wire，再按当前器件状态添加内部边。
+            // 它不是保存拓扑，也不能用于反向推断用户是否实际画过一根导线。
             graph.Clear();
 
             foreach (var component in components)
@@ -1422,6 +1455,8 @@ namespace ElectricalSim.Core
 
         private void AddInternalConnections(CircuitComponent component)
         {
+            // 内部边仅对当前运行步骤有效。接触器、按钮、限位开关和时间继电器的边都依赖运行状态，
+            // 因此不得缓存为永久连接，也不得并入 WireManager 的用户接线集合。
             var terms = component.Terminals.ToList();
             if (terms.Count < 2)
             {
@@ -1642,6 +1677,8 @@ namespace ElectricalSim.Core
 
         private HashSet<TerminalView> Flood(List<TerminalView> roots)
         {
+            // Flood 仅查询当前 graph 的可达端子，用于本 Tick 的供电与测量判断；它不修改元件状态。
+            // 遍历预算是防御异常环路或损坏图的上限，达到上限时宁可返回受限结果，也不能无限阻塞仿真。
             var visited = new HashSet<TerminalView>();
             var queue = new Queue<TerminalView>();
             var traversalSteps = 0;

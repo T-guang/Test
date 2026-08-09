@@ -12,6 +12,11 @@ namespace ElectricalSim.Rules
     /// 结果会由检查工作流结合运行态分析后再进行面板误报过滤和格式化，因此不能把该过滤理解为删除生产校验问题。
     /// 修改本类后必须回归 Inspector 报告模型测试、18 张真实模板基线，以及家庭和普通工业电路的检查流程。
     /// </summary>
+    /// <remarks>
+    /// 本类把画布中的结构与当前导通事实转换为教学规则问题及严重度；它不取代
+    /// CircuitStateAnalyzer 的运行态推导，也不负责最终报告的过滤、分区和 UI 呈现。规则代码、
+    /// 严重度和关联元件是下游检查工作流、练习反馈与报告模型之间的稳定契约。
+    /// </remarks>
     public sealed class CircuitRuleChecker
     {
         private readonly WorkspaceController workspace;
@@ -29,6 +34,11 @@ namespace ElectricalSim.Rules
             this.workspace = workspace;
         }
 
+        /// <summary>
+        /// 对当前 Workspace 执行基础、家庭与工业教学规则检查。
+        /// 本方法只向结构化结果追加问题，不修改元件、导线或运行状态。检查顺序依赖前置的分类和图构建；
+        /// 调整顺序前必须确认后续规则不再读取前面准备的集合与图事实。
+        /// </summary>
         public CircuitCheckResult Check()
         {
             if (workspace == null)
@@ -100,6 +110,8 @@ namespace ElectricalSim.Rules
 
         private void BuildGraphs()
         {
+            // structuralGraph 用于回答“按器件能力是否存在结构路径”，liveGraph 用于回答“当前开合状态下
+            // 是否实际导通”。两者都包含外部 Wire，但内部边的加入条件不同；不能用其中一个替代另一个。
             var components = workspace.Components;
             if (components != null)
             {
@@ -247,6 +259,8 @@ namespace ElectricalSim.Rules
 
         private void CheckPhaseAndNeutralPaths()
         {
+            // 相线/零线完整性是接线结构规则，消费 structuralGraph：即使开关当前断开，
+            // 也仍应能指出哪一段物理接线缺失；运行时得电与否交由 liveGraph 相关规则说明。
             foreach (var load in loads)
             {
                 if (IsThreePhaseMotor(load))
@@ -273,6 +287,8 @@ namespace ElectricalSim.Rules
 
         private void CheckSwitchOnPhaseBranch()
         {
+            // 开关位置规则只审查真实外部导线构成的支路，避免把开关自身或其他器件的内部导通
+            // 误当成“开关串在火线”。这是一项教学接线约束，不重新推导运行时通断事实。
             var switchExternalGraph = BuildExternalSwitchGraph();
             foreach (var load in loads)
             {
@@ -451,6 +467,8 @@ namespace ElectricalSim.Rules
 
         private void CheckBypassedDevices()
         {
+            // 普通开关/保护器件旁路依赖外部接线图来判断控制路径是否被绕过；这与接触器受控触点的
+            // 直接短接规则不同，后者必须检查真实的同器件 Wire，不能从图的可达性反推。
             var switchExternalGraph = BuildExternalSwitchGraph();
             foreach (var load in loads)
             {
@@ -536,6 +554,8 @@ namespace ElectricalSim.Rules
 
         private void CheckBreakers()
         {
+            // 空开与电能表规则检查端子角色及外部接线完整性，不模拟保护器件的跳闸时序或计量行为。
+            // 这些运行时效果由仿真与分析层维护，RuleChecker 只给出可操作的接线风险提示。
             if (breakers.Count == 0)
             {
                 AddIssue(CircuitIssueSeverity.Info, "NO_BREAKER", "\u5f53\u524d\u7535\u8def\u672a\u68c0\u6d4b\u5230\u7a7a\u6c14\u5f00\u5173\u3002", "\u57fa\u7840\u6f14\u793a\u7535\u8def\u53ef\u4ee5\u8fd0\u884c\uff0c\u4f46\u5b9e\u9645\u7535\u8def\u901a\u5e38\u9700\u8981\u4fdd\u62a4\u5f00\u5173\u3002", "\u540e\u7eed\u53ef\u52a0\u5165\u7a7a\u6c14\u5f00\u5173\uff0c\u8ba9\u7535\u6e90\u5148\u8fdb\u5165\u4fdd\u62a4\u5f00\u5173\u8f93\u5165\u7aef\u3002");
@@ -609,6 +629,8 @@ namespace ElectricalSim.Rules
 
         private void CheckIndustrialControlLoops()
         {
+            // 工业控制回路规则消费结构图来验证 A1/A2、95/96 等必要支路是否可构成；
+            // 它不自行判定接触器当前是否吸合，也不复制自保持、互锁等运行态算法。
             var components = workspace.Components;
             if (components == null)
             {
@@ -759,6 +781,8 @@ namespace ElectricalSim.Rules
 
         private void CheckIsolatedComponents()
         {
+            // 孤立元件仅依据真实 Wire 的存在性提示“未参与图纸”，不能从 liveGraph 推断：
+            // 一个当前断开的有效控制器件仍可能已经正确接线，不应被误报为孤立。
             var components = workspace.Components;
             if (components == null)
             {
@@ -791,6 +815,8 @@ namespace ElectricalSim.Rules
 
         private void CheckOpenDevicesAffectLoads()
         {
+            // 此规则刻意同时对比 structuralGraph 与 liveGraph：前者证明接线完整，后者解释当前为何未得电。
+            // 只有结构可达而运行态不可达时，才把原因归因于打开的开关/空开，避免把缺线误说成“OFF”。
             foreach (var load in loads)
             {
                 if (IsThreePhaseMotor(load))
@@ -885,6 +911,8 @@ namespace ElectricalSim.Rules
 
         private void CheckIndustrialMotorMainCircuitSegments(CircuitComponent motor)
         {
+            // 工业电机主回路按相分别检查外部段落，避免仅凭“某处能到电源”掩盖 L1/L2/L3 中某一相缺线。
+            // 这仍是结构审计；相序、接触器闭合及电机实际运行状态由上层已稳定的运行分析负责。
             var contactor = FindMainContactorForMotor(motor);
             var fuse = FindComponentWithTerminals("L1_OUT", "L2_OUT", "L3_OUT");
             if (contactor == null || fuse == null)
@@ -1195,7 +1223,7 @@ namespace ElectricalSim.Rules
         }
 
         /// <summary>
-        /// KM-2B5 Gate A: 接触器旁路安全规则。
+        /// 接触器受控触点的直接旁路安全规则。
         /// 直接遍历 workspace.WireManager.Wires 中的真实外部导线，检测同一接触器
         /// 受控触点对被直接短接的危险接线。不从 structuralGraph 或 liveGraph 推断，
         /// 因为 graph 中含有正常接触器内部触点边。同一根 Wire 只产生一次 issue。
@@ -1212,9 +1240,9 @@ namespace ElectricalSim.Rules
         }
 
         /// <summary>
-        /// 窄 B5 detector：仅执行接触器旁路安全规则，不运行完整 Check()。
+        /// 仅执行接触器旁路安全规则，不运行完整 Check()。
         /// 供工业检查工作流（InspectionWorkflowService）在 IndustrialCircuitRuleAnalyzer
-        /// 之后调用，避免工业路径跳过 B5 旁路检测。与 CheckContactorBypass 共用同一
+        /// 之后调用，确保工业检查路径也包含接触器旁路检测。与 CheckContactorBypass 共用同一
         /// DetectContactorBypassIssues(IReadOnlyList{WireView}) 核心实现，不复制端子判断。
         /// 设为 public 以避免与 private 重载在反射调用中产生 AmbiguousMatchException。
         /// </summary>
@@ -1226,6 +1254,8 @@ namespace ElectricalSim.Rules
 
         /// <summary>
         /// 基于 WireManager 真实外部 Wire 检测接触器受控触点直接旁路。
+        /// 只把同一接触器的一对受控触点被一根真实外部 Wire 直接跨接视为旁路。正常的线圈控制接线、
+        /// 不同 NO 触点对之间的连接或跨元件连接不满足这个定义，不能因此产生该规则的 Error/Warning。
         /// 遍历每根 Wire，判断两端是否属于同一 ContactorCoil 元件且构成完整受控触点对。
         /// 不散写 "L1"/"T1"/"13"/"14" 等端子 ID，统一通过 ContactorTerminalSchema.TryFindPair 查询。
         /// </summary>
@@ -1292,6 +1322,8 @@ namespace ElectricalSim.Rules
 
         private void AddIssue(CircuitIssueSeverity severity, string code, string title, string message, string suggestion, CircuitComponent component = null)
         {
+            // 此处保留规则事实、严重度和修复建议，不在 RuleChecker 依据中文文案重新解释或过滤问题。
+            // InspectionWorkflowService 与 Formatter 负责后续面向学习者的组合和展示。
             result.Add(new CircuitIssue
             {
                 code = code,

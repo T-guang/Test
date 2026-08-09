@@ -9,6 +9,11 @@ namespace ElectricalSim.Core
     /// 不修改场景、不推进仿真时间，也不决定教学报告的呈现；调用方必须只传入活动工作区图，
     /// 不得把 Demo.unity 中的全部对象作为输入。主要调用方为检查、校验和回归基线路径。
     /// </summary>
+    /// <remarks>
+    /// 本类从当前画布的元件、外部导线和给定的动态触点状态推导分析快照；它不推进运行时、
+    /// 不写回元件开合状态，也不负责教学报告的排版。SimulationEngine 负责推进可观察的运行时效果，
+    /// 本类负责说明在某个稳定状态下电路呈现出的拓扑、电压和结构性结论。
+    /// </remarks>
     public sealed class CircuitStateAnalyzer
     {
         public const string VoltageNone = "None";
@@ -19,17 +24,26 @@ namespace ElectricalSim.Core
         public const string VoltageL3 = "L3";
         public const string VoltagePE = "PE";
         public const string VoltageConflict = "Conflict";
+        // 接触器线圈、辅助触点和定时触点可能形成反馈。上限既保证分析可终止，也让未收敛状态
+        // 以冲突/警告形式暴露，而不是在分析阶段无限循环。
         private const int MaxContactorStateIterations = 5;
 
         private readonly Dictionary<string, TerminalView> terminalsByKey = new Dictionary<string, TerminalView>();
         private readonly Dictionary<string, string> friendlyNamesByInstanceId = new Dictionary<string, string>();
         private readonly HashSet<string> wiredTerminalKeys = new HashSet<string>();
+        // connectionGraph 包含当前分析步骤允许导通的内部边；wireConnectionGraph 只记录真实外部 Wire。
+        // 两者服务于不同问题，不能互相替换，更不能把内部触点边永久写入外部接线事实。
         private readonly Dictionary<string, HashSet<string>> connectionGraph = new Dictionary<string, HashSet<string>>();
         private readonly Dictionary<string, HashSet<string>> wireConnectionGraph = new Dictionary<string, HashSet<string>>();
         private TerminalUnionFind wireOnlyTopology;
         private TerminalUnionFind staticNcTopology;
         private bool traversalBudgetWarningLogged;
 
+        /// <summary>
+        /// 基于当前画布快照生成一次可读的电气与拓扑分析结果。
+        /// 输入中的 Wire 仅代表用户建立的外部连接；返回结果是派生状态，不修改输入元件、导线或
+        /// RuntimeStateManager。缺失端子和不完整导线会记录到结果的诊断信息，而不是中断整个分析。
+        /// </summary>
         public CircuitStateResult Analyze(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
@@ -56,6 +70,8 @@ namespace ElectricalSim.Core
             Dictionary<string, bool> lastCurrentStates = null;
             Dictionary<string, bool> lastCurrentTimerStates = null;
 
+            // 每轮都用上一轮线圈/定时器状态重建导通关系，再从结果提取新的状态。只有状态不再变化
+            // 才能把自保持、互锁和延时触点看作同一时刻的一致快照。
             for (var iteration = 0; iteration < MaxContactorStateIterations; iteration++)
             {
                 finalResult = AnalyzePass(components, wires, previousStates, previousTimerStates);
@@ -100,6 +116,8 @@ namespace ElectricalSim.Core
                 }
             }
 
+            // 检测到循环状态或超过上限时，关闭参与冲突的接触器后重新分析一次。该降级路径优先保证
+            // 分析结果确定且安全可解释，不能被改成“沿用上一轮全部导通”的隐式行为。
             if (hasInterlockConflict)
             {
                 previousStates = CloneContactorStates(lastCurrentStates ?? previousStates);
@@ -132,6 +150,8 @@ namespace ElectricalSim.Core
             IReadOnlyList<WireView> wires,
             HashSet<string> conflictMotorIds)
         {
+            // 星点/三角连接是用户画出的绕组结构证据，不等同于接触器此刻已经吸合。这里保留结构冲突，
+            // 供后续运行态冲突证据合并，避免把静态接线直接误判为当前主回路短路。
             if (components == null || wires == null || conflictMotorIds == null)
             {
                 return;
@@ -261,6 +281,8 @@ namespace ElectricalSim.Core
             HashSet<string> conflictMotorIds,
             ref bool simultaneousStarDeltaContactors)
         {
+            // 运行时同时闭合的星、三角接触器才属于动态危险状态；它与上面的绕组结构证据分开收集，
+            // 使报告能够区分“接线风险”和“当前控制状态冲突”。
             if (result == null || conflictMotorIds == null)
             {
                 return;
@@ -362,6 +384,8 @@ namespace ElectricalSim.Core
         {
             // 单次推导严格按“登记端子 -> 外部导线 -> 内部触点 -> 电源标签 -> 元件状态”执行。
             // 动态线圈状态由 Analyze 的有界稳定循环提供，本方法本身不推进时间也不修改场景。
+            // 单次分析同时维护三种关系：所有当前导通边、仅外部 Wire 的节点关系、以及静态 NC 控制路径。
+            // 它们必须在每一轮从零构建，避免上一轮动态触点状态污染下一轮的结构判断。
             terminalsByKey.Clear();
             wiredTerminalKeys.Clear();
             connectionGraph.Clear();
@@ -642,6 +666,8 @@ namespace ElectricalSim.Core
                     continue;
                 }
 
+                // 真实 Wire 同时进入当前导通图和两个结构辅助拓扑；与之相对，元件内部触点只允许由
+                // 后续对应的内部连接步骤加入 current unionFind，不能伪装成用户接线。
                 ConnectTerminalKeys(startKey, endKey, unionFind);
                 wireOnlyTopology.Union(startKey, endKey);
                 staticNcTopology.Union(startKey, endKey);
@@ -667,7 +693,7 @@ namespace ElectricalSim.Core
                 if (component == null || component.Definition == null) continue;
 
                 // 停止按钮 NC 11/12：未按下时闭合
-                // B2.1：去名称化，纯结构判断——PushButton + 有 11/12 + 无 23/24 即为 NC-only 停止按钮
+                // 仅用端子结构识别 NC-only 停止按钮，避免名称、模板或实例编号改变后破坏控制路径判断。
                 if (component.Definition.kind == ComponentKind.PushButton &&
                     !IsLimitSwitchComponent(component) &&
                     !IsCompoundPushButton(component) &&
@@ -718,7 +744,7 @@ namespace ElectricalSim.Core
 
         /// <summary>
         /// 判断是否为瞬时启动按钮（PushButton 有 23/24 NO，排除限位开关和停止按钮）。
-        /// B2.1：去名称化，纯结构判断——PushButton + 有 23/24 + 非限位开关即为启动按钮。
+        /// 通过端子结构而不是显示名称识别启动按钮，保证模板、实例编号或文案变化不影响分析结论。
         /// 纯 NC-only 停止按钮（无 23/24）已通过 terminal 检查自动排除。
         /// 复合按钮（有 11/12 + 23/24）在点动电路中合法作为启动按钮，不排除。
         /// </summary>
@@ -752,7 +778,7 @@ namespace ElectricalSim.Core
             var a1Root = a1Key != null ? staticNcTopology.Find(a1Key) : null;
             var a2Root = a2Key != null ? staticNcTopology.Find(a2Key) : null;
 
-            // 遍历启动按钮
+                // 先确认按钮确实属于当前接触器的线圈控制路径；否则另一个 KM 的联动支路会被误判为自保持。
             for (var bi = 0; bi < components.Count; bi++)
             {
                 var button = components[bi];
@@ -777,7 +803,8 @@ namespace ElectricalSim.Core
 
                 if (!btn23ControlsThisCoil && !btn24ControlsThisCoil) continue;
 
-                // 遍历 NO candidate pairs
+                // 两个端子各自有线不足以代表自保持。候选 NO 必须与这个启动按钮的外部节点并联，
+                // 才说明它在按钮释放后承担了同一控制支路的保持作用。
                 foreach (var noPair in ContactorTerminalSchema.NormallyOpenContactPairs)
                 {
                     var noStart = contactor.GetTerminal(noPair.StartTerminalId);
@@ -811,7 +838,7 @@ namespace ElectricalSim.Core
         }
 
         /// <summary>
-        /// 结构化识别接触器 NC 互锁触点对（B2.1 side-aware / candidate-excluded 版本）。
+        /// 通过保留候选两端分离的 candidate-excluded 拓扑识别接触器 NC 互锁触点对。
         /// candidate 必须来自 ContactorTerminalSchema.NormallyClosedContactPairs，
         /// 两端均必须有外部接线。
         /// 使用 candidate-excluded 拓扑（不闭合当前 candidate NC）证明：
@@ -912,7 +939,7 @@ namespace ElectricalSim.Core
                 if (component == null || component.Definition == null) continue;
 
                 // 停止按钮 NC 11/12（去名称化结构判断）
-                // B2.2 修复：静态结构分析中 NC 总是连接（与接触器 NC 一致），
+                // 静态结构分析把 NC 视为默认可用控制路径，
                 // 不管 IsClosed 当前状态。这是结构识别，不是运行时状态判断。
                 if (component.Definition.kind == ComponentKind.PushButton &&
                     !IsLimitSwitchComponent(component) &&
@@ -960,7 +987,7 @@ namespace ElectricalSim.Core
 
         /// <summary>
         /// 将外部 Wire 的两端 Union 到指定拓扑（仅从 wireConnectionGraph 重建，不含内部 NC 连接）。
-        /// B2.1：必须使用 wireConnectionGraph 而非 connectionGraph，
+        /// 必须使用 wireConnectionGraph 而非 connectionGraph，
         /// 因为 connectionGraph 包含内部 NC 连接（如接触器 21/22），
         /// 会导致 candidate-excluded 拓扑失效。
         /// </summary>
@@ -1051,7 +1078,7 @@ namespace ElectricalSim.Core
         /// 或停止按钮 11 端子（控制回路上游入口），
         /// 或启动按钮 23 端子（启动支路上游）。
         /// 保守策略：灯端子、孤立 Wire 不视为有效控制上游。
-        /// B2.2 修复：Start.24 不再直接作为 valid upstream，
+        /// Start.24 不单独视为有效上游，
         /// 需要同按钮 Start.23 到达 base upstream 才作为 valid upstream。
         /// </summary>
         private static bool ReachesValidControlUpstream(
@@ -1158,6 +1185,8 @@ namespace ElectricalSim.Core
             IReadOnlyList<CircuitComponent> components,
             TerminalUnionFind unionFind)
         {
+            // 此处只加入本轮分析条件下有效的元件内部导通关系。它们不属于外部接线拓扑，下一轮会随
+            // 按钮、接触器、限位开关和时间继电器状态重新计算。
             if (components == null)
             {
                 return;
@@ -1684,6 +1713,8 @@ namespace ElectricalSim.Core
             Dictionary<string, List<string>> rootSources,
             CircuitStateResult result)
         {
+            // 电源标签是本轮分析中“端子所属电位”的事实来源：它随当前 unionFind 的连通关系传播，
+            // 用于后续判断相线、零线与冲突；它不是对电源容量、保护动作或真实电流的求解。
             if (components == null)
             {
                 return;
@@ -1728,7 +1759,7 @@ namespace ElectricalSim.Core
 
                 AddPowerLabel(line, VoltageL, unionFind, rootLabels, rootSources);
                 AddPowerLabel(neutral, VoltageN, unionFind, rootLabels, rootSources);
-                // E4：单相电源的 L2/N2 端子与 L/N 同相位，标记为相同电压标签，
+                // 单相电源的 L2/N2 是与 L/N 等价的供电端子，标记为相同电压标签，
                 // 使分析器能识别经 L2/N2 供电的灯泡并检测 L2-N 短路。
                 AddPowerLabel(component.GetTerminal("L2"), VoltageL, unionFind, rootLabels, rootSources);
                 AddPowerLabel(component.GetTerminal("N2"), VoltageN, unionFind, rootLabels, rootSources);
@@ -1778,6 +1809,8 @@ namespace ElectricalSim.Core
             Dictionary<string, HashSet<string>> rootLabels,
             CircuitStateResult result)
         {
+            // 这里只把同一分析根出现互斥电位标签记录为冲突证据。冲突结论来自已稳定的连通事实，
+            // 不应由报告路径、显示顺序或某个负载是否最终得电来反推。
             foreach (var pair in rootLabels)
             {
                 var labels = pair.Value;
@@ -1872,6 +1905,9 @@ namespace ElectricalSim.Core
                     WriteActualTerminalState(terminal, info, unionFind, rootLabels, rootSources);
                 }
 
+                // 负载与控制器件都消费本轮已稳定的端子电位/导通事实；本分派不推进任何运行时状态。
+                // 因此单相负载、三相/星三角电机、接触器和时间继电器的解释可以并列生成，
+                // 但不能在这里通过修改器件状态来“补全”它们的接线。
                 if (IsLamp(component))
                 {
                     info.SummaryGroup = ComponentStateInfo.GroupLoad;
@@ -2025,6 +2061,8 @@ namespace ElectricalSim.Core
             ComponentStateInfo info,
             CircuitStateResult result)
         {
+            // 三相电机分析只依据 U/V/W 已获得的相别与冲突事实判定供电完整性；
+            // 接触器主触点是否在本轮导通已在前序稳定分析中反映到 unionFind，不能在本方法中重新假设导通。
             var uId = FindExistingTerminalId(motor, "U", "U1");
             var vId = FindExistingTerminalId(motor, "V", "V1");
             var wId = FindExistingTerminalId(motor, "W", "W1");
@@ -2110,6 +2148,8 @@ namespace ElectricalSim.Core
             ComponentStateInfo info,
             CircuitStateResult result)
         {
+            // 星三角电机的“星/三角/冲突”来自当前端子连通与已记录的结构冲突证据；
+            // 这里生成分析结论，不负责切换接触器或替用户选择启动阶段。
             var requiredTerminals = new[] { "U1", "V1", "W1", "U2", "V2", "W2" };
             for (var i = 0; i < requiredTerminals.Length; i++)
             {
@@ -2344,6 +2384,8 @@ namespace ElectricalSim.Core
             ComponentStateInfo info,
             CircuitStateResult result)
         {
+            // 线圈解释读取本轮稳定后的 A1/A2 供电事实，并把它映射为触点说明；
+            // 它不直接推进接触器状态，避免分析层与 SimulationEngine 对同一线圈作出相互覆盖的写入。
             if (contactor.GetTerminal("A1") == null || contactor.GetTerminal("A2") == null)
             {
                 info.State = "CoilUnknown";
@@ -2404,6 +2446,8 @@ namespace ElectricalSim.Core
             ComponentStateInfo info,
             CircuitStateResult result)
         {
+            // 时间继电器分析展示当前延时状态与触点结果；实际计时与状态推进由运行时状态管理负责。
+            // 因而报告可说明“尚未到时”，但不能在此处累加时间或改变延时触点。
             info.TimerRelayType = info.IsOnDelayTimerRelay ? "OnDelay" : "OffDelay";
             if (info.IsOffDelayTimerRelay)
             {
@@ -2782,6 +2826,8 @@ namespace ElectricalSim.Core
             CircuitStateResult result,
             bool isFan)
         {
+            // 单相负载只消费已经传播到 L/N 的电位事实。风扇与灯泡的展示/方向规则不同，
+            // 但两者都不能通过本方法反向改变开关、接触器或电源标签。
             var line = VoltageAt(info, "L");
             var neutral = VoltageAt(info, "N");
             var runningState = isFan ? "Running" : "On";
@@ -2812,7 +2858,7 @@ namespace ElectricalSim.Core
 
             if (line == VoltageN && IsLineOrPhase(neutral))
             {
-                // E4：普通交流灯泡无极性，L/N 端子互换不影响亮灯。仅对灯泡（!isFan）生效，
+                // 普通交流灯泡按无极性负载处理，L/N 工作端交换不影响亮灯。仅对灯泡（!isFan）生效，
                 // 风扇仍保留方向检查。不放宽二极管、直流器件或其他有极性器件规则。
                 if (!isFan)
                 {
@@ -2868,6 +2914,7 @@ namespace ElectricalSim.Core
             ComponentStateInfo info,
             CircuitStateResult result)
         {
+            // 指示灯属于负载展示：其亮灭来自既有供电事实，不参与控制回路状态的求值或反馈。
             var firstTerminalId = component.GetTerminal("L") != null ? "L" : "A1";
             var secondTerminalId = component.GetTerminal("N") != null ? "N" : "A2";
             if (component.GetTerminal(firstTerminalId) == null || component.GetTerminal(secondTerminalId) == null)
@@ -3180,6 +3227,8 @@ namespace ElectricalSim.Core
             IReadOnlyList<CircuitComponent> components,
             CircuitStateResult result)
         {
+            // 路径仅用于把已得出的连通分析翻译为可阅读的教学说明。最短路径不是电气正确性、
+            // 保护选择性或唯一供电路径的证明；其生成失败也不能覆盖前面已经得出的状态与诊断。
             if (components == null)
             {
                 return;
@@ -4489,6 +4538,8 @@ namespace ElectricalSim.Core
 
     internal sealed class TerminalUnionFind
     {
+        // TerminalUnionFind 只表达本次分析中允许合并的“当前连通根”。它不保存外部 Wire 的原始拓扑，
+        // 也不携带元件状态或路径顺序；需要区分真实导线、静态 NC 与动态触点时必须使用对应专用结构。
         private readonly Dictionary<string, string> parents = new Dictionary<string, string>();
         private readonly Dictionary<string, int> ranks = new Dictionary<string, int>();
 
