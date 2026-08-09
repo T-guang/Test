@@ -250,7 +250,7 @@ namespace ElectricalSim.Editor
             WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
             {
                 var scroll = GetPaletteScroll(bindings);
-                var expected = 10f + 7f * 116f + 6f * 12f + 32f;
+                var expected = 10f + 7f * 116f + 6f * 12f + 96f;
                 CheckNear(expected, scroll.content.rect.height, 0.1f, "Content 高度必须按当前实际七行卡片动态计算。");
                 CheckTrue(scroll.content.rect.height > scroll.viewport.rect.height, "1366×768 下 Content 必须高于 Viewport，滚动才有意义。");
             });

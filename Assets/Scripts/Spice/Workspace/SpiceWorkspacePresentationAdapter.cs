@@ -18,7 +18,8 @@ namespace ElectricalSim.Spice.Workspace
         private const float PaletteCardHeight = 116f;
         private const float PaletteCardGap = 12f;
         private const float PaletteCardTopPadding = 10f;
-        private const float PaletteCardBottomPadding = 32f;
+        // 末行滚到最低位置后仍保留一段空白，避免底边紧贴窗口而显得被裁切。
+        private const float PaletteCardBottomPadding = 96f;
         private const float AssistantSectionHeaderHeight = 42f;
         private const float ParameterSectionHeight = 166f;
         private const float NetlistSectionHeight = 180f;
