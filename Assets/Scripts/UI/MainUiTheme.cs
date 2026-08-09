@@ -3,6 +3,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    // MainUiTheme 集中定义运行时 UI 的颜色、字体和控件样式契约。它只处理表现层，不能成为页面状态、元件规格或电气规则的来源。
+    // 样式入口应保持幂等：动态 UI 重建可重复调用，但不得通过主题应用新增业务 listener、改变布局 ownership 或依赖 Editor 资源。
     public static class MainUiTheme
     {
         public enum UiTextRole

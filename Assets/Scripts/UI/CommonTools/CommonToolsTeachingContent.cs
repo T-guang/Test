@@ -2,6 +2,8 @@ using System.Collections.Generic;
 
 namespace ElectricalSim.UI.CommonTools
 {
+    // 本文件是常用工具页的静态教学内容库：公式、色环和文章数据仅供展示与检索，不能替代仿真参数、ComponentDefinition 或运行态事实。
+    // 工厂方法集中保持条目的稳定 id、分类和别名格式；修改文案时不要借机改变 Calculator/Workspace 的计算或保存语义。
     public static class CommonToolsTeachingContent
     {
         public static List<CommonFormulaEntry> GetFormulas()

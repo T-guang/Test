@@ -6,7 +6,8 @@ namespace ElectricalSim.UI.VisualPrefab
     /// <summary>
     /// 驱动电机 Visual Prefab 中风扇转轴的显示动画。
     /// 普通三相电机优先读取 RuntimeStateManager 的相序方向；旧 rotationDirection 仅作兼容回退。
-    /// 仿真、Analyzer 或 RuntimeStateManager。Prefab 子节点缺失时保守地停止显示更新。
+    /// 本控制器只消费 CircuitComponent / RuntimeStateManager 提供的运行态用于视觉动画，不负责修改仿真、
+    /// Analyzer 或 RuntimeStateManager；Prefab 子节点缺失时保守停止视觉更新。
     /// 修改后需回归普通电机、正反转、自动往返和星三角的启动/停止显示。
     /// </summary>
     public class MotorVisualController : MonoBehaviour
@@ -58,7 +59,7 @@ namespace ElectricalSim.UI.VisualPrefab
                     return;
                 }
 
-                // Compatibility fallback for old ordinary-motor template instances before a simulation pass.
+                // 对尚未产生运行态记录的旧普通电机实例保留参数回退，确保视觉不会反向要求 SimulationEngine 预先创建状态。
                 var parameter = component.GetParameter("rotationDirection");
                 if (parameter != null)
                 {
@@ -71,7 +72,7 @@ namespace ElectricalSim.UI.VisualPrefab
                     return;
                 }
 
-                // M1 deliberately leaves star-delta motor behavior unchanged.
+                // 星三角等多端子电机的方向和转速依赖专门的运行态语义，不能把普通三相 U/V/W 的视觉回退规则套用到它们。
                 var isOrdinaryThreePhaseMotor = component.GetTerminal("U") != null &&
                     component.GetTerminal("V") != null && component.GetTerminal("W") != null;
                 if (!isOrdinaryThreePhaseMotor)

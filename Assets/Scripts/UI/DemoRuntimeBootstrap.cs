@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace ElectricalSim.UI
 {
+    // Runtime Bootstrap 只在已构建的 Demo 场景中装配可选的家庭照明示例，用于首次展示；它不同于 Editor 的 DemoSceneBuilder，
+    // 不创建场景结构、Definition 资产或 UI 绑定。示例构建完成后清除构建过程的 undo/redo 历史并标记拓扑需要重新仿真，
+    // 使当前 demo 成为新的初始编辑基线。
     public sealed class DemoRuntimeBootstrap : MonoBehaviour
     {
         [SerializeField] private WorkspaceController workspace;
@@ -22,6 +25,7 @@ namespace ElectricalSim.UI
 
         private void BuildHomeLightingCircuit()
         {
+            // 该方法按固定实例 id、端子和 Wire 顺序重建一套演示拓扑。这里的坐标和颜色只服务演示可读性；连接有效性仍由 Workspace/WireManager 审核。
             workspace.ClearDrawing();
 
             var power = Find("AC_220V_Power");

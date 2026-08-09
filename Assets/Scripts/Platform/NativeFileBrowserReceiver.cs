@@ -3,6 +3,8 @@ using UnityEngine;
 
 namespace ElectricalSim.Platform
 {
+    // 这是浏览器/原生文件选择插件回调与应用服务之间的最薄桥接层：只把异步文本或错误转交给一次性回调，
+    // 不解析图纸内容、不保存文件，也不应跨一次选择操作保留旧回调，避免后到的浏览器消息污染下一次导入。
     public sealed class NativeFileBrowserReceiver : MonoBehaviour
     {
         private static NativeFileBrowserReceiver instance;

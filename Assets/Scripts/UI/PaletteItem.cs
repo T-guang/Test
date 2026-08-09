@@ -5,6 +5,8 @@ using ElectricalSim.Core;
 
 namespace ElectricalSim.UI
 {
+    // PaletteItem 是 Definition 的单张展示卡及其创建意图入口，不是画布上的 CircuitComponent。点击/拖放始终委托 Workspace 创建新实例，
+    // 因而卡片的 RectTransform、hover 样式和 drag preview 不得参与 terminal identity、Wire endpoint 或已保存电路的判断。
     public sealed class PaletteItem : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         [SerializeField] private ComponentDefinition definition;
@@ -70,6 +72,7 @@ namespace ElectricalSim.UI
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            // 单击只保留卡片交互，严格双击才创建一个实例；不要把 clickCount 之外的 UI 事件当作创建命令，避免拖放结束时重复生成元件。
             if (workspace.IsInteractionLocked)
             {
                 workspace.SetStatus("画布已锁定，解锁后再添加元件。");
@@ -89,6 +92,7 @@ namespace ElectricalSim.UI
 
         public void OnBeginDrag(PointerEventData eventData)
         {
+            // 预览对象仅提供拖放反馈且关闭 raycast，真实组件只在有效 Workspace 区域内的 EndDrag 阶段创建。
             if (workspace.IsInteractionLocked)
             {
                 workspace.SetStatus("画布已锁定，解锁后再添加元件。");
@@ -118,6 +122,7 @@ namespace ElectricalSim.UI
 
         public void OnEndDrag(PointerEventData eventData)
         {
+            // 正常未锁定路径会先销毁视觉预览，再验证画布边界并转换坐标；落在画布外必须是无副作用操作，不能污染历史记录。
             if (workspace.IsInteractionLocked)
             {
                 return;

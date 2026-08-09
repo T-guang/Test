@@ -2,6 +2,8 @@ using UnityEngine;
 
 namespace ElectricalSim.UI
 {
+    // AppSession 只保存当前本地用户这一会话级 UI 身份，供导航和个人页显示使用；它不是账号认证、权限模型或图纸所有权的来源。
+    // 静态访问点会跨页面存在，因此销毁/重建时必须保持单例语义，不能把页面临时显示文本当作会话真值。
     public sealed class AppSession : MonoBehaviour
     {
         private static AppSession instance;

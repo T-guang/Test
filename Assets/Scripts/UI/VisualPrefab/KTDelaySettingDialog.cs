@@ -4,6 +4,9 @@ using ElectricalSim.UI;
 
 namespace ElectricalSim.Core
 {
+    // KT 延时设置弹窗只编辑当前实例的 delaySeconds 参数并把确认操作交回调用方；它不推进计时器、
+    // 不修改 RuntimeStateManager 的阶段，也不把屏幕上的倒计时当作可保存的电路事实。场景中已有弹窗实例时会复用它，
+    // 因此每次 Show 都必须重新绑定 component、workspace 和 callback，避免上一只 KT 的操作误写到新的实例。
     public sealed class KTDelaySettingDialog : MonoBehaviour
     {
         private const string DelayParameterKey = "delaySeconds";
@@ -134,6 +137,7 @@ namespace ElectricalSim.Core
 
         private void ApplyDelay(float value)
         {
+            // UI 只转发已解析的值；真正参数写入、运行态失效和视觉刷新由调用方/组件正式路径负责，不能仅更新弹窗文本制造已应用假象。
             applyDelay?.Invoke(value);
             workspace?.SetStatus("时间继电器延时时间已设置为 " + KTTimerVisualController.FormatSeconds(Mathf.RoundToInt(Mathf.Clamp(value, 0f, 10f))) + "。");
         }

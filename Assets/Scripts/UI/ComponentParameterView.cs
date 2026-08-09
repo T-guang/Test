@@ -6,6 +6,10 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    // 参数面板是当前 CircuitComponent 可编辑参数的 UI 投影：Definition 提供规格与默认值，实例保存用户修改，
+    // runtime-derived 状态和分析结果只能展示而不应经此回写成参数。面板负责输入解析和 min/max 范围检查，
+    // CircuitComponent.SetParameterValue 写入实例，Workspace 只提供状态提示和 MarkSimulationDirty。
+    // 面板可以被隐藏后复用；currentComponent 仅表示当前编辑目标，不是选中状态或电气身份的替代缓存。
     public sealed class ComponentParameterView : MonoBehaviour
     {
         [SerializeField] private Text titleText;
@@ -91,6 +95,8 @@ namespace ElectricalSim.UI
 
         private void ApplyChanges()
         {
+            // 当前实现按字段顺序校验并立即写入；若后续字段非法，前面已通过的字段可能已经更新。
+            // 未来若需要事务式提交，必须先完成全量校验再进入写入阶段，不能只在此注释旁假定现有行为具备原子性。
             if (currentComponent == null)
             {
                 return;
@@ -143,6 +149,7 @@ namespace ElectricalSim.UI
 
         private void BuildParameterRows(CircuitComponent component)
         {
+            // 行控件每次均从当前实例参数重新投影。不要复用上一元件的 InputField 值，否则显示文本可能被误提交给不同的 parameter key。
             ClearRows();
             editableInputs.Clear();
 

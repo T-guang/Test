@@ -110,12 +110,13 @@ namespace ElectricalSim.UI
 
         private void LoadBlueprint(SavedBlueprintInfo blueprint)
         {
+            // 面板只选择用户保存文件并把加载请求交给 SaveLoadService；Reader、schema 兼容、实例/导线重建和失败回滚不能在 UI 层复制。
             if (blueprint == null || saveLoadService == null)
             {
                 return;
             }
 
-            // F1-A：练习模式下正式导入操作前拒绝，保持练习、参考图纸、画布、运行态全部不变。
+            // 练习会话拥有图纸、参考图和锁定语义；导入会替换 Workspace，因此会话存续时必须在服务调用前拒绝并保持全部现状。
             var practice = ElectricalSim.Practice.PracticeSessionController.Instance;
             if (practice != null && practice.IsPracticeActive)
             {
@@ -134,6 +135,7 @@ namespace ElectricalSim.UI
 
         private void RequestDelete(SavedBlueprintInfo blueprint)
         {
+            // 删除先记录稳定的 SavedBlueprintInfo，再等待显式确认；列表刷新或弹窗关闭不得让悬挂的 UI 选择改指向另一份文件。
             if (blueprint == null)
             {
                 return;

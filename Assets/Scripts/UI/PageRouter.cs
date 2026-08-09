@@ -5,6 +5,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.UI
 {
+    // PageRouter 只协调页面根节点的显示/隐藏和标题投影。activeSelf 是导航表现状态，不等于 Workspace 是否锁定、模板是否加载或仿真是否运行。
+    // 页面控制器仍各自拥有数据刷新与 listener 生命周期；路由器不能通过切页重建或清理其业务状态。
     public sealed class PageRouter : MonoBehaviour
     {
         [SerializeField] private GameObject simulationRoot;
@@ -145,6 +147,7 @@ namespace ElectricalSim.UI
 
         public void ShowPage(PageId page)
         {
+            // 切页前由调用方完成必要的 guard；本方法只切换 root，不能把“页面已隐藏”当作练习/仿真已安全结束的证明。
             CurrentPage = page;
             var targetRoot = GetRoot(page);
 
