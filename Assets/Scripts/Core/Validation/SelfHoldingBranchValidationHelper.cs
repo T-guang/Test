@@ -38,6 +38,8 @@ namespace ElectricalSim.Core.Validation
     /// 它只检查静态接线证据，不判定接触器当前吸合状态；复合按钮、星三角和自锁按钮等复杂结构应保守跳过。
     /// 修改后必须回归点动、连续运行和自锁支路缺失规则测试，避免将合法点动模板误判为故障。
     /// </summary>
+    // 自锁支路识别要求瞬时启动支路、同一接触器的完整 NO 辅助触点对和该线圈控制路径形成保持关系。
+    // 任意 NO 两端都有 Wire 并不构成自锁；静态图只表达外部接线，运行时闭合仍由 Analyzer/Simulation 决定。
     public sealed class SelfHoldingBranchValidationHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -45,6 +47,8 @@ namespace ElectricalSim.Core.Validation
 
         public bool HasTraversalLimitExceeded { get; private set; }
 
+        // 当前入口只在可唯一识别的单接触器教学结构中给出结论；复杂、多接触器或星三角场景保守退出，
+        // 防止把联动支路误分类为自锁。
         public bool TryEvaluateSingleContactorSelfHold(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires,
@@ -109,6 +113,7 @@ namespace ElectricalSim.Core.Validation
             return true;
         }
 
+        // 只登记真实 Wire 节点。候选 NO 的内部闭合不能被 Union 到外部图，否则会把待验证的保持条件当成前提。
         private void BuildStaticWireGraph(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
@@ -148,6 +153,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 此查询只回答外部接线节点是否相同，不允许候选 NO 内部边参与；否则自锁判断会用待证明的触点
+        // 自己证明自己。
         private bool AreConnectedByStaticWires(TerminalView first, TerminalView second)
         {
             if (first == null || second == null)
@@ -244,6 +251,8 @@ namespace ElectricalSim.Core.Validation
             staticWireGraph[second].Add(first);
         }
 
+        // 自锁教学规则只在候选角色唯一时下结论。多候选结构必须由更高层专门场景处理，不能随意选择
+        // 列表中第一个组件。
         private static CircuitComponent FindUnique(
             IReadOnlyList<CircuitComponent> components,
             Func<CircuitComponent, bool> predicate)

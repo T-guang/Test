@@ -15,6 +15,8 @@ namespace ElectricalSim.Practice
         public bool NeedsReview { get; set; }
     }
 
+    // 该 Union-Find 只把模板/学生的外部 Wire 端点归并为比较节点，不纳入元件内部动态触点。
+    // 它是旧练习评分的局部工具，不应被用于取代 CircuitStateAnalyzer 的运行态连通分析。
     public class UnionFind<T>
     {
         private readonly Dictionary<T, T> parent = new Dictionary<T, T>();
@@ -70,12 +72,16 @@ namespace ElectricalSim.Practice
     /// 直接调用后者，本类不应被视为重复代码后直接合并或删除。本类不创建 UI，也不维护练习会话生命周期。
     /// 修改实例映射、连通分组或旧结果转换前，必须回归正确、缺失、多余和错误连接的兼容用例。
     /// </summary>
+    // 旧练习兼容层按元件定义分组并比较外部接线的连通分组，不比较 Unity 对象引用，也不依赖学生实例 ID
+    // 与模板 ID 相同。它服务旧评分结果模型；当前结构化 Exact/Equivalent 识别由 Netlist 层负责。
     public static class PracticeConnectionChecker
     {
         /// <summary>
         /// 按旧结果模型执行元件数量、连通分组和实例映射比较。该入口服务仍使用 ConnectionCheckResult 的兼容调用方，
         /// 不替代 Netlist 层的结构化 Issue 输出，也不决定练习会话能否开始或结束。
         /// </summary>
+        // 连通分组表达外部 Wire 形成的节点，而不是按钮/接触器当前导通。相同元件数量并不足以得分，
+        // 映射后仍需验证端子连接；多个同分映射且存在错误时保守标为 NeedsReview。
         public static ConnectionCheckResult Check(WorkspaceController workspace, CircuitTemplateDto template)
         {
             var result = new ConnectionCheckResult();
@@ -189,7 +195,8 @@ namespace ElectricalSim.Practice
             return "未知元件";
         }
 
-        // 旧兼容路径按定义分组枚举实例对应；排列规模会随同类元件数量增长，不能把它误当作当前 Netlist 求解器的实现副本。
+        // 旧兼容路径按定义分组枚举实例对应；排列规模会随同类元件数量增长，不能把它误当作当前 Netlist
+        // 求解器的实现副本。这里的映射只用于评分比较，绝不能回写学生实例 ID 或修改图纸。
         private static List<Dictionary<string, string>> GenerateAllMappings(List<TemplateComponentDto> stdComps, List<CircuitComponent> stuComps)
         {
             var defGroups = stdComps.GroupBy(c => c.definitionName).ToList();
@@ -246,6 +253,8 @@ namespace ElectricalSim.Practice
         }
 
         // 在旧 UnionFind 连通组之间做双向映射比较，结果仅回填旧 MissingConnections/WrongConnections 模型。
+        // 每种候选映射都在两个独立节点分组上比较缺失/错误连接，不修改 Workspace；评分只为从同定义元件
+        // 的可能对应中选择最接近者，不能宣称找到了物理运行等价。
         private static MappingResult EvaluateMapping(Dictionary<string, string> stdToStuMap, UnionFind<string> stdNodes, UnionFind<string> stuNodes, CircuitTemplateDto template, WorkspaceController workspace)
         {
             var r = new MappingResult();

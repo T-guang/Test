@@ -9,8 +9,13 @@ namespace ElectricalSim.Core.Validation
     /// 不推进仿真，也不负责检查助手的报告排版和教学报告组装。RuleId 与 Severity 属于测试和快照保护的契约数据；
     /// 改动 Helper 顺序或严重级别后，必须运行规则和模板验证。
     /// </summary>
+    // ValidationService 负责协调结构/运行分析所提供的事实与教学规则，输出可去重的规则问题；它不自行
+    // 推进运行态，也不负责最终 UI 文案。新增规则应优先落入相应 Helper，避免在此处复制第二套拓扑推导。
     public sealed class CircuitValidationService
     {
+        // 阶段顺序是报告契约的一部分：相位与元件不变量先建立基础证据，随后才追加电势、保护、KT 与
+        // 控制支路规则。各 Helper 会按规则需要读取 wire-only 静态图、受控 runtime-aware 连通事实和/或
+        // 同一次 Analyzer 结果；动态内部导通绝不能写回静态 Wire 图，复杂拓扑上限统一降级报告。
         public CircuitValidationReport Validate(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires,
@@ -37,6 +42,8 @@ namespace ElectricalSim.Core.Validation
             return report;
         }
 
+        // 电势组仅从静态外部接线提取，适合判定 L/N/相线冲突；它不是电流求解，也不能把动态触点闭合
+        // 当成永久节点关系。
         private static void AddPowerSafetyIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -61,6 +68,7 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 保护旁路规则消费主回路结构范围，关注保护器件是否被真实外部路径绕开，而非某一时刻的显示导通。
         private static void AddProtectionBypassIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -85,6 +93,7 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // KT 旁路只检查静态控制意图是否被直接绕过；运行中是否已经延时到位仍应由 Analyzer/Simulation 解释。
         private static void AddTimerControlBypassIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -109,6 +118,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 电机问题以 Analyzer 的稳定组件状态和相位 Helper 的结构证据交叉判断；不能把单次视觉状态或
+        // 单个端子“有线”直接升级为相序、星三角或负载运行结论。
         private static void AddMotorIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -311,6 +322,8 @@ namespace ElectricalSim.Core.Validation
             return secondaryConnectedPairs > 0 && secondaryConnectedPairs < 3;
         }
 
+        // 元件不变量检查针对无需运行态即可成立的端子/结构约束，作为后续电机和控制规则的基础；
+        // 它不能替代 Helper 的跨组件路径判断。
         private static void AddComponentInvariantIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -455,6 +468,7 @@ namespace ElectricalSim.Core.Validation
             return count;
         }
 
+        // 不支持项是教学/分析能力边界的显式反馈，不应以静默跳过掩盖；该规则不负责把组件转换成其他模型。
         private static void AddUnsupportedComponentIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components)
@@ -489,6 +503,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 自锁、热继控制 NC 与正反转互锁属于控制支路结构规则。它们不能只凭“端子有线”成立，
+        // 必须复用 Helper 对线圈控制路径和可靠作用域的保守判断。
         private static void AddControlCircuitStructureIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -503,6 +519,8 @@ namespace ElectricalSim.Core.Validation
             AddReversingContactorConflictIssues(report, components, wires, analysisResult);
         }
 
+        // 正反转冲突同时消费可靠配对范围和 Analyzer 的状态事实。名称相近、两台 KM 同时存在或两端有线
+        // 均不足以形成可报告冲突，防止普通多接触器图纸误报。
         private static void AddReversingContactorConflictIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -588,6 +606,7 @@ namespace ElectricalSim.Core.Validation
                  string.Equals(info.CoilStatus, "InterlockConflict", StringComparison.OrdinalIgnoreCase));
         }
 
+        // 自锁规则委托分支 Helper 验证启动、NO 与线圈控制路径的关系；不能把任意辅助触点连线简化成自锁。
         private static void AddSelfHoldingBranchIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -628,6 +647,8 @@ namespace ElectricalSim.Core.Validation
                 "24");
         }
 
+        // 热继控制保护与主回路保护范围不同。此处检查线圈控制支路是否绕过 NC 保护触点，而不是判断 FR
+        // 外观、名称或当前脱扣显示状态。
         private static void AddThermalRelayControlBypassedIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -679,6 +700,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 停止按钮旁路是控制意图缺失的教学风险；候选按钮必须满足纯停止结构条件，不能把复合按钮或
+        // 其他常闭元件一概视为停止按钮。
         private static void AddStopButtonBypassedIssues(
             CircuitValidationReport report,
             IReadOnlyList<CircuitComponent> components,
@@ -886,6 +909,7 @@ namespace ElectricalSim.Core.Validation
             report.Issues.Add(issue);
         }
 
+        // 同一规则、同一元件只保留一个问题，避免多个 Helper 或多次遍历把同一教学风险堆叠成重复提示。
         private static void AddIssue(CircuitValidationReport report, CircuitValidationIssue issue)
         {
             if (report == null || issue == null || HasIssue(report, issue.RuleId, issue.Component))
@@ -896,6 +920,7 @@ namespace ElectricalSim.Core.Validation
             report.Issues.Add(issue);
         }
 
+        // Helper 的遍历预算耗尽表示结论不完整。统一转换为复杂拓扑问题，避免把“未遍历完”误写成安全通过。
         private static void AddComplexTopologyIssue(CircuitValidationReport report)
         {
             AddIssue(

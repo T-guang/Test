@@ -8,6 +8,8 @@ namespace ElectricalSim.Core.Validation
     /// 仅产出问题，聚合由 CircuitValidationService 负责；调用方不得借此修改接线。
     /// 遍历超限时必须保守处理，不能静默相信环路结果。
     /// </summary>
+    // 保护旁路检查针对真实外部 Wire 形成的主回路范围，判断断路器、熔断器、接触器或热继是否被绕开。
+    // “存在连接”不等于“经过保护器件”；内部动态导通和显示路线不能作为旁路证据。
     internal sealed class ProtectionBypassValidationHelper
     {
         private const string BreakerOrFuseBypassed = "BREAKER_OR_FUSE_BYPASSED";
@@ -34,6 +36,8 @@ namespace ElectricalSim.Core.Validation
             BuildStaticWireGraph();
         }
 
+        // 静态 Wire 图定义保护范围与旁路候选，Analyzer 只提供断开、下游带电等运行证据。两类事实可组合
+        // 判定风险，但任何内部动态导通都不能被反写成静态旁路；无法可靠定位目标时不能扩张为错误报告。
         public List<CircuitValidationIssue> Validate()
         {
             // 四类问题各自采用不同的作用域和证据：不能为了减少遍历而合并，否则会扩大正常并联支路的误报范围。
@@ -46,6 +50,8 @@ namespace ElectricalSim.Core.Validation
             return issues;
         }
 
+        // 电源到负载的保护链要求保护器件处于实际结构路径中；同一节点上“看起来相邻”的图形位置
+        // 不构成经过保护的证据。
         private void AddBreakerOrFuseBypassedIssues(List<CircuitValidationIssue> issues)
         {
             // 仅在保护器件已断开且 Analyzer 仍确认其下游带电时报告；静态存在并联导线本身不等价于有效旁路。
@@ -85,6 +91,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 电机直接接三相电源会绕过接触器主触点控制意图。该规则同时要求明确的三相结构证据，
+        // 不能把单相测试线或临时显示导通当作完整电机旁路。
         private void AddMotorContactorBypassedIssues(List<CircuitValidationIssue> issues)
         {
             if (components == null || !HasSupportedContactorStructure())
@@ -119,6 +127,7 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // FR 主回路旁路与其 95/96 控制 NC 触点是两项独立教学风险，不能因其中一项存在就推导另一项正确。
         private void AddThermalRelayMainCircuitBypassedIssues(List<CircuitValidationIssue> issues)
         {
             if (components == null)
@@ -161,6 +170,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 反转安全规则只在可靠正反转作用域内检查互锁。若不能唯一确定相对接触器，报告“缺互锁”
+        // 会比漏报更危险，因此应交由作用域 Helper 保守过滤。
         private void AddReversingInterlockMissingIssues(List<CircuitValidationIssue> issues)
         {
             // 缺失互锁只针对静态主回路能唯一确定的同一电机正反转作用域。运行态双吸合冲突由 Service 的独立规则处理。
@@ -223,6 +234,8 @@ namespace ElectricalSim.Core.Validation
                 phases.Contains(TerminalConstants.L3);
         }
 
+        // FR 上游接触器必须唯一，后续才能判断“绕过此 FR”而不是“连接到某个 FR”。多候选时主动失败，
+        // 防止并列回路被错误串联成一个保护范围。
         private bool TryFindUniqueUpstreamContactorForRelay(CircuitComponent relay, out CircuitComponent contactor)
         {
             contactor = null;
@@ -469,6 +482,8 @@ namespace ElectricalSim.Core.Validation
             return null;
         }
 
+        // 旁路范围只允许沿外部接线展开。遍历上限是防御性边界：超限交由主服务标记复杂拓扑，
+        // 不把不完整搜索的结果当作“无旁路”的肯定结论。
         private List<TerminalView> FloodStaticWireGroup(TerminalView start)
         {
             var group = new List<TerminalView>();
@@ -543,6 +558,7 @@ namespace ElectricalSim.Core.Validation
             return false;
         }
 
+        // 图建立后仅供结构范围查询复用；任何动态接触器状态都不能通过修改该缓存来“补齐”路径。
         private void BuildStaticWireGraph()
         {
             staticWireGraph.Clear();

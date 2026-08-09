@@ -15,6 +15,8 @@ namespace ElectricalSim.UI
     /// 本类不负责系统模板 Catalog、Resources 写回或保存/导入界面的视觉。修改 instanceId、definitionName、端子关联字段或路径前，
     /// 需同步复核保存、导入、模板和 Workspace 读取端，并回归保存、读取、删除、导入与重新启动读取。
     /// </summary>
+    // 用户图纸持久化只保存可重建的编辑事实：定义名、instanceId、位置、参数、Wire 端点与视觉路线。
+    // 仿真派生状态、测量结果和 Unity 对象引用不得进入文件；Reader/Writer 的稳定 ID 契约不能随显示文案变化。
     public sealed class SaveLoadService : MonoBehaviour
     {
         [SerializeField] private WorkspaceController workspace;
@@ -26,6 +28,8 @@ namespace ElectricalSim.UI
 
         private string LegacySavePath => Path.Combine(Application.persistentDataPath, "electrical_demo_drawing.json");
 
+        // Service 只持有当前活动 Workspace 与 Catalog 的引用。Catalog 用于把稳定 definitionName 解析回规格，
+        // 不是用户文件的副本；替换 Catalog 时不能用显示名称或 Scene 对象作为兼容键。
         public void Initialize(WorkspaceController targetWorkspace, List<ComponentDefinition> definitions)
         {
             workspace = targetWorkspace;
@@ -42,6 +46,8 @@ namespace ElectricalSim.UI
             return SaveAs(documentName, false, out _, out _, out _);
         }
 
+        // 保存从活动 Workspace 的权威集合创建 DTO。写盘失败不会声称具有事务回滚；调用方应把文件系统失败
+        // 与图纸拓扑失败区分处理，且不得扫描 Demo 场景中的无关对象补充内容。
         public bool SaveAs(string documentName, bool overwrite, out SavedBlueprintInfo savedInfo, out bool exists, out string error)
         {
             // 此入口从活动 Workspace 创建用户图纸 DTO 后直接写入目标文件；当前实现捕获写入异常，但不声明原子写入或事务回滚。
@@ -112,6 +118,8 @@ namespace ElectricalSim.UI
             return LoadFromFile(filePath, out _);
         }
 
+        // 文件读取层只负责 I/O 与错误封装，格式解析统一交给 LoadFromJsonString，保证文件导入与粘贴导入
+        // 遵循同一份预检、清空和重建契约。
         public bool LoadFromFile(string filePath, out string error)
         {
             error = null;
@@ -142,6 +150,8 @@ namespace ElectricalSim.UI
             }
         }
 
+        // 文件和外部文本共用同一导入入口。必须在清空活动图纸前完成格式、definition、instanceId 和端子引用
+        // 预检；读取成功后才进入重建阶段，避免明显无效 JSON 覆盖学习者当前工作。
         public bool LoadFromJsonString(string jsonContent, out string error, string sourceFilePath = null)
         {
             // 文件和外部导入共用此解析入口。清空画布前先校验 DTO、Definition 与端子引用。
@@ -180,7 +190,8 @@ namespace ElectricalSim.UI
             }
 
             // 在清空当前画布前先检查所有元件定义与导线端子引用，避免明显无效的外部 JSON 覆盖学习者当前电路。
-            // F1-A：同时拒绝重复 instanceId，并在校验阶段建立 instanceId → ComponentDefinition 映射供导线预检使用。
+            // 重复 instanceId 会使 Wire 端点重建失去唯一目标；在预检阶段建立实例到 Definition 的映射，
+            // 以便所有 Wire 都在清空画布前验证 terminalId 的稳定契约。
             var instanceIds = new HashSet<string>(StringComparer.Ordinal);
             var definitionsByInstanceId = new Dictionary<string, ComponentDefinition>(StringComparer.Ordinal);
             foreach (var item in drawing.components)
@@ -210,7 +221,7 @@ namespace ElectricalSim.UI
                 definitionsByInstanceId[item.instanceId] = definition;
             }
 
-            // F1-A：导线前置校验。在清空画布前完成所有 DTO 级判断，避免无效 JSON 覆盖学习者当前电路。
+            // 导线前置校验在清空画布前完成所有 DTO 级判断，避免无效 JSON 覆盖学习者当前电路。
             // 规则与 WireManager.CanCreateWire 保持一致：同端子拒绝、同元件跳线由集中策略 SameComponentWirePolicy 判定。
             // 不复制更宽松的接线规则，也不修改 WireManager。
             var wireEndpointPairs = new HashSet<string>(StringComparer.Ordinal);
@@ -248,7 +259,7 @@ namespace ElectricalSim.UI
                     return false;
                 }
 
-                // F1-A：起点和终点不能是完全相同端子（同一元件同一端子）。
+                // 起点和终点不能是完全相同端子（同一元件同一端子）。
                 if (item.startComponentId == item.endComponentId && item.startTerminalId == item.endTerminalId)
                 {
                     error = $"导入失败：导线不能连接到元件 '{item.startComponentId}' 的同一端子 '{item.startTerminalId}'。";
@@ -256,7 +267,7 @@ namespace ElectricalSim.UI
                     return false;
                 }
 
-                // F1-A：同一元件内部跳线委托集中策略 SameComponentWirePolicy，不再使用本地星三角白名单或字符串特判。
+                // 同一元件内部跳线委托集中策略 SameComponentWirePolicy，不再使用本地星三角白名单或字符串特判。
                 // 预检失败发生在 StopSimulation/ClearDrawing 之前，失败时旧画布、旧 Wire、旧运行态、锁定状态和模板身份保持。
                 if (item.startComponentId == item.endComponentId)
                 {
@@ -268,7 +279,7 @@ namespace ElectricalSim.UI
                     }
                 }
 
-                // F1-A：不允许重复的无向端点对。
+                // 不允许重复的无向端点对。
                 var pairKey = BuildUndirectedWireKey(item.startComponentId, item.startTerminalId, item.endComponentId, item.endTerminalId);
                 if (!wireEndpointPairs.Add(pairKey))
                 {
@@ -278,7 +289,7 @@ namespace ElectricalSim.UI
                 }
             }
 
-            // F1-A：所有校验通过后的成功导入生命周期。
+            // 所有校验通过后的成功导入生命周期。
             // 1. 再次确认 workspace 不为 null（已在入口检查，此处防御性二次确认）；
             // 2. 若 IsInteractionLocked，拒绝导入，旧状态保持；
             // 3. 调用 workspace.StopSimulation()；
@@ -301,7 +312,7 @@ namespace ElectricalSim.UI
                 // 恢复阶段发生异常时，已清空或已部分恢复的画布不会自动回滚。
                 ApplyDrawingDto(drawing);
 
-                // F1-A：导入完成后 IsSimulationRunning 必须为 false，新电路不得自动运行。
+                // 导入完成后 IsSimulationRunning 必须为 false，新电路不得自动运行。
                 if (workspace.IsSimulationRunning)
                 {
                     workspace.StopSimulation();
@@ -323,7 +334,9 @@ namespace ElectricalSim.UI
             }
         }
 
-        // F1-A：构建无向端点对的规范化键，使 (A→B) 与 (B→A) 视为同一对。
+        // 构建无向端点对的规范化键，使 (A→B) 与 (B→A) 视为同一对。
+        // Wire 在保存层按无向端点对去重：绘制方向不应产生两份边。排序依据必须使用稳定 instanceId/terminalId，
+        // 不能改为显示名称，否则重命名会破坏旧图纸的重复线防护。
         private static string BuildUndirectedWireKey(string startComponentId, string startTerminalId, string endComponentId, string endTerminalId)
         {
             var a = startComponentId + ":" + startTerminalId;
@@ -331,6 +344,7 @@ namespace ElectricalSim.UI
             return string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
         }
 
+        // 列表只读取用户保存目录并容忍单个文件损坏；它不修改文件、也不把内置模板混入用户图纸清单。
         public List<SavedBlueprintInfo> ListSavedBlueprints()
         {
             // 只枚举用户专用 SavedBlueprints 目录中的 JSON；单个文件读取失败只记录警告，不阻断其余用户图纸列表。
@@ -356,6 +370,7 @@ namespace ElectricalSim.UI
             return DeleteSavedBlueprint(filePath, out _);
         }
 
+        // 删除仅接受保存目录内的用户文件路径，避免 UI 传入任意路径影响模板或应用外部数据。
         public bool DeleteSavedBlueprint(string filePath, out string error)
         {
             error = null;
@@ -420,6 +435,8 @@ namespace ElectricalSim.UI
             }
         }
 
+        // 序列化从当前权威组件和 Wire 集合采样；保存路线、颜色和样式用于恢复显示，但 Wire 的核心契约
+        // 仍是两端 instanceId/terminalId。运行测量、选中状态与临时预览不得写入 DTO。
         private DrawingDto CreateDrawingDto()
         {
             // 仅把 Workspace 的当前元件和活动导线转换为用户图纸 DTO；运行期计时、运动和保护缓存不在此 JSON 中。
@@ -460,6 +477,8 @@ namespace ElectricalSim.UI
             return drawing;
         }
 
+        // 应用顺序固定为清空旧工作区、先生成全部组件及端子、再恢复 Wire 与视觉路线。Wire 只能指向本次
+        // 创建的 TerminalView；DTO 身份不能直接当作 Unity 对象引用复用。
         private void ApplyDrawingDto(DrawingDto drawing)
         {
             // 已通过前置校验的 DTO 仍按“先元件、后导线”恢复；此方法会清空当前画布并在结束后清理撤销历史。
@@ -476,14 +495,14 @@ namespace ElectricalSim.UI
                 var definition = catalog.Find(d => d.name == item.definitionName);
                 if (definition == null)
                 {
-                    // F1-A：前置校验已确认 definition 存在；此分支仅防御极端运行时异常（如 catalog 被外部修改）。
+                    // 前置校验已确认 definition 存在；此分支仅防御极端运行时异常（如 catalog 被外部修改）。
                     throw new InvalidOperationException($"导入恢复失败：元件类型 '{item.definitionName}' 在恢复阶段不可用。");
                 }
 
                 var component = workspace.SpawnComponent(definition, new Vector2(item.x, item.y), item.instanceId, false);
                 if (component == null)
                 {
-                    // F1-A：SpawnComponent 返回 null 不得继续解引用；前置校验已拒绝锁定画布，此处仅防御极端运行时异常。
+                    // SpawnComponent 返回 null 不得继续解引用；前置校验已拒绝锁定画布，此处仅防御极端运行时异常。
                     throw new InvalidOperationException($"导入恢复失败：元件 '{item.instanceId}' 创建失败。");
                 }
                 component.SetClosed(item.isClosed);
@@ -501,7 +520,7 @@ namespace ElectricalSim.UI
                 var wire = workspace.WireManager.CreateWire(start, end, color, style);
                 if (wire == null)
                 {
-                    // F1-A：CreateWire 返回 null 不得静默忽略；前置校验已确认连接合法，此处仅防御极端运行时异常。
+                    // CreateWire 返回 null 不得静默忽略；前置校验已确认连接合法，此处仅防御极端运行时异常。
                     throw new InvalidOperationException($"导入恢复失败：导线 '{item.startComponentId}:{item.startTerminalId}' → '{item.endComponentId}:{item.endTerminalId}' 创建失败。");
                 }
                 // 历史图纸缺少手动路由字段时保持 DTO 默认值并使用自动路径；不会在读取阶段改写原文件。
@@ -531,6 +550,8 @@ namespace ElectricalSim.UI
             workspace.ClearHistory();
         }
 
+        // 颜色解析仅用于视觉兼容，失败时退回默认颜色而不改变端点或拒绝原本有效的电气图纸。
+        // 支持历史文本格式是读取兼容层，不得把新的显示格式反向写成拓扑 schema。
         private static bool TryParseWireColor(string rawColor, out Color color, Color fallback)
         {
             color = fallback;
@@ -689,6 +710,7 @@ namespace ElectricalSim.UI
             return true;
         }
 
+        // 目录创建只限定在 persistentDataPath 的用户图纸根目录；系统模板、Resources 和工程资产永不由此写入。
         private void EnsureSaveDirectory()
         {
             // 当前实现仅确保用户保存目录存在，不迁移旧文件，也不执行云备份或缓存清理。
@@ -703,6 +725,7 @@ namespace ElectricalSim.UI
             return Path.Combine(SavedBlueprintDirectory, safeName + ".json");
         }
 
+        // 文档名是文件系统显示名，不是 documentId 或 instanceId。净化不能修改 DTO 内的稳定电气标识。
         private static string SanitizeDocumentName(string documentName)
         {
             if (string.IsNullOrWhiteSpace(documentName))

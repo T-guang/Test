@@ -8,6 +8,8 @@ namespace ElectricalSim.Core.Validation
     /// 仅报告既有的 TIMER_CONTROL_BYPASSED 契约；不得修改 KT 计时状态、规则严重级别
     /// 或教学输出格式。
     /// </summary>
+    // KT 旁路检查识别延时触点参与的静态控制依赖是否被直接外部路径绕开。它验证的是教学控制意图，
+    // 不是计时器当前已经到时的运行态；运行状态仍由 RuntimeStateManager 与 Analyzer 管理。
     internal sealed class TimerControlBypassValidationHelper
     {
         private const string TimerControlBypassed = "TIMER_CONTROL_BYPASSED";
@@ -31,15 +33,18 @@ namespace ElectricalSim.Core.Validation
             BuildStaticWireGraph();
         }
 
+        // 先建立静态 Wire 图，再对支持的 KT/接触器组合验证控制路径，避免把动态 KT 触点边作为旁路前提。
         public List<CircuitValidationIssue> Validate()
         {
-            // 仅在 Analyzer 确认 KT 正处于计时、延时触点尚未完成而下游线圈已经得电时检查旁路。
-            // 静态存在其他控制支路不等于错误；运行态证据和静态接线证据必须同时成立。
+            // 仅在静态图存在直接旁路候选，且 Analyzer 确认 KT 正处于计时、延时触点尚未完成而下游线圈已经得电时检查。
+            // 静态存在其他控制支路不等于错误；运行态证据只用于本次判定，不能改变 Wire topology。
             var issues = new List<CircuitValidationIssue>();
             AddTimerControlBypassedIssues(issues);
             return issues;
         }
 
+        // 仅当 KT 的 NO 延时触点被用于特定接触器控制意图、且存在绕开该依赖的直接静态路径时才报告。
+        // 不能把任意 KT 触点接线或当前计时状态误分类为旁路。
         private void AddTimerControlBypassedIssues(List<CircuitValidationIssue> issues)
         {
             if (components == null || analysisResult == null || analysisResult.Components == null)
@@ -93,6 +98,7 @@ namespace ElectricalSim.Core.Validation
                 string.Equals(info.TimerDelayStatus, "Timing", StringComparison.OrdinalIgnoreCase);
         }
 
+        // 归属判定连接“哪个 KT NO 触点”和“哪个线圈控制支路”，避免多个 KT/KM 同时存在时跨实例借用触点。
         private bool IsTimerNoContactAssignedToContactor(CircuitComponent timer, CircuitComponent contactor)
         {
             if (timer == null || contactor == null)
@@ -111,6 +117,8 @@ namespace ElectricalSim.Core.Validation
                 IsTimerNoBeforeStartButton(timerNo, contactor);
         }
 
+        // 启动按钮前的 KT NO 触点仍属于控制依赖的一部分；检查采用静态节点关系而不要求触点当前闭合，
+        // 否则延时尚未到期时会把正确教学接线错误地判成无关联。
         private bool IsTimerNoBeforeStartButton(TerminalView timerNo, CircuitComponent contactor)
         {
             if (timerNo == null || contactor == null || components == null)
@@ -186,6 +194,7 @@ namespace ElectricalSim.Core.Validation
             return null;
         }
 
+        // 查询仅沿真实外部 Wire；KT 内部延时接点与接触器内部触点不进入图，避免用动态导通证明静态旁路。
         private bool AreConnectedByStaticWires(TerminalView first, TerminalView second)
         {
             if (first == null || second == null)
@@ -244,6 +253,7 @@ namespace ElectricalSim.Core.Validation
             return false;
         }
 
+        // 静态图的边严格来自真实外部 Wire；这保证“直接路径”表示学生实际接线，而非元件内部导通。
         private void BuildStaticWireGraph()
         {
             staticWireGraph.Clear();

@@ -32,6 +32,8 @@ namespace ElectricalSim.Core.Validation
     /// 作用域依赖端子连通证据，不依据显示名称或画布距离；无法唯一对应时返回不可靠结果，避免多电机场景跨范围误报。
     /// 本类不判断热继电器当前脱扣状态，修改后必须回归热继主回路与控制旁路规则测试。
     /// </summary>
+    // 热继保护作用域把 FR、上游接触器与受保护三相电机按主回路真实连接关联起来；不能只依赖名称或
+    // 单个 NC 控制触点。主回路保护范围与控制回路 NC 作用是相关但不同的结构事实。
     public sealed class ThermalRelayProtectionScopeHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -39,6 +41,8 @@ namespace ElectricalSim.Core.Validation
 
         public bool HasTraversalLimitExceeded { get; private set; }
 
+        // 只有上游接触器和下游电机均能唯一确定时才返回可靠作用域；模糊映射不能被后续旁路规则用作
+        // 断言依据，避免多电机图纸出现跨回路误报。
         public bool TryResolveProtectionScope(
             CircuitComponent relay,
             IReadOnlyList<CircuitComponent> components,
@@ -71,6 +75,7 @@ namespace ElectricalSim.Core.Validation
             return true;
         }
 
+        // 上游接触器必须通过三相主回路得到唯一证明；仅有控制线、名称相似或单相接触均不能建立 FR 主回路范围。
         private bool TryFindUniqueUpstreamContactor(
             CircuitComponent relay,
             IReadOnlyList<CircuitComponent> components,
@@ -110,6 +115,7 @@ namespace ElectricalSim.Core.Validation
             return false;
         }
 
+        // 受保护电机同样要求 FR 输出三相与电机输入一一对应，避免一个 FR 被错误关联到并列负载。
         private bool TryFindUniqueProtectedMotor(
             CircuitComponent relay,
             IReadOnlyList<CircuitComponent> components,
@@ -166,6 +172,7 @@ namespace ElectricalSim.Core.Validation
                 AreConnectedByStaticWires(relay.GetTerminal(TerminalConstants.T3), motor.GetTerminal(TerminalConstants.W));
         }
 
+        // 图中只连接外部主回路 Wire；接触器当前闭合不改变 FR 所属主回路的静态范围。
         private void BuildStaticMainCircuitGraph(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)

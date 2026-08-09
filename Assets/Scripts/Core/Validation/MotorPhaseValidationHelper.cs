@@ -9,6 +9,8 @@ namespace ElectricalSim.Core.Validation
     /// 动态图用于反映当前可导通路径，静态图用于区分既有接线；本类只提供规则证据，不修改电机运行态或 UI。
     /// 遍历受拓扑预算保护，预算耗尽时调用方必须保守处理并运行拓扑安全测试与电机、星三角负向用例。
     /// </summary>
+    // 三相电机相位检查组合静态 Wire 图与受限的元件连通事实，区分普通电机和星三角端子布局。
+    // “端子有线”不足以证明相位正确：必须确认相线来源、重复相和可达路径；遍历预算超限时由上层报告复杂拓扑。
     internal sealed class MotorPhaseValidationHelper
     {
         private readonly IReadOnlyList<CircuitComponent> components;
@@ -26,6 +28,7 @@ namespace ElectricalSim.Core.Validation
             BuildGraph();
         }
 
+        // 校验结果只描述结构风险，不驱动电机运行。运行方向、接触器瞬态和保护动作仍属于 Analyzer/Simulation。
         public MotorPhaseValidationResult Validate(
             CircuitComponent motor,
             ComponentStateInfo info,
@@ -228,6 +231,7 @@ namespace ElectricalSim.Core.Validation
             return CircuitStateAnalyzer.VoltageNone;
         }
 
+        // 静态图只 Union 真实外部 Wire；内部触点不能永久合并到此图，否则停机/断开时仍会被误判为同节点。
         private void BuildStaticWireGraph()
         {
             staticWireGraph.Clear();
@@ -446,6 +450,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // Flood 用于发现受当前规则允许的结构可达性，不是最短路径求解或运行态电流证明；预算保护避免异常
+        // 环路让检查助手失去响应。
         private HashSet<TerminalView> Flood(TerminalView start)
         {
             var visited = new HashSet<TerminalView>();
@@ -542,6 +548,7 @@ namespace ElectricalSim.Core.Validation
             return visited;
         }
 
+        // 该变体在追踪负载侧路径时阻断供电端子，避免电源内部汇聚把不同相误判为负载侧短接。
         private HashSet<TerminalView> FloodWithoutSupplyTerminals(TerminalView start)
         {
             var visited = new HashSet<TerminalView>();

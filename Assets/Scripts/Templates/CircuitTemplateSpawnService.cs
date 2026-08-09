@@ -10,6 +10,8 @@ namespace ElectricalSim.Templates
     /// 本类不负责模板选择 UI 或用户图纸导入。生成完成后的 Workspace.Components 与 WireManager.Wires 才是活动电路权威输入。
     /// 真实模板基线依赖这条生产生成路径，修改后必须回归 18 张模板与 Template Integrity。
     /// </summary>
+    // 模板 DTO 是静态描述，Workspace 实例才是可运行对象。生成过程先验证所有引用，再按 instanceId 创建
+    // 元件和端子，最后恢复真实 Wire；绝不能把模板中的对象关系当作运行时 Unity 引用。
     public static class CircuitTemplateSpawnService
     {
         private sealed class TemplateValidationResult
@@ -17,6 +19,8 @@ namespace ElectricalSim.Templates
             public readonly Dictionary<string, ComponentDefinition> DefinitionsByInstanceId = new Dictionary<string, ComponentDefinition>();
         }
 
+        // Spawn 的预检先于 ClearDrawing，防止不完整模板清掉当前图纸。当前生成不是事务回滚实现，
+        // 因此新字段或端子兼容变更必须先在 ValidateTemplate 阶段拒绝，而非在半生成后补救。
         public static bool Spawn(
             CircuitTemplateDto template,
             WorkspaceController workspace,
@@ -105,6 +109,7 @@ namespace ElectricalSim.Templates
         /// 供 TemplateLoadController 等加载入口在停止旧仿真前完成预检：
         /// 预检失败时保持旧电路与旧仿真继续运行，预检成功后才进入替换提交点。
         /// </summary>
+        // 提供给加载入口的只读预检。成功仅表示可安全开始替换，不表示模板运行正确或教学规则已通过。
         public static bool TryValidate(
             CircuitTemplateDto template,
             IReadOnlyList<ComponentDefinition> catalog,
@@ -113,6 +118,8 @@ namespace ElectricalSim.Templates
             return ValidateTemplate(template, catalog, out _, out message);
         }
 
+        // 预检只确认 DTO 能映射到当前 Catalog 与稳定端子契约；它不求解电路、也不替代运行后的
+        // Analyzer/Validation。模板的视觉路线可缺省，但端点、实例 ID 和参数引用不能含糊。
         private static bool ValidateTemplate(
             CircuitTemplateDto template,
             IReadOnlyList<ComponentDefinition> catalog,
@@ -270,6 +277,7 @@ namespace ElectricalSim.Templates
             return false;
         }
 
+        // 手工路线属于视觉持久化数据：必须是有限坐标且至少两点，但不参与元件/端子电气合法性判断。
         private static bool ValidateManualRoutePoints(IReadOnlyList<Vector2> points, out string error)
         {
             error = null;
@@ -320,6 +328,7 @@ namespace ElectricalSim.Templates
             return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
+        // 未知样式回退为稳定默认视觉样式，不改变模板 Wire 的两个端点；样式兼容不应影响图纸能否接线。
         private static WireStyle ParseStyle(string style)
         {
             if (!string.IsNullOrWhiteSpace(style) && System.Enum.TryParse(style, out WireStyle parsed))

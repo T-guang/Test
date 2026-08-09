@@ -10,6 +10,8 @@ namespace ElectricalSim.AI
     /// 置换以 <see cref="ContactorTerminalSchema.NormallyOpenContactPairs"/> 为唯一依据，
     /// 不在业务代码中散写 13/14/33/34。
     /// </summary>
+    // NO pair 的置换只服务“同一接触器、同类型完整辅助触点对”的结构等价识别。它不合并物理触点，
+    // 不改变运行时导通，也不能跨接触器、跨 NO/NC/Main 或把半对端子当作可交换对象。
     public static class ContactorNoPairPermutation
     {
         /// <summary>
@@ -61,6 +63,8 @@ namespace ElectricalSim.AI
         /// 第一个映射始终是 identity。不散写 13/14/33/34，完全以
         /// <see cref="ContactorTerminalSchema.NormallyOpenContactPairs"/> 为唯一依据。
         /// </summary>
+        // 对外暴露的映射保持 terminalId 到 terminalId 的显式形式，便于调用方审计；identity 始终位于
+        // 第一个选项，调用方可在 ExactMatch 已失败后决定是否接受非 identity 的 EquivalentMatch。
         public static List<Dictionary<string, string>> GenerateSingleComponentNoPairMappings(
             IReadOnlyCollection<string> usedTerminals)
         {
@@ -121,6 +125,8 @@ namespace ElectricalSim.AI
         /// 从端子集合中找出该元件实际使用的 NO pair 列表。
         /// 只要 pair 的任一端子出现在端子集合中，即视为该 pair 被使用。
         /// </summary>
+        // 只要某个 Schema NO pair 的任一端子出现在图中，就把该完整 pair 纳入候选集合；这一步只识别
+        // 可置换的触点归属，不判断半对接线是否最终构成合法控制结构。后续置换仍以完整 pair 为双射单位。
         private static List<ContactorContactPair> GetUsedNoPairs(HashSet<string> terminals)
         {
             var used = new List<ContactorContactPair>();
@@ -141,6 +147,8 @@ namespace ElectricalSim.AI
         /// 枚举 per-component NO pair 置换的笛卡尔积。
         /// 每个接触器独立选择 identity 或 swap（仅当使用了 >= 2 个 NO pair 时才有 swap 选项）。
         /// </summary>
+        // 每个可用接触器节点独立生成映射后再组合，避免把 KM1 的辅助触点错误映射到 KM2。
+        // Schema 是可交换范围的唯一来源；外部拓扑决定该 pair 当前承担自锁或联动等控制角色。
         private static IEnumerable<Dictionary<int, Dictionary<string, string>>> EnumeratePermutations(
             List<ContactorNodeInfo> contactorNodes)
         {
@@ -261,6 +269,8 @@ namespace ElectricalSim.AI
         /// 应用 per-component 端子置换，生成新的 graph。
         /// 仅 remap NO pair 端子，其他端子（NC/Main/A1A2 等）保持不变。
         /// </summary>
+        // 置换在临时 graph 副本上完成，原 candidate 保持不变，确保识别回退或后续 Practice 比较
+        // 不会因一次 Equivalent 尝试污染真实学生接线的端子身份。
         private static CircuitTopologyGraph ApplyPermutation(
             CircuitTopologyGraph graph,
             Dictionary<int, Dictionary<string, string>> permutation)

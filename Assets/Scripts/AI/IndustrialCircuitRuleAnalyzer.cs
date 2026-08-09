@@ -12,6 +12,8 @@ namespace ElectricalSim.AI
     /// 仅覆盖当前已支持的三相电机、正反转、热继保护、自锁等教学控制范围，不应推断为可识别任意工业系统。
     /// 修改后必须回归 18 张模板，尤其是正反转、自动往返、两电机顺序启动和星三角相关场景。
     /// </summary>
+    // 本类提取工业教学电路的结构事实并形成教学级工业结论；它不推进接触器/KT 的运行状态，也不替代
+    // 通用 CircuitRuleChecker 的所有规则。调用方须把其结果与其他检查来源按展示契约汇总，而非重复建图。
     public static class IndustrialCircuitRuleAnalyzer
     {
         public static bool TryAnalyze(WorkspaceController workspace, out CircuitAnalysisResult result)
@@ -35,6 +37,8 @@ namespace ElectricalSim.AI
             return true;
         }
 
+        // 事实提取只读取当前 Workspace 的元件和真实外部 Wire。CircuitStateAnalyzer 提供已定义的
+        // 自锁/互锁结构事实；在这里重写端子编号识别会使工业规则与运行/分析语义发生漂移。
         internal static IndustrialCircuitFacts BuildFacts(WorkspaceController workspace)
         {
             var facts = new IndustrialCircuitFacts { Workspace = workspace };
@@ -58,7 +62,7 @@ namespace ElectricalSim.AI
             facts.StopButtons = facts.Components.Where(IsStopButton).ToList();
             facts.CompoundButtons = facts.Components.Where(IsCompoundPushButton).ToList();
 
-            // B3: 复用 CircuitStateAnalyzer 的结构事实，不在此层重建第二套端子编号简化识别器。
+            // 复用 CircuitStateAnalyzer 的结构事实，不在此层重建第二套端子编号简化识别器。
             // Analyze 只调用一次，后续 HasSelfHold 和 HasMutualInterlock 均复用该结果。
             var stateResult = new CircuitStateAnalyzer().Analyze(facts.Components, facts.Wires);
 
@@ -69,9 +73,8 @@ namespace ElectricalSim.AI
             });
             facts.HasThermalControlContact = facts.ThermalRelays.Any(r => HasTerminalWire(facts, r, "95") || HasTerminalWire(facts, r, "96"));
             facts.IsForwardReverseControl = HasForwardReverseRoles(facts.Components);
-            // B3: 互锁泛化。严格限定双 KM 场景（Count == 2），此时 HasInterlockStructure
-            // 中的 "other contactor" 只能是对方 KM，可安全复用 B2 结构事实。
-            // 3+ KM 场景因 target identity 不确定而返回 false。
+            // 互锁事实严格限定双 KM 场景：此时结构结果中的“另一接触器”才具有唯一目标。
+            // 三台以上 KM 的 target identity 不确定，宁可不把它误报为可靠互锁。
             facts.HasMutualInterlock = facts.IsForwardReverseControl &&
                 facts.Contactors.Count == 2 &&
                 HasMutualInterlockByStructure(stateResult, facts.Contactors[0], facts.Contactors[1]);
@@ -81,6 +84,8 @@ namespace ElectricalSim.AI
             return facts;
         }
 
+        // 公共工业规则描述主回路最小教学配置与负载端子完整性，不把它们解释为通用电力系统设计审查。
+        // 规则提示与硬错误保留各自严重度，后续报告层不得只取计数而遗漏具体风险说明。
         private static void AnalyzeCommonIndustrialRules(IndustrialCircuitFacts facts, CircuitAnalysisResult result)
         {
             if (facts.PowerSources.Count == 0)
@@ -125,6 +130,8 @@ namespace ElectricalSim.AI
             }
         }
 
+        // 控制规则消费 BuildFacts 中统一提取的按钮、线圈、自锁与互锁事实。此层不重新运行仿真，
+        // 因而它的结论是结构/教学结论，不应替代 SimulationEngine 对瞬时冲突的处理。
         private static void AnalyzeControlRules(IndustrialCircuitFacts facts, CircuitAnalysisResult result)
         {
             foreach (var contactor in facts.Contactors)
@@ -161,6 +168,7 @@ namespace ElectricalSim.AI
             }
         }
 
+        // 教学提示不应修正或抵消 Errors/Warnings；它们仅在结构事实足够时补充学习顺序，保持与安全规则分层。
         private static void AddTeachingTips(IndustrialCircuitFacts facts, CircuitAnalysisResult result)
         {
             if (facts.IsForwardReverseControl && facts.Contactors.Count >= 2)
@@ -225,7 +233,7 @@ namespace ElectricalSim.AI
         }
 
         /// <summary>
-        /// B3: 基于 CircuitStateAnalyzer 结构事实判断双 KM 互锁。
+        /// 基于 CircuitStateAnalyzer 的结构事实判断双 KM 互锁。
         /// 仅在严格双 KM 场景下使用，此时 HasInterlockStructure 的 "other contactor" 唯一确定。
         /// </summary>
         private static bool HasMutualInterlockByStructure(

@@ -9,6 +9,8 @@ namespace ElectricalSim.Core.Validation
     /// 它是规则证据 Helper，不是仿真引擎或 UI 格式化器；有界静态图可避免把任意场景对象
     /// 误当作电气连接。
     /// </summary>
+    // 电势检查给静态外部 Wire 节点标注 L/N/相线来源，用于提前发现冲突和线圈额定电压不匹配。
+    // 它不是求解电流或瞬时触点导通；动态状态只能作为已有 Analyzer 事实的补充，不能并入静态节点。
     internal sealed class PowerPotentialValidationHelper
     {
         private const string PowerPotentialConflict = "POWER_POTENTIAL_CONFLICT";
@@ -35,6 +37,7 @@ namespace ElectricalSim.Core.Validation
             BuildStaticWireGraph();
         }
 
+        // 先检查同一静态节点的直接电势冲突，再检查线圈额定值与可达电势的结构性矛盾，保持报告顺序稳定。
         public List<CircuitValidationIssue> Validate()
         {
             // 先按纯导线静态连通组判断电位直接混接，再用 Analyzer 的 A1/A2 电压证据校验线圈额定值。
@@ -45,6 +48,8 @@ namespace ElectricalSim.Core.Validation
             return issues;
         }
 
+        // 每个静态节点只评估一次，防止同一 L/N 或多相冲突随遍历起点重复报告；电势标签来自支持的
+        // 电源输出端，不从普通负载、视觉标题或运行显示反推。
         private void AddDirectPowerPotentialIssues(List<CircuitValidationIssue> issues)
         {
             var visited = new HashSet<TerminalView>();
@@ -131,6 +136,8 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 线圈失配将组件规格与同次 Analyzer 给出的 A1/A2 电压证据结合。直接电势冲突仍来自静态节点；
+        // 运行态证据不能反向写入静态 Wire 图，也不能以得电显示代替额定电压检查。
         private void AddCoilVoltageMismatchIssues(List<CircuitValidationIssue> issues)
         {
             // 线圈额定值来自元件参数，实际供电由 A1/A2 的 Analyzer 电压标签解析；UI 显示文本不能作为证据。
@@ -209,6 +216,8 @@ namespace ElectricalSim.Core.Validation
                 TerminalConstants.A2);
         }
 
+        // 仅沿外部 Wire 泛洪一个保存意义上的节点组；按钮、接触器和继电器内部边不属于该组，避免把
+        // 当前导通状态误报为永久 L/N 短接。
         private List<TerminalView> FloodStaticWireGroup(TerminalView start, HashSet<TerminalView> globalVisited)
         {
             var group = new List<TerminalView>();
@@ -258,6 +267,7 @@ namespace ElectricalSim.Core.Validation
             return group;
         }
 
+        // 静态图为所有端子登记节点并只连真实 Wire，确保孤立端子也可被明确识别，而不被内部元件边吞没。
         private void BuildStaticWireGraph()
         {
             staticWireGraph.Clear();

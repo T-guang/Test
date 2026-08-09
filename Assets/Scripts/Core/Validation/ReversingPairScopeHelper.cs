@@ -32,6 +32,8 @@ namespace ElectricalSim.Core.Validation
     /// 配对依据是到同一电机端子的三相映射，不能只凭 KM 名称；证据不唯一时宁可不返回作用域，避免跨电机误报。
     /// 本类不判断运行态冲突，修改后必须回归正反转互锁缺失、接触器冲突和多电机模板测试。
     /// </summary>
+    // 正反转配对依据三相主回路的实际连接映射解析接触器与同一电机的作用域，不能根据 KM 名称、编号
+    // 或画布顺序猜测。解析结果不可靠时宁可拒绝作为规则依据，避免把无关接触器误判为互锁对。
     public sealed class ReversingPairScopeHelper
     {
         private readonly Dictionary<TerminalView, HashSet<TerminalView>> staticWireGraph =
@@ -80,6 +82,8 @@ namespace ElectricalSim.Core.Validation
             return false;
         }
 
+        // 先建立只含外部 Wire 的静态主回路图，再为每台支持的电机寻找唯一的两接触器映射；结果中的
+        // IsReliable 表示后续规则可安全消费的前提，而不是对所有工业拓扑的泛化证明。
         private IReadOnlyList<ReversingPairScope> Resolve(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
@@ -117,6 +121,8 @@ namespace ElectricalSim.Core.Validation
             return scopes;
         }
 
+        // 一台电机需要两个不同接触器分别给出唯一三相映射才构成候选正反转对；缺相、共享或多重映射
+        // 都使作用域不可靠，而不是由名称猜测补全。
         private bool TryResolvePairForMotor(
             CircuitComponent motor,
             IReadOnlyList<CircuitComponent> components,
@@ -161,6 +167,8 @@ namespace ElectricalSim.Core.Validation
             return false;
         }
 
+        // 映射记录接触器输出相线到电机端子的实际对应关系，供判断两套主回路是否构成反相，而不是判断
+        // 接触器当前是否吸合。
         private bool TryResolveMapping(
             CircuitComponent contactor,
             CircuitComponent motor,
@@ -213,6 +221,7 @@ namespace ElectricalSim.Core.Validation
             }
         }
 
+        // 静态主回路图不加入接触器主触点的运行态边；这里要识别的是接线作用域，非某一时刻是否得电。
         private void BuildStaticMainCircuitGraph(
             IReadOnlyList<CircuitComponent> components,
             IReadOnlyList<WireView> wires)
