@@ -20,6 +20,9 @@ namespace ElectricalSim.AI
     /// </summary>
     public sealed class LocalInspectorPanel : MonoBehaviour, IInspectionWorkflowRuntimeAdapter
     {
+        // 本类是检查助手的 UGUI 宿主：负责把工作流给出的结构化报告映射为可交互面板，协调面板可见性、
+        // 选择上下文和运行态展示补充。它不拥有第二套电气判定：Analyzer、Validation 与 formatter 的事实和
+        // 严重度必须原样消费，UI 只能决定如何呈现，不能在此处重新推导电路规则。
         private const float PanelWidth = 320f;
         private const float CollapsedPanelWidth = 0f;
         private const float PanelMargin = 12f;
@@ -117,6 +120,8 @@ namespace ElectricalSim.AI
 
         private void BuildUi(RectTransform root)
         {
+            // 右侧面板只定义展示容器和 ScrollRect；报告 block 的语义、顺序与严重度由上游 ReportData 保证。
+            // 这里改变布局不能改变 ReportData，也不能把滚动位置当成检查或仿真的状态。
             root.anchorMin = new Vector2(1f, 0f);
             root.anchorMax = new Vector2(1f, 1f);
             root.pivot = new Vector2(1f, 0.5f);
@@ -211,6 +216,8 @@ namespace ElectricalSim.AI
 
         private void EnsureCollapseHandle(RectTransform parent)
         {
+            // 收起手柄挂在面板外层而不是报告 Content 中，保证报告重建、滚动或折叠时都不会重复创建，
+            // 且其点击命中不与报告内的按钮竞争。
             if (parent == null)
             {
                 return;
@@ -281,6 +288,8 @@ namespace ElectricalSim.AI
 
         private void ApplyRightPanelLayout(bool collapsed)
         {
+            // 面板折叠仅调整可视工作区的可用宽度。它不清空 Workspace、不中断仿真，也不改变已有选择；
+            // 这些编辑/运行状态由 WorkspaceController 统一拥有。
             isRightPanelCollapsed = collapsed;
             GetAssistantVerticalOffsets(out var bottom, out var top);
 
@@ -636,6 +645,8 @@ namespace ElectricalSim.AI
 
         private void AppendCircuitStateAnalysis()
         {
+            // 运行态摘要是本次 Analyzer 结果的展示投影，用于帮助学习者理解当前状态；它不能回写为 Wire
+            // topology、练习评分或后续检查的事实来源。
             try
             {
                 var result = AnalyzeCircuitState();
@@ -652,12 +663,16 @@ namespace ElectricalSim.AI
 
         private CircuitStateResult AnalyzeCircuitState()
         {
+            // 所有面板内需要的动态事实应来自同一次分析入口，避免多个局部扫描在触点/定时器状态变化时产生
+            // 相互矛盾的展示。分析失败按报告路径表达，不以猜测的默认状态替代。
             var analyzer = new CircuitStateAnalyzer();
             return analyzer.Analyze(workspace.Components, workspace.WireManager != null ? workspace.WireManager.Wires : null);
         }
 
         private void ApplyRuntimeDisplayOverrides(CircuitStateResult stateResult)
         {
+            // 这些覆盖仅处理“如何读给用户看”的阶段、延时和运动文案。显示友好的状态不能反向推进电机、
+            // 接触器或时间继电器的 runtime state。
             // 仅为教学显示补充 KT、星三角和运动状态；不得把这些覆写写回 ComponentDefinition 或仿真状态。
             // 仅校正检查助手展示所需的运行态字段，不能替代 Analyzer、SimulationEngine 或 RuntimeStateManager 的权威状态更新。
             if (stateResult == null || workspace == null || workspace.Components == null)
@@ -935,6 +950,8 @@ namespace ElectricalSim.AI
 
         private string BuildRuntimeDisplaySummary(CircuitStateResult stateResult)
         {
+            // 汇总按稳定的 ComponentStateInfo 投影生成，不从 Canvas 文本或图标反推电气状态；Canvas 是结果
+            // 的消费者而不是仿真事实的来源。
             if (stateResult == null)
             {
                 return string.Empty;
@@ -1010,6 +1027,8 @@ namespace ElectricalSim.AI
             CircuitStateResult stateResult,
             out IReadOnlyList<CircuitValidationIssue> validationIssues)
         {
+            // Validation 结果与检查报告分段展示，但不能被拼接成新的规则来源。这里保留 RuleId/严重度的
+            // 上游含义，只负责为学习者增加可读的总览和定位文本。
             var summary = BuildCircuitValidationSummary(stateResult, out validationIssues);
             if (string.IsNullOrWhiteSpace(summary))
             {
@@ -1128,6 +1147,8 @@ namespace ElectricalSim.AI
 
         private string BuildIndustrialParameterEstimationSummary(CircuitStateResult stateResult)
         {
+            // 参数估算服务于教学说明，使用已稳定的分析事实和元件规格给出量级参考；估算值不参与求解、
+            // 不更新元件参数，也不能替代保护或相序规则的判定。
             if (stateResult == null || workspace == null || workspace.Components == null)
             {
                 return string.Empty;
@@ -1455,6 +1476,8 @@ namespace ElectricalSim.AI
 
         private Dictionary<TerminalView, List<TerminalView>> BuildWireTerminalGraph()
         {
+            // 此图仅由用户真实 Wire 端点构造，用于热继等展示/估算范围的静态追踪。元件内部导通、触点状态
+            // 和图形路径都不能写入其中，否则会把运行态误固化为接线事实。
             var graph = new Dictionary<TerminalView, List<TerminalView>>();
             var wires = workspace != null && workspace.WireManager != null ? workspace.WireManager.Wires : null;
             if (wires == null)
@@ -1666,6 +1689,8 @@ namespace ElectricalSim.AI
 
         private Dictionary<string, ComponentStateInfo> BuildComponentStateMap(CircuitStateResult stateResult)
         {
+            // instanceId 是将分析快照投影回当前 Workspace 的稳定键；显示名可能重复、可本地化，因此不能
+            // 用来关联 ComponentStateInfo。
             var result = new Dictionary<string, ComponentStateInfo>();
             if (stateResult == null || stateResult.Components == null)
             {
@@ -2008,6 +2033,8 @@ namespace ElectricalSim.AI
 
         private string PrependUnsupportedComponentNotice(string report)
         {
+            // 不支持提示是能力边界说明，不等价于电路错误。保留原报告后再追加提示，避免 UI 因未知运行态
+            // 擅自吞掉 Analyzer 或 Validation 已给出的诊断。
             var notice = BuildUnsupportedComponentNotice();
             if (string.IsNullOrWhiteSpace(notice))
             {
@@ -2119,6 +2146,8 @@ namespace ElectricalSim.AI
 
         private string PrependAutoReciprocatingRuntimeSummary(string report)
         {
+            // 往复控制摘要只解释当前运行快照中的限位/方向关系；实际状态推进仍由 SimulationEngine 完成，
+            // 面板不能因为展示摘要而触发一次额外的控制逻辑。
             var summary = BuildAutoReciprocatingMainRuntimeSummary();
             if (string.IsNullOrWhiteSpace(summary))
             {
@@ -2172,6 +2201,8 @@ namespace ElectricalSim.AI
 
         private bool TryAppendAutoReciprocatingRuntimeSummary(StringBuilder builder)
         {
+            // 自动往复信息把 RuntimeStateManager 的运动快照与已解析的角色投影为教学说明。手动 SQ 状态和虚拟限位
+            // 触发可同时参与有效控制，但虚拟触发不能覆盖或持久化为组件的手动闭合状态。
             var roles = workspace != null ? workspace.AutoReciprocationRoles : null;
             if (roles == null || !roles.IsResolved)
             {
@@ -2358,6 +2389,8 @@ namespace ElectricalSim.AI
             CircuitCheckResult ruleResult,
             CircuitStateResult stateResult)
         {
+            // 过滤只处理已证实会在特定教学拓扑中重复/误导的展示项，且以同次 Analyzer 事实为条件；它不能泛化为
+            // UI 层的规则豁免，更不能修改原始 Checker 结果或改变其他检查入口的严重度。
             if (ruleResult == null || stateResult == null)
             {
                 return ruleResult;
@@ -2483,6 +2516,7 @@ namespace ElectricalSim.AI
 
         public void RefreshPracticeState()
         {
+            // 按钮可见性只反映会话当前是否存在；不从按钮状态反推 PracticeSession，也不在 UI 刷新时建立或结束会话。
             var practiceController = ElectricalSim.Practice.PracticeSessionController.Instance;
             bool isPractice = practiceController != null && practiceController.IsPracticeActive;
             if (submitPracticeButton != null)
@@ -2557,6 +2591,8 @@ namespace ElectricalSim.AI
 
         private void RebuildReportLayout(bool scrollToTop)
         {
+            // ContentSizeFitter/布局组在同一帧内可能尚未更新 preferred height，因此按 Canvas 刷新后重建再设置滚动位置。
+            // 该刷新只影响报告视图；不要把 scroll position 作为报告生成、仿真或选择状态的一部分。
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(reportContent);
             Canvas.ForceUpdateCanvases();
@@ -2568,6 +2604,8 @@ namespace ElectricalSim.AI
 
         private static RectTransform CreateReportBlock(Transform parent, InspectionReportBlock block)
         {
+            // 每个 block 独立拥有颜色和文本，但只复制模型字段，不保存对 Analyzer/issue 的对象引用。动态重建时可
+            // 安全销毁这些节点，而不会改变上游检查结果。
             var safeBlock = block ?? new InspectionReportBlock(
                 "检查报告",
                 string.Empty,

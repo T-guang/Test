@@ -31,6 +31,8 @@ namespace ElectricalSim.EditorTools
     /// </summary>
     public static class ArchitectureBaselineSnapshotWriter
     {
+        // 此 Editor 工具采集模板、规则和 Inspector 报告的可比较快照，用于发现架构契约的意外漂移；它不修复
+        // 生产数据、不改变场景，也不应把运行过程中的瞬时对象引用、时间戳或随机顺序写入 baseline。
         private const string CatalogPath = "Blueprints/Templates/template_catalog";
         private const string BaselineAssetDirectory = "Assets/EditorTests/Baselines/V2.3.9.1";
         private static readonly string[] KnownRuleIds =
@@ -98,6 +100,8 @@ namespace ElectricalSim.EditorTools
 
         private static void Run(bool writeBaseline)
         {
+            // 生成与校验共用同一捕获路径，区别只在于是否写入已审核的基线。这样“当前实现如何被观察”只有一份
+            // 定义，避免生成器与校验器因各自遍历顺序不同而制造无意义差异。
             // 生成与验证共用真实模板采集路径；仅 writeBaseline=true 的明确菜单操作允许写入期望快照。
             if (!EditorApplication.isPlaying)
             {
@@ -135,6 +139,8 @@ namespace ElectricalSim.EditorTools
 
         private static BaselineBundle CaptureAllTemplates()
         {
+            // 模板按稳定 identity 捕获，不能依赖 Unity 场景对象顺序；快照目标是结构/规则/报告模型，而非运行时
+            // GameObject 或临时 UI 的序列化外观。
             var workspace = UnityEngine.Object.FindObjectOfType<WorkspaceController>();
             var saveLoad = UnityEngine.Object.FindObjectOfType<SaveLoadService>();
             var inspector = UnityEngine.Object.FindObjectOfType<LocalInspectorPanel>();
@@ -204,6 +210,7 @@ namespace ElectricalSim.EditorTools
             CircuitValidationReport validation,
             LocalInspectorPanel inspector)
         {
+            // 捕获时先通过正式加载和分析链取得事实，再投影为纯数据快照。不要在此工具中重写模板生成、拓扑或规则逻辑。
             var snapshot = new TemplateSnapshot
             {
                 templateId = item.templateId,
@@ -234,6 +241,8 @@ namespace ElectricalSim.EditorTools
 
         private static List<SemanticComponentSnapshot> CaptureComponents(CircuitStateResult analysis)
         {
+            // 元件快照只保留报告和规则真正依赖的语义字段。不要把 GameObject 名称、屏幕坐标或临时选中状态纳入，
+            // 否则纯 UI 调整会造成错误的架构基线失败。
             var result = new List<SemanticComponentSnapshot>();
             if (analysis == null)
             {
@@ -278,6 +287,8 @@ namespace ElectricalSim.EditorTools
 
         private static AnalysisSnapshot CaptureAnalysis(CircuitStateResult analysis)
         {
+            // 分析快照记录正式 Analyzer 已输出的结论，而不是重新计算电气关系；基线工具必须跟随生产入口，
+            // 否则会把测试夹具的假设误当成模板运行事实。
             if (analysis == null)
             {
                 return new AnalysisSnapshot { available = false };
@@ -301,6 +312,8 @@ namespace ElectricalSim.EditorTools
 
         private static List<RuleIssueSnapshot> CaptureIssues(CircuitValidationReport report)
         {
+            // issue 按 RuleId、严重度与可读说明投影。RuleId 是稳定的内部诊断键，文字调整也应显式显示为基线差异，
+            // 不能在此处为了“通过”而丢弃或模糊化。
             if (report == null)
             {
                 return new List<RuleIssueSnapshot>();
@@ -353,6 +366,8 @@ namespace ElectricalSim.EditorTools
 
         private static InspectorReportSnapshot CaptureInspectorReport(LocalInspectorPanel inspector, string methodName, InspectorReportSourceSnapshot sources)
         {
+            // Inspector 报告通过真实面板入口取得，确保 workflow、composer 与渲染镜像的交界都被覆盖；反射仅用于
+            // 读取已生成模型，不应成为业务调用的替代路径。
             var method = typeof(LocalInspectorPanel).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             var field = typeof(LocalInspectorPanel).GetField("reportContent", BindingFlags.Instance | BindingFlags.NonPublic);
             var modelField = typeof(LocalInspectorPanel).GetField("renderedReportData", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -474,6 +489,8 @@ namespace ElectricalSim.EditorTools
 
         private static RuleCatalogSnapshot CreateRuleCatalog()
         {
+            // 规则目录从当前实现集中列举，用于检测“规则悄然消失/严重度漂移”。目录不替代运行时规则执行，
+            // 新规则加入时必须同时评估模板与报告基线。
             var projectRoot = Directory.GetParent(Application.dataPath).FullName;
             var validationDirectory = Path.Combine(projectRoot, "Assets", "Scripts", "Core", "Validation");
             if (!Directory.Exists(validationDirectory))
@@ -552,6 +569,8 @@ namespace ElectricalSim.EditorTools
 
         private static void WriteBaseline(BaselineBundle bundle, RuleCatalogSnapshot ruleCatalog)
         {
+            // 写入前应保证捕获结果已经按稳定键规范化。baseline 是长期比较协议，字段重排或删除应视为兼容性变更，
+            // 不能借一次快照更新掩盖真实的模板/规则行为漂移。
             var directory = EnsureBaselineDirectory();
             WriteJson(Path.Combine(directory, "TemplateStaticSnapshots.json"), bundle);
             WriteInspectorBaseline(bundle);
@@ -582,6 +601,7 @@ namespace ElectricalSim.EditorTools
 
         private static List<string> VerifyAgainstBaseline(BaselineBundle actual, RuleCatalogSnapshot actualRules)
         {
+            // 校验返回全部可读差异而不是首个异常，便于一次定位模板、规则目录和报告模型的契约变化；不修改任何资产。
             var directory = EnsureBaselineDirectory();
             var expected = TryReadJson<BaselineBundle>(Path.Combine(directory, "TemplateStaticSnapshots.json"), out var templateReadError);
             var expectedRules = TryReadJson<RuleCatalogSnapshot>(Path.Combine(directory, "ValidationRuleSnapshots.json"), out var ruleReadError);
@@ -734,6 +754,8 @@ namespace ElectricalSim.EditorTools
 
         private static void CompareInspectorReportModel(string prefix, InspectorReportSnapshot expected, InspectorReportSnapshot actual, List<string> differences)
         {
+            // Inspector 模型比较保留 section、kind、severity、顺序和关键短语，既能发现用户可见报告断裂，
+            // 又避免把字体、布局尺寸等纯表现细节误作为架构差异。
             CompareStringSequence(prefix + " UI blocks", expected.blocks.Select(block => block.title + ":" + block.blockType), actual.blocks.Select(block => block.title + ":" + block.blockType), differences);
             CompareStringSequence(prefix + " model blocks", expected.modelBlocks.Select(DescribeModelBlock), actual.modelBlocks.Select(DescribeModelBlock), differences);
         }
@@ -745,6 +767,7 @@ namespace ElectricalSim.EditorTools
 
         private static void CompareTemplate(TemplateSnapshot expected, TemplateSnapshot actual, List<string> differences)
         {
+            // 比较的是规范化后的语义序列。对象创建顺序、临时 instance 引用和展示排版不应成为架构基线的噪声。
             var prefix = actual.templateId + ": ";
             if (expected.componentCount != actual.componentCount) differences.Add(prefix + "ComponentCount expected=" + expected.componentCount + ", actual=" + actual.componentCount);
             if (expected.wireCount != actual.wireCount) differences.Add(prefix + "WireCount expected=" + expected.wireCount + ", actual=" + actual.wireCount);
@@ -834,6 +857,7 @@ namespace ElectricalSim.EditorTools
 
         private static string NormalizeText(string value)
         {
+            // 文本规范化只消除跨平台空白差异；不要在这里翻译、删减诊断或抹平具有教学意义的内容变化。
             return string.IsNullOrWhiteSpace(value) ? string.Empty : Regex.Replace(value, "\\s+", " ").Trim();
         }
 

@@ -13,12 +13,16 @@ namespace ElectricalSim.AI
     /// </summary>
     public static class TeachingCheckReportFormatter
     {
+        // Formatter 只把已存在的分析/规则事实编排为教学文本：不求解电路、不创建 issue，也不拥有运行态。
+        // 任何 Error、Warning、Info 的真实来源仍在 Analyzer、Industrial analyzer 或 CircuitRuleChecker；这里的
+        // 去重只防止同一事实被重复展示，不能借格式化改变其严重度。
         public static string Format(
             CircuitStateResult stateResult,
             CircuitAnalysisResult industrialResult,
             string debugDetails,
             bool showDeveloperDebugInfo = false)
         {
+            // 工业分析的 Errors/Warnings 必须进入问题段落；若只用于摘要计数，学习者会看到风险数量却没有可操作的说明。
             // 工业专项分析的 Errors/Warnings 必须进入"问题与风险"段落，否则顶部计数与正文不一致。
             // AppendProblems 的 AddRangeUnique 会按 Trim 精确文本去重，不会与 stateResult.Errors 重复。
             return Build(stateResult,
@@ -33,6 +37,8 @@ namespace ElectricalSim.AI
             string debugDetails,
             bool showDeveloperDebugInfo = false)
         {
+            // 普通规则路径同样只消费 Checker 已产生的结构化 issue，保持工业与非工业报告在“事实来源”和
+            // “展示职责”上的边界一致。
             var errors = new List<string>();
             var warnings = new List<string>();
             if (ruleResult != null)
@@ -68,6 +74,8 @@ namespace ElectricalSim.AI
             string debugDetails,
             bool showDeveloperDebugInfo)
         {
+            // 固定章节顺序既是教学阅读顺序，也是 Inspector/基线快照的模型契约。新增章节需要同步更新报告模型
+            // 验证，而不是在某个 UI 分支中临时插入字符串。
             if (stateResult == null)
             {
                 var fallback = "【检查结论】\n未能生成当前电路的教学化检查结论。";
@@ -159,6 +167,7 @@ namespace ElectricalSim.AI
 
         private static void AppendKeyStates(StringBuilder builder, CircuitStateResult result)
         {
+            // 关键状态来自本次分析快照，描述的是当前运行条件下的投影；它们不能被当作永久接线结构或练习答案。
             var count = 0;
             for (var i = 0; i < result.Components.Count; i++)
             {
@@ -233,6 +242,8 @@ namespace ElectricalSim.AI
             IEnumerable<string> additionalErrors,
             IEnumerable<string> additionalWarnings)
         {
+            // 本段汇聚 stateResult 和上游规则结果，但只做文本去重。未发现问题与“所有未支持拓扑均正确”不同，
+            // 因此后续教学说明仍应保留能力边界和不确定性提示。
             var problems = new List<string>();
             AddRangeUnique(problems, additionalErrors);
             AddRangeUnique(problems, result.Errors);
@@ -268,6 +279,7 @@ namespace ElectricalSim.AI
 
         private static void AppendTeachingExplanation(StringBuilder builder, CircuitStateResult result)
         {
+            // 教学解释将状态翻译为可学习的因果关系；不要在这里补充新的互锁、自锁或保护判定，避免与规则系统漂移。
             var appended = false;
             if (HasTwoWaySwitch(result))
             {

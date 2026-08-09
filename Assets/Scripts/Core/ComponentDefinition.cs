@@ -15,6 +15,8 @@ namespace ElectricalSim.Core
     [CreateAssetMenu(menuName = "Electrical Simulation/Component Definition")]
     public sealed class ComponentDefinition : ScriptableObject
     {
+        // Definition 是可复用的静态规格资产；CircuitComponent 才是图纸实例，RuntimeStateManager 保存的是仿真派生状态。
+        // 不要在此资产中写入某次接线、选择、得电或视觉瞬时状态，否则多个实例和模板会互相污染。
         [Header("Palette")]
         // 展示名称不等同于模板和视觉查找使用的 Unity 资产名。
         public string displayName = "Component";
@@ -31,6 +33,7 @@ namespace ElectricalSim.Core
         public bool canParticipateInParameterCalculation = false;
 
         [Header("Electrical")]
+        // 端子定义及这些电气能力字段是生成、模板和校验共同消费的规格契约；视觉坐标、实例 ID 与运行态不在此层拥有。
         public bool startsClosed;
         public bool togglable;
         public bool allowSameComponentJumper;

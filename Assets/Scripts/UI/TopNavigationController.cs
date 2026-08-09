@@ -18,6 +18,8 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class TopNavigationController : MonoBehaviour
     {
+        // 顶部导航只拥有页面选择与离开守卫的 UI 编排，不拥有电路、练习或仿真状态。任何页面切换前的确认
+        // 必须委托各会话/Workspace 的正式清理入口，不能通过隐藏页面来绕过停止仿真或退出练习的生命周期。
         [SerializeField] private PageRouter pageRouter;
         [SerializeField] private List<Button> tabButtons = new List<Button>();
         [SerializeField] private List<Text> tabLabels = new List<Text>();
@@ -33,16 +35,18 @@ namespace ElectricalSim.UI
         /// <summary>在导航标签完成页面切换后通知局部浮层关闭自身，不参与页面内容逻辑。</summary>
         public event Action<int> TabSelected;
 
-        // F2-B：导航保护字段。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
+        // 导航保护字段：弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
         private GameObject navigationGuardDialog;
         private int pendingNavigationIndex = -1;
 
-        // F2-C：模式控制器引用，用于查询当前模式（ControlCircuit/SpiceDc）和 SPICE 求解状态。
+        // 模式控制器引用用于查询当前模式（ControlCircuit/SpiceDc）和 SPICE 求解状态。
         // 由 SimulationModeDropdown.Awake 通过 ConfigureModeController 注入，不新增场景绑定。
         private SimulationModeController modeController;
 
         private void Awake()
         {
+            // Awake 只建立持久 UI 引用和基础事件绑定；不要在此处直接切换工作区或清理业务状态，场景加载顺序
+            // 在 Editor、Player 和动态页面重建时并不恒定。
             // 路由器必须在任何标签点击前完成配置；这里的空引用兜底仅服务当前场景兼容，不应扩展为页面创建入口。
             if (pageRouter == null)
             {
@@ -93,6 +97,7 @@ namespace ElectricalSim.UI
 
         private void ApplyThemeToNavBar()
         {
+            // 主题应用只改变导航栏表现层。颜色、圆角和图标不是页面激活或模式状态的来源，不能被守卫逻辑读取。
             var navRect = GetComponent<RectTransform>();
             if (navRect != null)
             {
@@ -142,6 +147,7 @@ namespace ElectricalSim.UI
 
         private void ApplyBrandGroupLayout()
         {
+            // 品牌区布局与 tab 容器解耦，窗口宽度变化时只调整可视排版，不能重新注册 tab 或改变当前页面选择。
             var titleTransform = transform.Find("Logo") ?? transform.Find("Title");
             var brandRect = titleTransform as RectTransform;
             if (brandRect == null)
@@ -220,6 +226,7 @@ namespace ElectricalSim.UI
 
         private void EnsureExitButton()
         {
+            // 退出按钮可由运行时 UI 缺失路径补建；必须复用已有同名按钮，避免多个“退出”入口分别绑定不同的确认行为。
             // 退出按钮由导航栏统一持有；重复进入页面时复用已有实例，避免生成多个确认弹窗入口。
             if (exitButton == null)
             {
@@ -317,7 +324,9 @@ namespace ElectricalSim.UI
 
         public void SelectTab(int index)
         {
-            // F2-B/F2-C：导航保护。只有从模拟电路页离开到其他页面时才需要拦截。
+            // SelectTab 是唯一受守卫的导航入口：先判断当前页面是否允许离开，再执行页面激活。不能由按钮监听
+            // 直接修改 page active 状态，否则会跳过运行中仿真和练习会话的清理确认。
+            // 导航保护只在从模拟电路页离开到其他页面时才需要拦截。
             // 所有外部 SelectTab(0) 调用（进入模拟电路页）和不在模拟电路页时的切换都不会被拦截。
             if (NeedsNavigationGuard(index))
             {
@@ -328,21 +337,23 @@ namespace ElectricalSim.UI
             ExecuteNavigation(index);
         }
 
-        // F2-C：由 SimulationModeDropdown.Awake 调用，注入模式控制器引用。
+        // 由 SimulationModeDropdown.Awake 调用，注入模式控制器引用。
         // 不使用 FindObjectOfType 或场景扫描，复用 SimulationModeDropdown 已有序列化引用。
         public void ConfigureModeController(SimulationModeController controller)
         {
+            // 模式控制器由外部注入，导航只查询其状态来决定守卫文案和离开条件；不在此处切换分析模式或启动求解。
             modeController = controller;
         }
 
-        // F2-C：查询当前是否有导航保护弹窗打开。供 SimulationModeDropdown 防重入使用。
+        // 查询当前是否有导航保护弹窗打开，供 SimulationModeDropdown 防重入使用。
         public bool IsNavigationGuardDialogOpen => navigationGuardDialog != null;
 
-        // F2-C：电工离开保护公开入口。供 SimulationModeDropdown 在切换到 SPICE 前复用。
+        // 电工离开保护公开入口，供 SimulationModeDropdown 在切换到 SPICE 前复用。
         // 判断电工运行和练习状态，显示与 F2-B 同款弹窗（模式切换专用文案），确认后完成清理并调用 onConfirmed。
         // 无需保护时直接调用 onConfirmed。取消或弹窗创建失败时不调用 onConfirmed。
         public void RequestLeaveControlWorkspace(Action onConfirmed)
         {
+            // 外部控制页复用同一离开守卫，确认后的回调只在相关会话已完成正式收口后执行，避免导航方复制清理逻辑。
             if (navigationGuardDialog != null)
             {
                 return;
@@ -368,9 +379,10 @@ namespace ElectricalSim.UI
             }
         }
 
-        // F2-B：判断是否需要导航保护。当前在模拟电路页且目标不是模拟电路页时才拦截。
+        // 判断是否需要导航保护：当前在模拟电路页且目标不是模拟电路页时才拦截。
         private bool NeedsNavigationGuard(int targetIndex)
         {
+            // 守卫的判断依据是当前模式/会话的真实状态，不是按钮高亮或目标页名称；视觉状态可能滞后一帧，不能作为事实。
             if (pageRouter == null)
             {
                 return false;
@@ -380,7 +392,7 @@ namespace ElectricalSim.UI
             return pageRouter.CurrentPage == PageId.Simulation && targetPage != PageId.Simulation;
         }
 
-        // F2-B/F2-C：请求受保护的导航。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
+        // 请求受保护的导航。弹窗显示期间锁定新的离开请求，保留第一次用户明确点击的目标页面。
         private void RequestGuardedNavigation(int targetIndex)
         {
             // 防重入：弹窗已显示时忽略后续点击，不静默更换 pending target。
@@ -391,7 +403,7 @@ namespace ElectricalSim.UI
 
             pendingNavigationIndex = targetIndex;
 
-            // F2-C：当前为 SPICE 模式且正在求解时，阻止离开 Simulation 页面。
+            // 当前为 SPICE 模式且正在求解时，阻止离开 Simulation 页面。
             if (modeController != null
                 && modeController.CurrentMode == SimulationWorkspaceMode.SpiceDc
                 && modeController.IsSpiceSolving)
@@ -406,7 +418,7 @@ namespace ElectricalSim.UI
             var isPracticeActive = practice != null && practice.IsPracticeActive;
             var isSimulationRunning = workspace != null && workspace.IsSimulationRunning;
 
-            // F2-C：当前为 SPICE 模式时，电工 WorkspaceController.IsSimulationRunning 不应触发电工弹窗。
+            // 当前为 SPICE 模式时，电工 WorkspaceController.IsSimulationRunning 不应触发电工弹窗。
             // 电工 workspace 在 SPICE 模式下虽隐藏但 IsSimulationRunning 可能保持 true，需按当前模式区分。
             if (modeController != null && modeController.CurrentMode == SimulationWorkspaceMode.SpiceDc)
             {
@@ -429,9 +441,11 @@ namespace ElectricalSim.UI
             }
         }
 
-        // F2-C：SPICE 求解中阻止导航的单按钮提示。
+        // SPICE 求解中阻止导航的单按钮提示。
         private void ShowSpiceSolvingBlockedDialog()
         {
+            // SPICE 求解中禁止离开是为了避免 UI 已切页而异步结果仍回写旧工作区；对话框只说明阻止原因，
+            // 不取消求解或修改其结果生命周期。
             var canvas = FindObjectOfType<Canvas>();
             if (canvas == null)
             {
@@ -447,9 +461,10 @@ namespace ElectricalSim.UI
                 "我知道了");
         }
 
-        // F2-C：模式切换专用——电工运行中确认弹窗。
+        // 模式切换专用的电工运行中确认弹窗。
         private void ShowSimulationLeaveForModeSwitchDialog(Action onConfirmed)
         {
+            // 模式切换确认与普通页面离开共享“先完成正式停止、再执行回调”的顺序，避免控制仿真与 SPICE UI 同时拥有画布。
             var canvas = FindObjectOfType<Canvas>();
             if (canvas == null)
             {
@@ -471,9 +486,10 @@ namespace ElectricalSim.UI
                 });
         }
 
-        // F2-C：模式切换专用——练习确认弹窗。
+        // 模式切换专用的练习确认弹窗。
         private void ShowPracticeLeaveForModeSwitchDialog(Action onConfirmed)
         {
+            // 练习模式切换必须经过 PracticeSessionController 的退出路径，不能只关闭参考面板；模板上下文与画布需同时收口。
             var canvas = FindObjectOfType<Canvas>();
             if (canvas == null)
             {
@@ -495,7 +511,7 @@ namespace ElectricalSim.UI
                 });
         }
 
-        // F2-C：单按钮提示弹窗（SPICE 求解中阻止导航时使用）。复用 F2-B.1 视觉样式。
+        // 单按钮提示弹窗用于 SPICE 求解中阻止导航；视觉样式与其他导航守卫保持一致。
         private void ShowSingleButtonDialog(Canvas canvas, string title, string message, string buttonText)
         {
             var overlay = new GameObject("NavigationGuardDialog", typeof(RectTransform), typeof(Image));
@@ -582,7 +598,7 @@ namespace ElectricalSim.UI
             });
         }
 
-        // F2-B：普通电路正在仿真时的确认弹窗。
+        // 普通电路正在仿真时的确认弹窗。
         private void ShowSimulationLeaveDialog(int targetIndex)
         {
             var canvas = FindObjectOfType<Canvas>();
@@ -608,7 +624,7 @@ namespace ElectricalSim.UI
                 });
         }
 
-        // F2-B：练习模式下的确认弹窗。
+        // 练习模式下的确认弹窗。
         private void ShowPracticeLeaveDialog(int targetIndex)
         {
             var canvas = FindObjectOfType<Canvas>();
@@ -633,11 +649,13 @@ namespace ElectricalSim.UI
                 });
         }
 
-        // F2-B：统一的导航保护弹窗创建。复用 LoadTemplateConfirmDialog 的样式，不新增 Dialog 类型。
+        // 统一创建导航保护弹窗，复用 LoadTemplateConfirmDialog 的样式，不新增平行 Dialog 类型。
         private void ShowNavigationGuardDialog(
             Canvas canvas, string title, string message,
             string confirmText, string cancelText, Action onConfirm)
         {
+            // 确认对话框是暂时的 UI 覆盖层，关闭时必须释放其事件和对象。它不锁定或修改画布本身，真正的退出操作
+            // 仍由确认回调调用相应 controller 完成。
             var overlay = new GameObject("NavigationGuardDialog", typeof(RectTransform), typeof(Image));
             overlay.transform.SetParent(canvas.transform, false);
             overlay.transform.SetAsLastSibling();
@@ -652,7 +670,7 @@ namespace ElectricalSim.UI
             overlayImage.color = new Color(0f, 0f, 0f, 0.42f);
             overlayImage.raycastTarget = true;
 
-            // F2-B.1：容器样式对齐 PracticeSessionController.ShowPracticeConfirm（圆角+边框+阴影+尺寸）。
+            // 容器样式与 PracticeSessionController.ShowPracticeConfirm 对齐（圆角、边框、阴影和尺寸）。
             var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
             panel.transform.SetParent(overlay.transform, false);
             var panelRect = panel.GetComponent<RectTransform>();
@@ -706,7 +724,7 @@ namespace ElectricalSim.UI
             msgLabel.lineSpacing = 1.3f;
             msgLabel.supportRichText = false;
 
-            // F2-B.1：按钮尺寸/颜色/位置对齐 CreateDialogButton（取消浅灰、确认蓝色、确认文字 Bold）。
+            // 按钮尺寸、颜色和位置与 CreateDialogButton 对齐（取消浅灰、确认蓝色、确认文字 Bold）。
             var confirmBtn = CreateGuardButton(panel.transform, "ConfirmButton", confirmText,
                 new Vector2(0.5f, 0f), new Vector2(-74f, 48f), new Vector2(118f, 38f),
                 MainUiTheme.Hex("2563EB"), Color.white);
@@ -769,7 +787,7 @@ namespace ElectricalSim.UI
             return obj.GetComponent<Button>();
         }
 
-        // F2-B：关闭导航保护弹窗并清空 pending target。
+        // 关闭导航保护弹窗并清空 pending target。
         private void CloseNavigationGuardDialog()
         {
             if (navigationGuardDialog != null)
@@ -780,9 +798,11 @@ namespace ElectricalSim.UI
             pendingNavigationIndex = -1;
         }
 
-        // F2-B：实际执行页面切换（PageRouter.ShowPage + RefreshTabStates + TabSelected）。
+        // 实际执行页面切换（PageRouter.ShowPage + RefreshTabStates + TabSelected）。
         private void ExecuteNavigation(int index)
         {
+            // 执行阶段只激活目标页面并刷新 tab 视觉；所有副作用应已在守卫确认路径完成，使直接导航和确认后导航
+            // 共享同一最终行为。
             var page = ToPageId(index);
             if (pageRouter != null)
             {
@@ -795,6 +815,7 @@ namespace ElectricalSim.UI
 
         private void RefreshTabStates(int activeIndex)
         {
+            // tab 的选中颜色是 ExecuteNavigation 的结果投影。不要通过修改高亮来模拟导航成功，否则 pageRouter 与 UI 状态会分叉。
             for (var i = 0; i < tabButtons.Count; i++)
             {
                 var active = i == activeIndex;

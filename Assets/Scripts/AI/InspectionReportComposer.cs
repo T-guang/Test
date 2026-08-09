@@ -15,6 +15,8 @@ namespace ElectricalSim.AI
     /// </summary>
     public static class InspectionReportComposer
     {
+        // Composer 的输入是已经计算完成的状态、校验问题和兼容文本；输出是供 Inspector 渲染的稳定 block 模型。
+        // 它可以决定区块、严重度和去重的呈现规则，但不能重新运行 Analyzer、升级规则严重度或修改 Workspace。
         public static InspectionReportData CreateSummary(
             string title,
             string reportType,
@@ -23,6 +25,8 @@ namespace ElectricalSim.AI
             string conclusion,
             string riskLevel)
         {
+            // 摘要是所有检查报告的固定入口块。报告类型、风险级别和运行标记来自调用方，保持它们的语义可让
+            // UI、快照测试和后续导出使用同一份结构化数据，而不是各自解析显示文本。
             var body = new StringBuilder();
             body.AppendLine("报告类型：" + reportType);
             body.AppendLine("生成时间：" + DateTime.Now.ToString("HH:mm:ss"));
@@ -83,6 +87,8 @@ namespace ElectricalSim.AI
             string runtimeSummary,
             string parameterSummary)
         {
+            // 解释报告由确定的教学章节和历史文本兼容章节组成。历史运行摘要可能已带标题，因此保留原 block
+            // 边界而非嵌套拼接，避免读者和 Inspector 都无法区分“当前运行态”与其子说明。
             var data = new InspectionReportData();
             AddSection(data, "电路组成", composition, InspectionReportBlockKind.General);
             AddSection(data, "主回路路径", mainCircuit, InspectionReportBlockKind.General);
@@ -114,6 +120,8 @@ namespace ElectricalSim.AI
             string noticesAndFormattedReport,
             IReadOnlyList<CircuitValidationIssue> validationIssues)
         {
+            // 检查摘要与问题正文在模型层合流：summary 保留总览，legacy 文本经同一解析路径取得 block 和
+            // severity。不要在 Panel 层再次拼接，否则顶部计数与“问题与风险”会失去一致的去重语义。
             var data = new InspectionReportData();
             data.AddRange(summary);
             data.AddRange(ParseLegacyText(noticesAndFormattedReport, validationIssues));
@@ -124,6 +132,8 @@ namespace ElectricalSim.AI
             string text,
             IReadOnlyList<CircuitValidationIssue> validationIssues = null)
         {
+            // 旧文本仅是向结构化报告迁移的兼容输入。分段时不能据字符串内容推导新的电气事实；Validation
+            // block 的严重度优先消费结构化 issues，文本关键字只保留给没有 issue 的历史路径。
             var data = new InspectionReportData();
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -175,6 +185,7 @@ namespace ElectricalSim.AI
 
         private static List<string> SplitLegacySections(string text)
         {
+            // 使用标题边界而不是固定换行数分段，兼容不同平台换行符和正文中的空行；标题格式仍是报告协议的一部分。
             var sections = new List<string>();
             var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
             var lines = normalized.Split('\n');
@@ -255,7 +266,8 @@ namespace ElectricalSim.AI
 
         private static IReadOnlyList<string> CollectRuleIds(IReadOnlyList<CircuitValidationIssue> issues)
         {
-            // Section-level aggregation: all validation RuleIds represented by this block.
+            // 一个 Validation block 可承载多个 issue；RuleId 集合按稳定顺序去重，供 UI 定位和快照对比使用，
+            // 但不把内部 RuleId 强制暴露给普通学习者。
             return issues == null
                 ? Array.Empty<string>()
                 : issues.Where(issue => issue != null && !string.IsNullOrWhiteSpace(issue.RuleId))

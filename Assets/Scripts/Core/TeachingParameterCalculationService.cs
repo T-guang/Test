@@ -85,6 +85,8 @@ namespace ElectricalSim.Core
     /// </summary>
     public static class TeachingParameterCalculationService
     {
+        // 本服务把元件规格与已稳定的供电/运行事实转换为教学估算值。它不是 SPICE 或控制仿真求解器：估算值
+        // 只可用于报告展示，不能回写参数、改变 Wire topology，也不能反向成为 Analyzer 或规则系统的判据。
         public delegate IReadOnlyCollection<string> PhaseResolver(TerminalView terminal);
         public delegate bool NeutralResolver(TerminalView terminal);
 
@@ -96,6 +98,8 @@ namespace ElectricalSim.Core
             NeutralResolver canReachNeutral,
             out TeachingParameterCalculationResult result)
         {
+            // 单相估算要求一端能解析到单根相线、另一端可达中性线。仅“端子有 Wire”不够；证据不足时返回
+            // 已识别但无有效估算的结果，避免用显示名或缺失参数猜出不存在的供电。
             result = null;
             if (!IsSinglePhaseTeachingLoad(component))
             {
@@ -155,6 +159,8 @@ namespace ElectricalSim.Core
             float sourceLineVoltage,
             out ThreePhaseMotorEstimate result)
         {
+            // 三相电机电流是教学量级估算，依赖额定功率、线电压、效率和功率因数；运行标志只决定是否展示
+            // 当前有效值，不替代相序、缺相或保护状态等上游安全判定。
             result = null;
             if (!IsThreePhaseTeachingMotor(component))
             {
@@ -187,6 +193,8 @@ namespace ElectricalSim.Core
             float sourceLineVoltage,
             out StarDeltaMotorEstimate result)
         {
+            // 星/三角阶段由上游结构与运行态判定。此处只按教学近似输出对应阶段的估算，冲突、供电故障或未知
+            // 阶段必须保留“不产生正常运行估算”的语义，不能为了显示数字掩盖异常。
             result = null;
             if (!IsStarDeltaTeachingMotor(component))
             {
@@ -232,6 +240,8 @@ namespace ElectricalSim.Core
             bool hasActualSupplyVoltage,
             out ControlCircuitLoadEstimate result)
         {
+            // 控制负载估算消费已确定的规格和供电投影；额定值 fallback 会明确标记，调用方不得把 fallback
+            // 当作实测电压或用于修改元件实际状态。
             result = null;
             if (!IsControlCircuitTeachingLoad(component))
             {
@@ -299,6 +309,8 @@ namespace ElectricalSim.Core
             bool usesStaticReference,
             out ThermalRelaySettingEstimate result)
         {
+            // 热继整定建议是教学参考，不推进保护动作。电机电流缺失时保留静态参考标记，避免报告把参数不全
+            // 伪装成经过运行态验证的整定结论。
             result = null;
             if (!IsThermalRelay(thermalRelay))
             {

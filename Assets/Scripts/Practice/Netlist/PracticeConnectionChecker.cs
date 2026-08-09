@@ -12,12 +12,17 @@ namespace ElectricalSim.Practice.Netlist
     /// </summary>
     public static class PracticeConnectionChecker
     {
+        // 这是结构化练习比对层：它比较标准模板与学生画布的端子拓扑，并输出缺失、错误和多余连接。
+        // 它与外层 PracticeConnectionChecker/PracticeSessionController 分工明确：本类不管理会话、评分 UI 或
+        // Workspace 生命周期；结构等价也不表示当前 runtime 导通状态一定相同。
         /// <summary>
         /// 依次构建两侧网表、建立元件映射，并按缺失连接、学生直接接错、学生额外电气合并的顺序收集结果。
         /// 映射成功不等于连接正确，三类比对必须保留，避免只看直接导线而遗漏跨多根导线形成的额外连通。
         /// </summary>
         public static PracticeConnectionCheckResult Check(WorkspaceController workspace, CircuitTemplateDto template)
         {
+            // 比对先固定元件映射，再以该映射检查连接。不能用 instanceId 或 Wire 数量直接断言正确，因为学生
+            // 可以使用同类元件的不同实例顺序，且多根 Wire 可能形成同一电气节点。
             var result = new PracticeConnectionCheckResult();
             if (workspace == null || template == null)
             {
@@ -127,6 +132,8 @@ namespace ElectricalSim.Practice.Netlist
         // 并查集得到的是学生侧电气等价节点组；同组端子在标准侧不应连通时，才构成额外连接。
         private static void AddExtraNodeMerges(PracticeConnectionCheckResult result, PracticeNetlist standard, PracticeNetlist student, StableTerminalMap terminalMap)
         {
+            // 额外节点合并检查的是 transitive electrical node，而非单根导线。这样可发现绕经多条 Wire 的错误短接，
+            // 同时避免把仅有相同组件数量或相同直接连接数量的画布误判为等价。
             var reported = new HashSet<string>();
             foreach (var group in student.GetEquivalentNodeGroups())
             {
@@ -179,6 +186,8 @@ namespace ElectricalSim.Practice.Netlist
             PracticeNetlist student,
             ComponentMappingResult componentMap)
         {
+            // terminal map 是随后全部比较共享的稳定对应关系。灯泡 L/N 的无极性和接触器 NO pair 的受控置换都
+            // 只能在明确的组件类型、完整候选映射和得分约束下发生，不能扩展为任意端子全局互换。
             var lampStudentIds = new HashSet<string>();
             if (workspace != null)
             {
@@ -369,6 +378,8 @@ namespace ElectricalSim.Practice.Netlist
             string standardContactorId,
             ContactorTerminalRemap remap)
         {
+            // 两组常开辅助触点的互换只表示同一 KM 实例内的物理 pair 等价；NO 与 NC、主触点、线圈端子以及
+            // 不同接触器实例均不参与该置换，以免把控制角色不同的拓扑放宽成练习正确。
             var score = 0;
             foreach (var connection in standard.DirectConnections)
             {

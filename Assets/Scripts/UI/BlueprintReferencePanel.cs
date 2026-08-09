@@ -10,6 +10,8 @@ namespace ElectricalSim.UI
 {
     public sealed class BlueprintReferencePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
     {
+        // 参考图面板只展示模板的图片、说明和推荐信息，帮助学习者接线；它不生成模板、不校验答案，也不能成为
+        // 当前画布拓扑或练习会话的事实来源。面板大小、位置和图片缩放均属于纯表现状态。
         private enum ReferencePanelSizeMode
         {
             Small,
@@ -45,6 +47,8 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // Awake 只确保已有场景绑定能被安全使用；延迟到 ShowPracticeReference 再填充模板内容，避免页面首次
+            // 激活时把上一轮练习的图片或文本误当成当前模板。
             if (panelRect == null)
             {
                 panelRect = GetComponent<RectTransform>();
@@ -62,6 +66,8 @@ namespace ElectricalSim.UI
         /// </summary>
         public void ShowPracticeReference(CircuitTemplateCatalogItemDto templateItem)
         {
+            // 这里将 catalog 元数据投影为参考展示，不创建 CircuitComponent。templateId/resourcePath 只用于定位资源；
+            // 真正的模板加载和 Spawn 仍由练习/模板服务完成。
             EnsureContentReferences();
             if (templateItem == null)
             {
@@ -125,6 +131,7 @@ namespace ElectricalSim.UI
 
         public void OnBeginDrag(PointerEventData eventData)
         {
+            // 拖动仅移动面板 RectTransform。它不改变参考图片的内容坐标、模板元数据或 Workspace 的平移/缩放状态。
             if (panelRect == null)
             {
                 return;
@@ -148,6 +155,8 @@ namespace ElectricalSim.UI
 
         private void EnsureFixedLayout()
         {
+            // 动态 UI 重建可重复调用；容器按名称复用以保持 Scene 引用和滚动状态，不能每次 Show 都累积 Viewport、
+            // Content 或按钮实例。
             if (panelRect == null)
             {
                 return;
@@ -159,6 +168,8 @@ namespace ElectricalSim.UI
 
         private void EnsureFixedLayoutContainers()
         {
+            // Header、图片 Viewport 与说明 ScrollView 是固定层级。它们的职责分开可避免图片遮罩、说明滚动和按钮命中
+            // 在尺寸切换时互相抢占；不要把整块面板放入说明 ScrollRect。
             if (panelRect == null)
             {
                 return;
@@ -171,6 +182,8 @@ namespace ElectricalSim.UI
 
         private void ApplyPanelSize(ReferencePanelSizeMode sizeMode)
         {
+            // 尺寸模式决定展示容器，随后再 clamp 到 Canvas。不能用屏幕坐标直接改图片缩放，否则窗口分辨率变化会使
+            // 拖动位置和可见区域脱节。
             if (panelRect == null)
             {
                 return;
@@ -216,6 +229,7 @@ namespace ElectricalSim.UI
 
         private void ClampPanelToCanvas()
         {
+            // Clamp 保护参考面板始终可重新拖回可见区域；这是 UI 可达性约束，不影响模板或活动电路的空间坐标。
             if (panelRect == null || !(panelRect.parent is RectTransform parentRect))
             {
                 return;
@@ -255,6 +269,7 @@ namespace ElectricalSim.UI
 
         private void OnRectTransformDimensionsChange()
         {
+            // 分辨率/父容器变化只请求一次延迟布局刷新，避免 Unity 在同一轮 layout 中递归修改 RectTransform 导致抖动。
             if (!isActiveAndEnabled || referenceImage == null || referenceImage.sprite == null || imageViewportRect == null)
             {
                 return;
@@ -267,6 +282,7 @@ namespace ElectricalSim.UI
 
         private void ConfigureHeader(float headerHeight)
         {
+            // Header 只承载模板标题和尺寸/关闭动作；参考图片和说明文本不应因 Header 重建而丢失当前滚动或缩放状态。
             if (headerRect == null)
             {
                 return;
@@ -394,6 +410,7 @@ namespace ElectricalSim.UI
 
         private void ConfigureImageViewport(float headerHeight, float infoHeight)
         {
+            // 图片 Viewport 的 Mask 只裁剪展示内容。图片可超出容器用于适配，但其 RectTransform 不代表模板元件坐标。
             if (imageViewportRect == null)
             {
                 return;
@@ -420,6 +437,7 @@ namespace ElectricalSim.UI
 
         private void ConfigureInfoScrollView(float infoHeight)
         {
+            // 说明采用独立 ScrollRect，避免长文本挤压图片或改变外层面板拖拽命中；文本滚动不是练习状态的一部分。
             if (infoScrollViewRect == null)
             {
                 return;
@@ -477,6 +495,7 @@ namespace ElectricalSim.UI
 
         private void ApplyRecommendations(CircuitTemplateCatalogItemDto templateItem)
         {
+            // 推荐信息来自 catalog 元数据，仅供阅读。它不替代模板 JSON 中的元件/导线定义，也不参与练习检查。
             if (referenceRecommendations == null)
             {
                 return;
@@ -561,6 +580,8 @@ namespace ElectricalSim.UI
 
         private void RefreshAfterLayout(bool resetInfoScrollPosition)
         {
+            // 布局刷新在本帧尺寸变化完成后重新计算图片适配。仅在切换模板/明确请求时复位说明滚动位置，避免用户
+            // 阅读长说明时因普通刷新被无故跳回顶部。
             Canvas.ForceUpdateCanvases();
             RebuildAndFit(resetInfoScrollPosition);
 
@@ -574,6 +595,7 @@ namespace ElectricalSim.UI
 
         private IEnumerator RefreshAfterLayoutNextFrame(bool resetInfoScrollPosition)
         {
+            // 等待一帧让 Canvas 完成尺寸传播后再 fit，避免在旧 Viewport 尺寸上计算缩放并在 Player 首帧出现错误留白。
             yield return null;
             Canvas.ForceUpdateCanvases();
             RebuildAndFit(resetInfoScrollPosition);
@@ -597,6 +619,7 @@ namespace ElectricalSim.UI
 
         private void CalculateFitScale()
         {
+            // 图片缩放只以当前 Viewport 和资源原始尺寸为依据；它不改变资源像素、模板坐标或实际工作区的比例。
             if (referenceImage == null || referenceImage.sprite == null || imageViewportRect == null)
             {
                 currentFitScale = 1f;
@@ -621,6 +644,7 @@ namespace ElectricalSim.UI
 
         private void FitImageToViewport()
         {
+            // 适配仅缩放并居中 referenceImage，保留原图宽高比；不能裁切或拉伸图纸来换取“填满”视觉效果。
             if (referenceImage != null)
             {
                 referenceImage.rectTransform.localScale = Vector3.one * currentFitScale;
@@ -630,6 +654,8 @@ namespace ElectricalSim.UI
 
         private void EnsureContentReferences()
         {
+            // 该方法只补齐缺失的 UI 子节点引用。若场景或 prefab 已提供节点，必须复用而非重建，避免 listener、
+            // ScrollRect 和布局组件叠加。
             var texts = GetComponentsInChildren<Text>(true);
             var images = GetComponentsInChildren<Image>(true);
             var buttons = GetComponentsInChildren<Button>(true);

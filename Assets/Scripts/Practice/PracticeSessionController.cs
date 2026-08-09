@@ -15,6 +15,8 @@ namespace ElectricalSim.Practice
     /// </summary>
     public class PracticeSessionController : MonoBehaviour
     {
+        // 会话控制器协调“何时进入、提交、退出练习”，并持有当前模板上下文；它不拥有学生接线事实，也不
+        // 直接判定答案。练习会话状态必须与 Workspace 的运行态分离：结束会话不能让旧模板身份残留到普通画布。
         private static PracticeSessionController _instance;
         public static PracticeSessionController Instance
         {
@@ -45,16 +47,18 @@ namespace ElectricalSim.Practice
         private BlueprintReferencePanel referencePanel;
         private LocalInspectorPanel inspectorPanel;
         private TopNavigationController navigation;
-        // F2-A.4：练习模板结构预检需要 ComponentDefinition 目录，复用 TemplateLoadController 已有的 SaveLoadService.Catalog，
+        // 练习模板结构预检需要 ComponentDefinition 目录，复用 TemplateLoadController 已有的 SaveLoadService.Catalog，
         // 不在 PracticeSessionController 内复制 catalog 读取逻辑。序列化字段保留场景已绑定的引用。
         [SerializeField] private SaveLoadService saveLoadService;
 
-        // E3：锁定状态下进入练习的拒绝提示。复用于 StartPractice 和 EnterPracticeMode 两处入口检查，
+        // 锁定状态下进入练习的拒绝提示，复用于 StartPractice 和 EnterPracticeMode 两处入口检查，
         // 避免提示文本分散在多处导致不一致。通过 workspace.SetStatus 写入状态栏与操作记录。
         private const string LockedEntryMessage = "画布已锁定，请先解锁后再进入练习模式。";
 
         private void Awake()
         {
+            // 单例只服务场景中可复用的会话入口。重复实例立即销毁，避免两个控制器各自清理画布或向 Inspector
+            // 写入练习反馈；不要把 CurrentTemplateData 设计为跨场景的持久化数据。
             if (_instance == null)
             {
                 _instance = this;
@@ -73,6 +77,8 @@ namespace ElectricalSim.Practice
         // 运行时页面对象可能晚于会话控制器创建；只补齐缺失引用，避免重复初始化时覆盖仍有效的会话上下文。
         private void EnsureReferences()
         {
+            // UI/Workspace 的创建顺序在 Editor 与 Player 中可能不同，因此这里只补齐缺失引用，不能每次查找后
+            // 覆盖已有会话依赖；否则动态注入的面板或保存服务会在活动练习中被替换。
             if (workspace == null)
             {
                 workspace = FindObjectOfType<WorkspaceController>(true);
@@ -93,7 +99,7 @@ namespace ElectricalSim.Practice
                 navigation = FindObjectOfType<TopNavigationController>(true);
             }
 
-            // F2-A.4：仅补齐缺失引用，避免覆盖场景已绑定或运行时已注入的 SaveLoadService。
+            // 仅补齐缺失引用，避免覆盖场景已绑定或运行时已注入的 SaveLoadService。
             if (saveLoadService == null)
             {
                 saveLoadService = FindObjectOfType<SaveLoadService>(true);
@@ -111,9 +117,11 @@ namespace ElectricalSim.Practice
         /// </summary>
         public void StartPractice(CircuitTemplateCatalogItemDto templateItem, System.Action onEntered)
         {
+            // 若画布已有内容，确认对话框只是延迟进入，不是提前清理。锁定检查必须在确认前后各经过正式入口，
+            // 防止用户等待确认期间切换到不可编辑状态而产生半进入会话。
             EnsureReferences();
 
-            // E3 第一次检查：锁定状态下立即拒绝，不弹确认框、不读取模板、不清空画布、不建立会话。
+            // 第一次锁定检查：锁定状态下立即拒绝，不弹确认框、不读取模板、不清空画布、不建立会话。
             // 放在 HasWorkspaceContent 之前，避免锁定+非空画布时仍弹出"是否继续"确认框。
             if (!CanEnterPractice())
             {
@@ -144,9 +152,11 @@ namespace ElectricalSim.Practice
         /// </summary>
         private bool EnterPracticeMode(CircuitTemplateCatalogItemDto templateItem)
         {
+            // 进入顺序是数据安全边界：先读取并验证模板，成功后才停止旧仿真、清空画布并写入会话上下文。
+            // 不能改成先清空再加载，否则损坏模板或 catalog 时会丢失学习者正在编辑的电路。
             EnsureReferences();
 
-            // E3 第二次检查：防止确认弹窗显示后、用户确认前画布被锁定，确认后继续进入练习形成半进入状态。
+            // 第二次锁定检查：防止确认弹窗显示后、用户确认前画布被锁定而形成半进入会话。
             // 与 StartPractice 复用同一 CanEnterPractice，不复制判断逻辑与提示文本。
             if (!CanEnterPractice())
             {
@@ -166,7 +176,7 @@ namespace ElectricalSim.Practice
                 return false;
             }
 
-            // F2-A.4：模板结构预检。复用 CircuitTemplateSpawnService.TryValidate，不复制校验逻辑。
+            // 模板结构预检复用 CircuitTemplateSpawnService.TryValidate，不复制校验逻辑。
             // 预检失败时不停止旧仿真、不清空画布、不修改当前 PracticeSession、不隐藏参考图纸、不调用回调、不切换页面。
             var catalog = saveLoadService != null ? saveLoadService.Catalog : null;
             if (!CircuitTemplateSpawnService.TryValidate(templateDto, catalog, out var validateMessage))
@@ -204,6 +214,8 @@ namespace ElectricalSim.Practice
         // 仅清理练习会话和参考面板，不清空画布；EndPractice 才负责执行退出后的画布清理。
         public void ClearPracticeState()
         {
+            // 这里只撤销模板/参考图/会话身份，不处理画布本体。将会话清理与 ClearDrawing 分开，能让导航守卫
+            // 和退出流程按需要组合，同时避免普通画布操作意外关闭练习上下文。
             EnsureReferences();
 
             IsPracticeActive = false;
@@ -228,12 +240,14 @@ namespace ElectricalSim.Practice
             navigation?.SelectTab(0);
         }
 
-        // F2-B：提取练习退出与会话清理+画布清空的正式路径，不包含页面跳转。
+        // 练习退出与会话清理、画布清空的正式路径不包含页面跳转。
         // 供 TopNavigationController 导航保护复用：用户确认离开模拟电路页后，
         // 先清理练习会话和画布，再由导航保护切换到用户选择的目标页面。
         // 不公开含义模糊的布尔参数；EndPractice 仍保留原行为（清理后跳回模拟电路页）。
         public void EndPracticeSessionAndClearCanvas()
         {
+            // 正式退出路径先撤销练习身份，再停止仿真并清空画布；观察者在清理期间读取状态时不会再把旧模板
+            // 解释为当前练习，且新画布不会继承 KT、电机或保护等 runtime cache。
             ClearPracticeState();
             workspace?.StopSimulation();
             workspace?.ClearDrawing(true);
@@ -257,6 +271,8 @@ namespace ElectricalSim.Practice
         /// </summary>
         public void SubmitPractice()
         {
+            // 提交只将当前 Workspace 的结构拓扑交给 Netlist checker。formatter 负责把结果变成反馈文本，
+            // 但 Passed、缺失/错误/多余连接仍以 checker 的结构化结论为准。
             EnsureReferences();
 
             if (!IsPracticeActive)
@@ -279,12 +295,14 @@ namespace ElectricalSim.Practice
         }
 
         /// <summary>
-        /// E3：检查当前画布是否允许进入练习。画布锁定时写入状态栏与操作记录并返回 false。
+        /// 检查当前画布是否允许进入练习。画布锁定时写入状态栏与操作记录并返回 false。
         /// 不自动解锁、不自动清空、不静默失败。复用于 StartPractice 与 EnterPracticeMode 两处入口，
         /// 确保确认弹窗期间锁定也能被第二次检查拦截。
         /// </summary>
         private bool CanEnterPractice()
         {
+            // 锁定画布不能由练习入口自动解锁或静默绕过；同一守卫复用于确认前后的进入路径，保证没有模板读取、
+            // 清空或页面切换发生在被锁定的编辑会话中。
             EnsureReferences();
             if (workspace != null && workspace.IsInteractionLocked)
             {

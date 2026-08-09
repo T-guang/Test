@@ -7,6 +7,8 @@ namespace ElectricalSim.UI.CommonTools
 {
     public sealed class ElectricianCalculatorController : MonoBehaviour
     {
+        // 计算器是独立的教学工具 UI：解析用户输入、调用明确的公式并格式化结果。它不读取或修改活动 Workspace
+        // 的元件、Wire、仿真状态或练习答案；结果只对当前表单生命周期有效。
         private RectTransform tabsArea;
         private RectTransform contentArea;
         private Button[] tabs;
@@ -74,6 +76,7 @@ namespace ElectricalSim.UI.CommonTools
         private static Sprite roundedSprite;
         private static Sprite GetRoundedSprite()
         {
+            // 圆角 sprite 为本控制器共享的纯视觉缓存；缓存的生命周期不携带任何表单输入或计算结果，避免跨页状态泄漏。
             if (roundedSprite != null) return roundedSprite;
             int r = 16;
             int size = 32;
@@ -97,12 +100,15 @@ namespace ElectricalSim.UI.CommonTools
 
         private void Awake()
         {
+            // 面板可能被导航多次激活，Awake 只构建一次静态表单骨架；重复 Build 会造成重复输入框、按钮监听和布局节点。
             BuildUI();
             SelectTab(0);
         }
 
         private void BuildUI()
         {
+            // UI 按页签建立，计算逻辑仍集中在各 Calculate 方法。布局代码不承担公式选择或输入有效性判断，避免
+            // 改皮肤时无意改变计算语义。
             ClearChildren(transform);
             
             // Header
@@ -161,6 +167,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void SelectTab(int index)
         {
+            // 页签切换只改变当前页可见性，不复用另一页的输入或结果作为隐含参数；每个计算类别保持独立的表单状态。
             currentTab = index;
             for (int i = 0; i < 4; i++)
             {
@@ -178,6 +185,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private Button CreateTabButton(string label, UnityEngine.Events.UnityAction action)
         {
+            // tab 创建时只绑定页面选择动作。计算动作绑定在对应页面按钮，避免 tab 重建或顺序调整导致公式被错误复用。
             var go = new GameObject("Tab", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(tabsArea, false);
             
@@ -196,6 +204,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private RectTransform BuildPageRoot(string name)
         {
+            // 每个页面拥有独立根节点和表单控件，页面切换只显隐根节点；不要将不同计算类别的 InputField 共享为同一状态。
             var go = new GameObject(name, typeof(RectTransform), typeof(Image));
             go.transform.SetParent(contentArea, false);
             SetRect(go.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
@@ -243,6 +252,8 @@ namespace ElectricalSim.UI.CommonTools
 
         private double GetValidNumber(InputField field, string fieldName, bool allowZero = false)
         {
+            // 输入解析的失败语义统一在此处：调用方只在得到有效数值后继续计算，不能把空文本或区域化显示字符串
+            // 静默转换为零而生成看似可信的电工建议。
             if (string.IsNullOrEmpty(field.text)) throw new Exception($"请完整填写【{fieldName}】");
             if (!double.TryParse(field.text, out double val)) throw new Exception($"【{fieldName}】必须是有效数字");
             if (val < 0) throw new Exception($"【{fieldName}】不能为负数");
@@ -252,6 +263,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void CalculateLoadCurrent()
         {
+            // 负载电流页只使用本页已验证的输入和选定相制；它不尝试从画布推断电压、功率或功率因数。
             try
             {
                 double pRaw = GetValidNumber(loadPower, "额定功率");
@@ -310,6 +322,8 @@ namespace ElectricalSim.UI.CommonTools
 
         private void CalculateWireBreaker()
         {
+            // 导线/断路器建议是教学估算，不替代工程选型或保护协调。结果文案应保留输入前提，不能被其他页面当作
+            // 活动电路的真实额定值。
             try
             {
                 double i = GetValidNumber(wireCurrent, "负载总电流");
@@ -368,6 +382,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void CalculateMotorStartup()
         {
+            // 电机起动页把额定参数和起动倍数显式组合；缺少安全边界时应显示输入错误，而不是以默认值伪造起动电流。
             try
             {
                 double pKw = GetValidNumber(motorPower, "电机功率");
@@ -435,6 +450,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void CalculateMultiLoad()
         {
+            // 多负载结果只汇总当前表单行，行的显示顺序和 UI 容器不构成电气拓扑，也不会写入任何保存文件。
             try
             {
                 double GetValOrZero(InputField f, string name)
@@ -488,6 +504,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ShowError(Text uiText, RectTransform bg, string msg)
         {
+            // 错误展示不抛出异常，也不保留上一轮成功结果的颜色。解析失败必须显式覆盖结果区域，提示用户修正输入。
             uiText.color = C_ErrorText;
             uiText.text = "<b>出错了</b>\n" + msg;
             
@@ -497,6 +514,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ShowSuccess(Text uiText, RectTransform bg, string msg)
         {
+            // 成功文本只代表当前点击时的表单计算，不是电路仿真结论；页面切换、重新输入或销毁面板后不应被持久化。
             uiText.color = C_ResultText;
             uiText.text = msg;
             
@@ -506,6 +524,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private RectTransform CreateFormContainer(RectTransform parent)
         {
+            // 表单容器统一交给 LayoutGroup 排布，字段新增时不要手工累积绝对坐标，否则小窗口下滚动高度会与实际内容脱节。
             var form = new GameObject("FormContainer", typeof(RectTransform), typeof(VerticalLayoutGroup));
             form.transform.SetParent(parent, false);
             var layout = form.GetComponent<VerticalLayoutGroup>();
@@ -541,6 +560,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private RectTransform CreateScrollableContent(RectTransform parent)
         {
+            // ScrollRect 仅解决表单可达性；Content 高度由 layout 决定，不能为了视觉调整手工篡改输入数据或计算结果。
             var scroll = new GameObject("Scroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
             scroll.transform.SetParent(parent, false);
             SetRect(scroll.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
@@ -593,6 +613,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private InputField CreateInputFieldRow(RectTransform parent, string labelText, string placeholderText = "")
         {
+            // 行级工厂只创建输入表现和标签；数值范围、单位换算和业务前提由 Calculate 方法及 GetValidNumber 统一管理。
             var row = CreateRow(parent);
 
             var label = CreateText("Label", row.transform, labelText, 15, FontStyle.Normal, C_TextMuted);
@@ -668,6 +689,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private Dropdown CreateDropdownRow(RectTransform parent, string labelText, string[] options)
         {
+            // 下拉选项是当前计算页的显式输入，而非全局应用设置。更新选项时需同步对应公式分支，不可由显示文本猜测单位。
             var row = CreateRow(parent);
 
             var label = CreateText("Label", row.transform, labelText, 15, FontStyle.Normal, C_TextMuted);
@@ -744,6 +766,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private Text CreateResultArea(RectTransform parent, out RectTransform bgRect)
         {
+            // 结果区域与输入区分离，便于成功/错误样式整体更新；它不保存中间数值，真实计算状态只存在于本次按钮调用栈中。
             var bg = new GameObject("ResultBg", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(LayoutElement));
             bg.transform.SetParent(parent, false);
             bgRect = bg.GetComponent<RectTransform>();
@@ -793,6 +816,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ClearChildren(Transform parent)
         {
+            // 只清理本控制器生成的页面子节点。调用前需确认 parent 属于计算器，避免通用工具重建时销毁导航或场景对象。
             foreach (Transform child in parent) Destroy(child.gameObject);
         }
 
