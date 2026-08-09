@@ -129,7 +129,8 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
             parameterApplyButton = apply;
             opAmpInfoText = SpiceWorkspaceUi.CreateText(parameterRoot, "OpAmpInfo", string.Empty, 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.SecondaryText);
-            SpiceWorkspaceUi.Anchor(opAmpInfoText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 12f), new Vector2(-14f, -44f));
+            // 固定模型说明仅使用参数标题下方的专属区域，不能覆盖标题或普通输入控件的位置。
+            SpiceWorkspaceUi.Anchor(opAmpInfoText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 12f), new Vector2(-14f, -164f));
             opAmpInfoText.gameObject.SetActive(false);
 
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
@@ -350,7 +351,8 @@ namespace ElectricalSim.Spice.Workspace
                 viewport.SetParent(scrollTransform, false);
             }
 
-            SpiceWorkspaceUi.Stretch(viewport, Vector2.zero, Vector2.zero);
+            // 右侧预留给可见滚动条；卡片宽度、文字与两列布局保持不变。
+            SpiceWorkspaceUi.Stretch(viewport, Vector2.zero, new Vector2(-10f, 0f));
             var content = viewport.Find("Content") as RectTransform;
             if (content == null)
             {
@@ -365,6 +367,7 @@ namespace ElectricalSim.Spice.Workspace
             content.sizeDelta = new Vector2(0f, content.sizeDelta.y);
             scroll.viewport = viewport;
             scroll.content = content;
+            CreatePaletteScrollbar(scrollTransform, scroll);
 
             // 兼容已有运行时层级：如果旧卡片尚在根节点，统一迁入 Content，避免重复生成 UI。
             for (var index = paletteRoot.childCount - 1; index >= 0; index--)
@@ -379,6 +382,40 @@ namespace ElectricalSim.Spice.Workspace
                 scroll.verticalNormalizedPosition = 1f;
 
             return content;
+        }
+
+        private static void CreatePaletteScrollbar(RectTransform scrollTransform, ScrollRect scroll)
+        {
+            var scrollbarTransform = scrollTransform.Find("Scrollbar") as RectTransform;
+            if (scrollbarTransform == null)
+            {
+                scrollbarTransform = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar)).GetComponent<RectTransform>();
+                scrollbarTransform.SetParent(scrollTransform, false);
+            }
+
+            SpiceWorkspaceUi.Anchor(scrollbarTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-8f, 8f), new Vector2(-3f, -8f));
+            var track = scrollbarTransform.GetComponent<Image>();
+            track.color = new Color(0.84f, 0.88f, 0.94f, 0.9f);
+            track.raycastTarget = true;
+
+            var handleTransform = scrollbarTransform.Find("Handle") as RectTransform;
+            if (handleTransform == null)
+            {
+                handleTransform = new GameObject("Handle", typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
+                handleTransform.SetParent(scrollbarTransform, false);
+            }
+
+            SpiceWorkspaceUi.Stretch(handleTransform, Vector2.zero, Vector2.zero);
+            var handle = handleTransform.GetComponent<Image>();
+            handle.color = MainUiTheme.MutedText;
+            var scrollbar = scrollbarTransform.GetComponent<Scrollbar>();
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.targetGraphic = handle;
+            scrollbar.handleRect = handleTransform;
+            scroll.verticalScrollbar = scrollbar;
+            // Viewport 已为细滚动条预留宽度；只在内容溢出时显示滚动条，避免 ScrollRect 再次压缩卡片区域。
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            scroll.verticalScrollbarSpacing = 4f;
         }
 
         private void CreatePaletteCard(RectTransform parent, SpiceComponentKind kind, string title, string summary, int column, int row)
@@ -646,9 +683,7 @@ namespace ElectricalSim.Spice.Workspace
                 // 教学级通用 BJT 模型参数固定（IS/BF），视图只呈现模型边界，与理想运放同样走无参数信息文本。
                 var isNpn = selectedComponent.Kind == SpiceComponentKind.GenericNpnBjt;
                 parameterTitle.text = selectedComponent.InstanceId + (isNpn ? " 通用 NPN 三极管" : " 通用 PNP 三极管");
-                parameterInput.gameObject.SetActive(false);
-                unitButton.gameObject.SetActive(false);
-                if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(false);
+                SetNormalParameterControlsVisible(false);
                 opAmpInfoText.text = "教学级模型：" + (isNpn ? SpiceComponentDefaults.NpnGenericModelName : SpiceComponentDefaults.PnpGenericModelName) + "\n端子：collector、base、emitter\n模型参数（IS、BF）固定\n无可编辑参数";
                 SetOpAmpInfoVisible(true);
                 return;
@@ -657,9 +692,7 @@ namespace ElectricalSim.Spice.Workspace
             {
                 // 这个固定 VCVS 没有可编辑参数；视图只呈现 Core 模型边界，任何电气改动仍须由 Controller 编排 Model API。
                 parameterTitle.text = selectedComponent.InstanceId + " 理想运算放大器（线性）";
-                parameterInput.gameObject.SetActive(false);
-                unitButton.gameObject.SetActive(false);
-                if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(false);
+                SetNormalParameterControlsVisible(false);
                 opAmpInfoText.text = "固定开环增益：1e6\n端子：IN+、IN-、OUT\n线性理想模型，无电源引脚和饱和限制\n无可编辑参数";
                 SetOpAmpInfoVisible(true);
                 return;

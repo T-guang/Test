@@ -47,7 +47,7 @@ namespace ElectricalSim.Editor
             passed = 0;
             failed = 0;
             Summary.Clear();
-            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S09)");
+            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S10)");
 
             Run("S01_HierarchyAndScrollSettings", S01_HierarchyAndScrollSettings);
             Run("S02_TitleRemainsFixed", S02_TitleRemainsFixed);
@@ -58,6 +58,7 @@ namespace ElectricalSim.Editor
             Run("S07_AdapterKeepsCardsInContentAndOrder", S07_AdapterKeepsCardsInContentAndOrder);
             Run("S08_PaletteCardsRetainDragAndClickComponents", S08_PaletteCardsRetainDragAndClickComponents);
             Run("S09_FinalScrollBoundsKeepBottomRowInsideSafeArea", S09_FinalScrollBoundsKeepBottomRowInsideSafeArea);
+            Run("S10_OverflowShowsDedicatedScrollbar", S10_OverflowShowsDedicatedScrollbar);
 
             var total = passed + failed;
             Summary.AppendLine();
@@ -85,6 +86,30 @@ namespace ElectricalSim.Editor
                 CheckTrue(content != null && content.name == "Content", "PaletteScroll 缺少 Content。");
                 CheckTrue(content.parent == viewport, "Content 必须直属 Viewport。");
                 CheckTrue(scroll.transform.parent == bindings.PaletteRoot, "PaletteScroll 必须直属 PaletteRoot。");
+                CheckTrue(scroll.verticalScrollbar != null, "PaletteScroll 内容溢出时必须具备可见的垂直滚动条。");
+                CheckEqual(ScrollRect.ScrollbarVisibility.AutoHide, scroll.verticalScrollbarVisibility,
+                    "Viewport 已预留滚动条空间，滚动条不应再次压缩卡片区域。");
+            });
+        }
+
+        private static void S10_OverflowShowsDedicatedScrollbar()
+        {
+            WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
+            {
+                var scroll = GetPaletteScroll(bindings);
+                var scrollbar = scroll.verticalScrollbar;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+                Canvas.ForceUpdateCanvases();
+
+                CheckTrue(scroll.content.rect.height > scroll.viewport.rect.height,
+                    "测试分辨率下内容必须真实溢出，才能验证滚动条反馈。");
+                CheckTrue(scrollbar != null && scrollbar.transform.parent == scroll.transform,
+                    "滚动条必须作为 PaletteScroll 的直属子节点。");
+                CheckTrue(scrollbar != null && scrollbar.handleRect != null,
+                    "滚动条必须包含可拖动 Handle。");
+                CheckTrue(scrollbar != null && scrollbar.gameObject.activeInHierarchy,
+                    "内容溢出时滚动条必须可见，向用户提示仍可向下浏览。");
             });
         }
 
