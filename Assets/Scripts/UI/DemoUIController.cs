@@ -17,6 +17,11 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class DemoUIController : MonoBehaviour
     {
+        // DemoUIController 是主界面的表现编排者：整理工具栏、绑定已存在的正式命令入口，并把 Workspace 的选择、
+        // 锁定和运行状态投影到按钮与面板。它不拥有 SimulationEngine、WorkspaceController 或 ValidationService 的
+        // 业务状态，不能因 UI 刷新而重新推导电气事实、清空画布或改变规则结论。
+        // 本类依赖 Demo 场景中的序列化引用，同时含有有限的运行时补建兼容路径；新增 UI 时必须优先复用这些引用，
+        // 防止重复按钮/listener 与现有场景层级发生竞争。
         [SerializeField] private WorkspaceController workspace;
         [SerializeField] private SaveLoadService saveLoadService;
         [SerializeField] private Button startButton;
@@ -48,6 +53,8 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 初始化顺序先保证容器和辅助面板存在，再绑定会访问它们或 Workspace 的动作。按钮绑定采用单监听契约，
+            // 因此不能在后续 layout 路径中再次 AddListener 而不先清理。
             // 顺序是当前场景兼容契约：先保证容器存在，再绑定会访问这些容器或 Workspace 的操作入口。
             ApplyMainFrameLayout();
             EnsureToolbarLayout();
@@ -96,6 +103,7 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
+            // 首帧后完成右侧动作组收口，避开 Canvas/布局组件尚未传播完尺寸时的错误测量；该协程只处理表现层。
             if (rightActionGroupStartupRoutine != null)
             {
                 StopCoroutine(rightActionGroupStartupRoutine);
@@ -106,6 +114,8 @@ namespace ElectricalSim.UI
 
         private void LateUpdate()
         {
+            // LateUpdate 只同步外部正式入口改变后的可视标签（例如模板加载调用 StopSimulation）。不要在这里主动
+            // 调用运行、停止或选择命令，否则每帧 UI 轮询会变成业务状态推进。
             RefreshWireColorButtons(false);
             // 外部 StopSimulation（如加载新模板）不会触发 ToggleSimulation，
             // 这里每帧同步按钮文字，确保 IsSimulationRunning 变化后按钮立即恢复"开始仿真"。
@@ -114,6 +124,8 @@ namespace ElectricalSim.UI
 
         private void BindButton(Button button, UnityEngine.Events.UnityAction action)
         {
+            // Demo 场景按钮可能被运行时 UI 重建复用。先移除旧监听保证一次点击只发出一个命令；该方法只应用于
+            // 本 controller 拥有的按钮，不能用来清除其他模块注册的业务监听。
             // 运行时 UI 可能复用场景按钮；先清理旧监听器以避免页面重建后一次点击重复执行。
             if (button == null || action == null)
             {
@@ -126,6 +138,8 @@ namespace ElectricalSim.UI
 
         private void EnsureToolbarLayout()
         {
+            // 工具栏重组只处理 Group、图标、尺寸和顺序。按钮的业务语义仍由已绑定 action 决定，不能通过移动
+            // 某个按钮来隐式改变 Save/Import/Undo 或 Simulation 的可用条件。
             // 仅整理已有工具栏及其兼容补件；不要把页面级布局迁移到这里。
             var toolbar = startButton != null ? startButton.transform.parent as RectTransform : null;
             if (toolbar == null)
@@ -278,6 +292,8 @@ namespace ElectricalSim.UI
 
         private void ApplyMainFrameLayout()
         {
+            // 主框架布局为 Workspace、Palette、Inspector 和文件动作区预留表现空间；RectTransform 改动不表示
+            // 电路坐标、模板位置或仿真拓扑发生变化。
             var navBar = GameObject.Find("NavBar")?.GetComponent<RectTransform>();
             if (navBar != null)
             {
@@ -668,6 +684,8 @@ namespace ElectricalSim.UI
 
         private void RefreshWireColorButtons(bool force)
         {
+            // 导线颜色按钮只展示当前选色，不改变 Wire endpoint 或电气连接。颜色刷新必须避免每帧重复写入相同样式，
+            // 否则会掩盖真正的选择状态变化并增加 UI 重建成本。
             if (workspace == null || wirePaletteColors == null)
             {
                 return;
@@ -765,6 +783,7 @@ namespace ElectricalSim.UI
 
         private void SyncFileActionGroupLayout()
         {
+            // 右侧文件操作组会随可选开发入口显隐重新排列；该方法只维护控件几何，不改变保存、导入或运行命令的权限语义。
             var rightGroup = ResolveRightActionGroup();
             if (rightGroup == null)
             {
@@ -944,6 +963,7 @@ namespace ElectricalSim.UI
 
         private GameObject EnsureDevelopmentDivider(bool visible)
         {
+            // 分隔线与开发入口共用可见性契约：运行时隐藏时只移除视觉占位，不能留下会拦截点击的透明对象。
             var rightGroup = ResolveRightActionGroup();
             if (rightGroup == null)
             {
@@ -1075,6 +1095,7 @@ namespace ElectricalSim.UI
 
         private IEnumerator FinalizeRightActionGroupAfterStartup()
         {
+            // 等待首帧布局完成后再校正按钮组，避免 Canvas 初始尺寸尚未稳定时写入错误 offset；这不是业务初始化顺序的一部分。
             yield return null;
             yield return null;
             SyncFileActionGroupLayout();
@@ -1099,6 +1120,8 @@ namespace ElectricalSim.UI
 
         private void EnsureLocalInspectorPanel()
         {
+            // Inspector 的创建/复用委托 LocalInspectorPanel.Create。此处只提供 host 和 Workspace，不能在 UI 层
+            // 复制检查工作流、报告格式化或运行态分析。
             // 检查助手由 LocalInspectorPanel 自行建立内部 UI；此处只确保主场景存在一个宿主实例。
             if (workspace == null)
             {
@@ -1126,10 +1149,13 @@ namespace ElectricalSim.UI
         /// </summary>
         public void ConfigureLocalInspectorHost(RectTransform hostRoot)
         {
+            // host 由 Builder 或场景注入；更换 host 仅影响报告面板父级，不能重置 Workspace、练习会话或已有报告事实。
             localInspectorHostRoot = hostRoot;
         }
         private void EnsureBlueprintPanels()
         {
+            // 保存、导入和图纸相关面板是 UI 外壳；文件解析、导入前置校验和画布重建属于 SaveLoadService，
+            // 不能因为面板缺失而绕过这些正式安全入口。
             // 图纸预览与练习参考面板的实际内容由各自 Controller 管理，此处不参与模板或图片加载。
             var canvas = GetComponentInParent<Canvas>();
             if (canvas == null)
@@ -1190,6 +1216,7 @@ namespace ElectricalSim.UI
 
         private void OpenSaveDialog()
         {
+            // 打开对话框只请求保存 UI；真正序列化发生在确认后的 SaveLoadService 路径，避免显示层持有保存 schema 逻辑。
             if (saveDialog != null)
             {
                 saveDialog.Show();
@@ -1201,6 +1228,7 @@ namespace ElectricalSim.UI
 
         private void OpenImportPanel()
         {
+            // 导入面板只收集用户选择。任何文件加载必须经正式预检和 Workspace 清理顺序，不能由按钮监听直接替换画布。
             if (importPanel != null)
             {
                 importPanel.Show();
@@ -1212,12 +1240,15 @@ namespace ElectricalSim.UI
 
         private void ToggleSimulation()
         {
+            // 按钮只向 Workspace 发出开始/停止命令并随后刷新标签；SimulationEngine 的状态稳定、保护与副作用
+            // 不属于此 controller，UI 不能凭按钮当前文字判断仿真是否真实结束。
             workspace.ToggleSimulation();
             RefreshSimulationButtonLabel();
         }
 
         private void RefreshSimulationButtonLabel()
         {
+            // 标签是 IsSimulationRunning 的只读投影。外部停止、加载或异常收口后必须能同步，因此不把状态缓存在 UI。
             var label = startButton != null ? startButton.GetComponentInChildren<Text>() : null;
             if (label != null)
             {
@@ -1234,6 +1265,8 @@ namespace ElectricalSim.UI
 
         private void ToggleLock()
         {
+            // 锁定命令由 Workspace 统一执行，保证 Palette、Wire、模板/练习入口都读取同一交互守卫；不要在此处
+            // 仅禁用几个按钮来伪造锁定状态。
             workspace.ToggleInteractionLock();
             RefreshLockButtonLabel();
         }

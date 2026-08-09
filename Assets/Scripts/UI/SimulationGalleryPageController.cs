@@ -15,6 +15,9 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class SimulationGalleryPageController : MonoBehaviour
     {
+        // 仿真广场展示并启动本地教学示例：它管理 catalog 条目的卡片、筛选、预览和启动请求，但不解析模板 JSON、
+        // 不生成电路对象，也不拥有图纸集或练习会话。缩略图、描述和标签都是 presentation，不等于运行时电路事实。
+        // Gallery 与 Blueprint 的职责应保持区分：前者面向示例探索/启动，后者面向图纸浏览、配置与练习入口。
         private const string CatalogPath = "Blueprints/Templates/template_catalog";
         private const float GalleryMargin = 44f;
         private const float DetailMargin = 37f;
@@ -44,6 +47,8 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 首次建立页面骨架后再读取 catalog 和创建卡片。动态节点均由本页拥有，不能依赖场景中遗留的旧卡片来恢复
+            // 选择或筛选状态，否则 catalog 更新后 listener 与条目索引会失配。
             // 首次创建页面骨架；Catalog 条目在后续 LoadEntries 中读取，避免把模板数据写入场景对象。
             EnsureRootRect();
             BuildPage();
@@ -53,6 +58,7 @@ namespace ElectricalSim.UI
 
         private void OnEnable()
         {
+            // 重新显示页面默认回到列表视图，但不触碰当前 Workspace 或已加载模板。页面可见性不是一次新的示例启动请求。
             // 页面重新显示时刷新筛选后的卡片，不改变当前 Workspace 或已加载模板。
             if (listRoot != null && detailRoot != null)
             {
@@ -86,6 +92,8 @@ namespace ElectricalSim.UI
 
         private void BuildPage()
         {
+            // 重建只清理本页根节点下的表现树，并按固定层级创建 filter、search、grid 和 detail 容器。不要把真实模板
+            // Spawn、Workspace 清理或 Practice 状态变更混入 UI rebuild。
             ClearChildren(transform);
 
             listRoot = CreateObject("GalleryListRoot", transform, typeof(RectTransform));
@@ -122,6 +130,7 @@ namespace ElectricalSim.UI
 
         private void BuildFilterBar(Transform parent)
         {
+            // 筛选栏只维护 activeFilter 和按钮视觉。分类选择影响展示集合，不会改变 catalog 的权威条目、模板资源路径或难度数据。
             var bar = CreateObject("FilterBar", parent, typeof(RectTransform), typeof(HorizontalLayoutGroup));
             var rect = bar.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0f, 1f);
@@ -155,6 +164,7 @@ namespace ElectricalSim.UI
 
         private void BuildSearchAndSort(Transform parent)
         {
+            // 搜索和排序是本地展示查询；文本输入和下拉顺序不能写回 catalog，更不能作为模板 identity 或加载参数。
             var group = CreateObject("SearchAndSort", parent, typeof(RectTransform), typeof(HorizontalLayoutGroup));
             var rect = group.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(1f, 1f);
@@ -188,6 +198,7 @@ namespace ElectricalSim.UI
 
         private void BuildGrid(Transform parent)
         {
+            // Grid 的 ScrollRect/Content 仅解决大量卡片的可达性。卡片位置、列数和响应式尺寸不能影响示例电路内元件坐标。
             var scroll = CreateObject("CaseGridScrollView", parent, typeof(RectTransform), typeof(Image), typeof(ScrollRect));
             var scrollRect = scroll.GetComponent<RectTransform>();
             Stretch(scrollRect, GalleryMargin, GalleryMargin, 150f, 32f);
@@ -250,6 +261,7 @@ namespace ElectricalSim.UI
 
         private void BuildDetailRoot()
         {
+            // 详情根与列表根独立，选择条目时只切换展示树。详情图片/文本可以 fallback，但不应修改条目来源或当前画布。
             detailRoot = CreateObject("GalleryDetailRoot", transform, typeof(RectTransform));
             Stretch(detailRoot.GetComponent<RectTransform>(), 0f, 0f, 0f, 0f);
             detailRoot.SetActive(false);
@@ -257,6 +269,7 @@ namespace ElectricalSim.UI
 
         private void LoadEntries()
         {
+            // entries 从正式 template catalog 投影而来。读取失败时保留可解释的空状态，不从缩略图文件名或已有 UI 反推模板定义。
             // 数据来源限定为 CircuitTemplateCatalogLoader；不要通过扫描 Resources 目录推断卡片集合。
             entries.Clear();
             if (!CircuitTemplateCatalogLoader.TryLoad(CatalogPath, out var catalog, out var error))
@@ -304,6 +317,8 @@ namespace ElectricalSim.UI
 
         private void RefreshCards()
         {
+            // 每次刷新先按 filter/search/sort 形成临时展示列表，再重建 Grid 卡片。旧 listener 随卡片销毁，避免点击过期条目
+            // 后加载了错误模板；筛选本身不删除 entries。
             // 仅销毁并重建本页动态卡片，详情根节点和模板加载流程不在此处重置。
             if (gridContent == null)
             {
@@ -369,6 +384,7 @@ namespace ElectricalSim.UI
 
         private void ApplyResponsiveGridLayout()
         {
+            // 响应式布局仅根据当前 Viewport 计算列数与 Content 高度。几何变化是 UI 事实，不能写回 GalleryEntry 或模板数据。
             if (gridContent == null || gridScrollRect == null || gridScrollRect.viewport == null)
             {
                 return;
@@ -427,6 +443,7 @@ namespace ElectricalSim.UI
 
         private void OnRectTransformDimensionsChange()
         {
+            // 尺寸变化后只刷新卡片布局；不要在此回调重新加载 catalog 或改变 activeFilter，避免 Canvas layout 循环造成状态抖动。
             if (gridContent != null)
             {
                 ApplyResponsiveGridLayout();
@@ -502,6 +519,7 @@ namespace ElectricalSim.UI
 
         private void CreateCard(GalleryEntry entry)
         {
+            // Card 持有条目的展示数据和明确的选择回调。其 thumbnail、tag 与难度 pill 只帮助用户浏览，不是 rule/validation 输入。
             var card = CreateObject("CaseCard_" + entry.Id, gridContent, typeof(RectTransform), typeof(Image), typeof(Button), typeof(UnityEngine.UI.Shadow));
             var image = card.GetComponent<Image>();
             image.sprite = UiThemeTokens.GetRoundedSprite(15);
@@ -603,6 +621,7 @@ namespace ElectricalSim.UI
 
         private void ShowDetail(GalleryEntry entry)
         {
+            // 展示详情不等于启动示例。用户仍需通过 LoadEntry 发出正式加载请求，保证预览不会无意清空或替换 Workspace。
             // 详情页是展示层；进入模板的实际动作继续交由 LoadEntry 的既有控制器调用。
             listRoot.SetActive(false);
             detailRoot.SetActive(true);
@@ -837,6 +856,8 @@ namespace ElectricalSim.UI
 
         private void LoadEntry(GalleryEntry entry)
         {
+            // Gallery 只发起选中示例的正式模板加载入口；真正的模板校验、组件生成、Wire 恢复和运行态清理由下游服务负责。
+            // 加载失败必须保留 status 反馈，不能因列表 UI 已切换而假定当前 Workspace 已成功重建。
             var loader = FindObjectOfType<TemplateLoadController>();
             if (loader == null)
             {
@@ -961,6 +982,7 @@ namespace ElectricalSim.UI
 
         private Sprite LoadThumbnail(string path)
         {
+            // 缩略图加载只服务视觉预览。资源缺失可返回 null/fallback，不得影响模板是否可被正式 loader 读取。
             // Catalog 路径按 Resources 规则传入且不带扩展名；Player 不应依赖 AssetDatabase。
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -972,6 +994,7 @@ namespace ElectricalSim.UI
 
         private void SetStatus(string message)
         {
+            // 状态文本是页面反馈的表现投影，不保存为示例配置，也不参与 Workspace/Practice 的业务状态判断。
             if (statusText != null)
             {
                 statusText.text = message ?? string.Empty;

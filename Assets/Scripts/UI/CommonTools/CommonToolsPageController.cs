@@ -14,6 +14,8 @@ namespace ElectricalSim.UI.CommonTools
     /// </summary>
     public sealed class CommonToolsPageController : MonoBehaviour
     {
+        // 常用工具页只组织工具入口、页签和展示容器。具体电阻计算、公式解释与文章内容各由本页的专用子流程处理，
+        // 不能把此 controller 扩展成读取或修改活动 Workspace 的“万能工具中心”。
         private enum ToolTab
         {
             Resistor,
@@ -101,6 +103,8 @@ namespace ElectricalSim.UI.CommonTools
 
         private void OnEnable()
         {
+            // 页面每次显示时可安全确保布局存在，但不能重复堆叠工具卡或监听。可见性刷新不应重置用户正在填写的
+            // 子工具输入，除非代码明确重建了对应工具页。
             // 只在首次显示时创建页面，避免页面切换时重复累加工具卡与监听器。
             if (!built)
             {
@@ -111,6 +115,8 @@ namespace ElectricalSim.UI.CommonTools
 
         public void BuildPage()
         {
+            // BuildPage 拥有本页动态 UI 的生命周期：先清理本控制器生成的子节点，再按固定层级建立 Header、Sidebar
+            // 和 Content。它不负责业务公式，布局重建也不能改变当前电路或仿真状态。
             // 供当前运行时页面初始化调用：清理本页旧节点后以种子数据重建，不修改任何外部页面或项目资源。
             ClearChildren();
             resistorColors = CommonToolsSeedData.GetResistorColors();
@@ -135,6 +141,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ClearChildren()
         {
+            // 仅销毁本页根下由 BuildPage 生成的对象；不要把通用清理用于外部导航或场景节点，否则会破坏 SerializedField 引用。
             // 仅销毁本控制器根节点下动态创建的 UI；不要把它用于清理场景其他页面。
             foreach (Transform child in transform)
             {
@@ -270,6 +277,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void BuildSidebar()
         {
+            // Sidebar 只发出工具选择意图。选中样式是当前工具页的表现投影，不能替代工具内部的计算结果或输入校验。
             var sidebar = CreatePanel("ToolSidebar", transform, CardBackground, 12);
             SetRect(sidebar, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(34f, -90f), new Vector2(240f, -120f));
             CleanupCardDecoration(sidebar);
@@ -324,6 +332,8 @@ namespace ElectricalSim.UI.CommonTools
 
         private void SelectTool(ToolTab tab)
         {
+            // 切换工具时只替换 Content 容器。每个工具拥有自己的 UI 和数据边界，避免电阻色环、公式文章和计算器
+            // 通过共享控件或残留 listener 相互污染。
             // 标签选择只切换本页面板可见性和按钮状态，不保存为全局应用状态。
             resistorPanel.gameObject.SetActive(tab == ToolTab.Resistor);
             calculatorPanel.gameObject.SetActive(tab == ToolTab.Calculator);
@@ -344,6 +354,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void BuildContentRoot()
         {
+            // 各工具共享同一个内容根节点，但仅当前选中的面板显示；切页复用已构建的 UI，避免重复注册按钮和重复持有资源。
             contentRoot = CreateRect("ToolContentRoot", transform);
             StretchTo(contentRoot, 290f, 90f, 34f, 30f);
         }
@@ -366,6 +377,8 @@ namespace ElectricalSim.UI.CommonTools
         // ==============================================
         private void BuildResistorPanel()
         {
+            // 电阻工具把色环选择转换为教学展示，所有中间状态仅存在于页面。它不创建 ComponentDefinition，
+            // 也不应把计算值写回 Palette、模板或活动电路中的电阻实例。
             resistorPanel = CreateRect("ResistorColorPanel", contentRoot);
             StretchTo(resistorPanel, 0f, 0f, 0f, 0f);
 
@@ -573,6 +586,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void RefreshResistorTool()
         {
+            // 刷新统一重算颜色、预览和文本，避免某个按钮仅更新局部 UI 产生前后不一致的色环含义。
             if (resistorResultText == null) return;
             
             var visibleBands = fiveBandMode ? 5 : 4;
@@ -640,6 +654,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private string CalculateResistanceText()
         {
+            // 色环换算是独立的教学计算，不读取也不修改活动 Workspace；输入不完整时返回说明文本，而不是伪造一个电路计算结果。
             double significant;
             double multiplier;
             string tolerance;
@@ -731,6 +746,7 @@ namespace ElectricalSim.UI.CommonTools
         // ==============================================
         private void BuildFormulaPanel()
         {
+            // 公式浏览是静态参考内容；选择公式只改变右侧详情，不触发求解、保存或任何 Workspace 操作。
             formulaPanel = CreateRect("FormulaPanel", contentRoot);
             StretchTo(formulaPanel, 0f, 0f, 0f, 0f);
 
@@ -763,6 +779,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void BuildArticlePanel()
         {
+            // 文章列表同样是展示数据源。动态创建的条目和 listener 随 Content 清理，不能跨页面持有旧的 RectTransform。
             articlePanel = CreateRect("ArticlePanel", contentRoot);
             StretchTo(articlePanel, 0f, 0f, 0f, 0f);
 
@@ -854,6 +871,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private RectTransform BuildDetailScrollPanel(RectTransform parent, string name, float left)
         {
+            // 资料详情使用独立 ScrollRect 容纳可变长度文本；滚动内容是页面表现数据，不应与画布导航或元件池滚轮状态耦合。
             var viewport = CreatePanel(name + "Viewport", parent, new Color(1f, 1f, 1f, 0.01f));
             StretchTo(viewport, left, 60f, 0f, 0f);
             viewport.gameObject.AddComponent<Mask>().showMaskGraphic = false;
@@ -891,6 +909,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void ShowFormula(CommonFormulaEntry entry)
         {
+            // 详情显示消费条目文本，不对公式表达式做隐藏求值；这样教学说明与计算器的明确输入公式保持边界。
             if (entry == null) return;
             ClearChildren(formulaDetailContent);
 
@@ -962,6 +981,7 @@ namespace ElectricalSim.UI.CommonTools
 
         private void RefreshToolListSelection(List<Button> buttons, Button selected)
         {
+            // 选择色只表示当前详情来源。不要根据某个按钮的颜色/activeSelf 来反推工具类别或业务计算状态。
             foreach (var button in buttons)
             {
                 var active = button == selected;

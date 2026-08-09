@@ -14,6 +14,9 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class EncyclopediaController : MonoBehaviour
     {
+        // 百科把 ComponentDefinition 及展示覆盖数据投影为可检索的教学页面。百科条目、卡片图片和详情文本不是
+        // 当前 Workspace 的 CircuitComponent，也不应反向修改 Definition、模板或任何 runtime state。
+        // 本类拥有动态列表/详情 UI 的创建与清理；资源缺失可以展示 fallback，但不能把 fallback 资源路径写回资产。
         private const string CategoryAll = "全部";
         private const float SidebarWidth = 150f;
         private const float CardWidth = 370f;
@@ -57,12 +60,16 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
+            // Start 后再构建页面，确保场景父容器和字体资源已可用。重复打开页面应刷新展示，不应重复保留旧卡片的
+            // listener 或让上一次搜索关键字改变 authoritative definitions。
             // 当前场景在页面激活后一次性构建百科；定义列表是只读输入，不写回 Catalog 或 ScriptableObject。
             BuildPage();
         }
 
         private void BuildPage()
         {
+            // 页面重建先清除本 controller 创建的列表/详情节点，再从当前 Definition 集合建立 Header、List 和 Detail。
+            // 这只是展示树生命周期，不创建 Workspace 元件，也不参与 Palette 的可创建性判定。
             // 重建仅限本控制器创建的页面节点；不要把此方法用于修改全局主题或画布元件。
             ClearExistingChildren();
             entries.Clear();
@@ -77,6 +84,7 @@ namespace ElectricalSim.UI
 
         private List<ComponentDefinition> LoadDefinitions()
         {
+            // Definition 目录是百科的基础数据源；读取失败时保持空/降级展示，而不是从现有卡片文本反向恢复规格。
             // 百科按现有定义来源取数，而非扫描 Prefab 或视觉资源目录；隐藏定义的展示规则由现有条目构建逻辑决定。
             var definitions = new List<ComponentDefinition>();
             var saveLoadService = FindObjectOfType<SaveLoadService>();
@@ -113,6 +121,7 @@ namespace ElectricalSim.UI
 
         private void ClearExistingChildren()
         {
+            // 只清理百科根下的动态内容。不要把此方法用于其他页面或共享 Canvas，避免销毁导航、参考图或场景绑定对象。
             for (var i = transform.childCount - 1; i >= 0; i--)
             {
                 Destroy(transform.GetChild(i).gameObject);
@@ -165,6 +174,7 @@ namespace ElectricalSim.UI
 
         private void CreateListView()
         {
+            // ListView 负责搜索、分类和卡片容器；过滤仅改变可见集合，不能改变 entries 的稳定 identity 或原始 catalog 顺序。
             listViewRoot = CreateRect("ListViewRoot", transform);
             SetRect(listViewRoot, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
 
@@ -253,6 +263,8 @@ namespace ElectricalSim.UI
 
         private void CreateDetailView()
         {
+            // DetailView 与列表并列而非嵌入卡片，保证切换条目时只刷新详情内容。详情选择是展示状态，不代表用户已把
+            // 该元件加入画布或修改了其运行参数。
             detailViewRoot = CreateRect("DetailViewRoot", transform);
             SetRect(detailViewRoot, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             detailViewRoot.gameObject.SetActive(false);
@@ -310,6 +322,8 @@ namespace ElectricalSim.UI
 
         private void RefreshCards()
         {
+            // 统一从当前筛选条件重建可见卡片，旧卡片和 listener 随容器清理。不要在单张卡片的点击回调里局部改变
+            // 搜索/分类状态，否则列表和详情会对同一条目给出不一致的选择结果。
             for (var i = cardContent.childCount - 1; i >= 0; i--)
             {
                 Destroy(cardContent.GetChild(i).gameObject);
@@ -358,6 +372,8 @@ namespace ElectricalSim.UI
 
         private RectTransform CreateCard(ComponentEncyclopediaEntry entry)
         {
+            // Card 仅持有条目的展示投影与选择回调。显示名、图标和简介可以本地化/fallback，但 terminalId、kind
+            // 等稳定规格仍由 entry 的 Definition 来源定义。
             var card = CreatePanel("ComponentCard_" + entry.DefinitionName, cardContent, Color.white);
             card.sizeDelta = new Vector2(CardWidth, CardHeight);
             var cardLayout = card.gameObject.AddComponent<LayoutElement>();
@@ -443,6 +459,8 @@ namespace ElectricalSim.UI
 
         private void ShowDetail(ComponentEncyclopediaEntry entry)
         {
+            // 详情依据当前 entry 重新生成，不能缓存上一条目的 Text/图片作为电气事实。缺失字段以教学说明降级，
+            // 不从运行中 Component 或 Analyzer 读取临时状态来“补全”百科内容。
             // 详情内容是定义数据的说明性投影，不可反向作为端子、规则或运行状态的权威来源。
             if (entry == null)
             {
@@ -588,6 +606,7 @@ namespace ElectricalSim.UI
 
         private bool MatchesCategory(ComponentEncyclopediaEntry entry)
         {
+            // 分类判定只服务 presentation filtering。隐藏一个条目不改变它在 Definition 目录、模板或 Palette 中的可用性。
             if (entry == null)
             {
                 return false;
@@ -606,6 +625,7 @@ namespace ElectricalSim.UI
 
         private bool MatchesSearch(ComponentEncyclopediaEntry entry)
         {
+            // 搜索在展示字段上做宽松匹配；不要把用户输入写入 Definition 名称或用搜索结果推断元件的电气类别。
             if (string.IsNullOrWhiteSpace(searchText))
             {
                 return true;
@@ -828,6 +848,8 @@ namespace ElectricalSim.UI
 
         private Sprite ResolveIcon(ComponentDefinition definition)
         {
+            // 图标按正式资源、visual prefab、fallback 的顺序解析。fallback 只保证百科仍可阅读，不代表元件已有
+            // 对应 runtime visual 或 terminal anchor。
             // 与 PaletteController 使用同一 Runtime Catalog 优先级，防止 Editor 与 Player 出现不同的图片链路。
             if (definition == null)
             {
@@ -896,6 +918,7 @@ namespace ElectricalSim.UI
 
         private Sprite GetFallbackSprite()
         {
+            // 后备图只保证缺少资源时卡片仍可识别；不回写 Definition，也不把临时 Sprite 作为百科或运行时规格数据。
             if (fallbackSprite != null)
             {
                 return fallbackSprite;
@@ -1057,6 +1080,8 @@ namespace ElectricalSim.UI
         {
             public static List<ComponentEncyclopediaEntry> Build(List<ComponentDefinition> definitions)
             {
+                // 展示条目由静态规格和少量百科覆盖规则构成。覆盖规则可改善术语/说明，但不得改变 Definition 的
+                // terminal、参数或支持能力；这些仍由正式资产和 runtime 服务解释。
                 var overrides = BuildOverrides();
                 var result = new List<ComponentEncyclopediaEntry>();
                 foreach (var definition in definitions)
@@ -1085,6 +1110,7 @@ namespace ElectricalSim.UI
 
             private static ComponentEncyclopediaEntry CreateDefaultEntry(ComponentDefinition definition)
             {
+                // 默认条目从正式 Definition 复制可展示的规格，再由覆盖表补充教学文案；百科扩展不能反向创建新的电气行为。
                 var category = ResolveCategory(definition);
                 return new ComponentEncyclopediaEntry
                 {
@@ -1109,6 +1135,8 @@ namespace ElectricalSim.UI
 
             private static Dictionary<string, ComponentEncyclopediaEntry> BuildOverrides()
         {
+                // 覆盖表按稳定 Definition 名称索引，避免依赖可本地化的 displayName。新增条目前需确认它只影响百科文本，
+                // 而不是为缺失规格偷偷补充新的业务行为。
             return new Dictionary<string, ComponentEncyclopediaEntry>(StringComparer.OrdinalIgnoreCase)
             {
                 {
@@ -1629,7 +1657,7 @@ namespace ElectricalSim.UI
 
             private static void ApplyOverride(ComponentEncyclopediaEntry target, ComponentEncyclopediaEntry source)
             {
-                // Do NOT overwrite DisplayName, let GetDisplayName handle it
+                // 覆盖表只替换教学展示字段；显示名称仍由统一的 GetDisplayName 解析，避免本地化文案意外改变 Definition 的稳定身份。
                 target.Category = source.Category;
                 target.CircuitType = source.CircuitType;
                 target.RatedVoltage = source.RatedVoltage;

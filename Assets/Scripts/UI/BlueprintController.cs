@@ -13,6 +13,9 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class BlueprintController : MonoBehaviour
     {
+        // 图纸集管理的是“可被展示和选择的目录项”及其卡片状态。内置模板、用户保存图纸、展示卡片与运行时
+        // Workspace 是不同层的对象：本类不能把预览图片或 selectedIndex 当成已加载电路，也不能直接生成元件。
+        // 查看、加载、进入练习必须保持各自的副作用边界，避免一个卡片点击同时隐式改变画布、会话和参考面板。
         private const float PageMargin = 28f;
         private const float CardWidth = 446f;
         private const float CardHeight = 336f;
@@ -53,6 +56,8 @@ namespace ElectricalSim.UI
 
         private void ApplyTheme()
         {
+            // 主题遍历只修正现有卡片和筛选控件的表现。不要在样式路径改变 catalog、过滤条件或选择索引，
+            // 否则窗口重绘会引入与用户操作无关的列表状态变化。
             var bg = GetComponent<Image>();
             if (bg != null) bg.color = MainUiTheme.Hex("F8FBFF");
 
@@ -493,6 +498,8 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // Awake 负责连接场景绑定、目录和动态卡片刷新入口。重复进入页面时必须复用/清理既有 listener，
+            // 不能让同一张图纸卡因 UI rebuild 触发多次预览、加载或练习请求。
             // 初始化先读取/整理 Catalog 与卡片，再绑定筛选和预览按钮；页面状态只在本控制器内维护。
 
             // Scene-authored cards are legacy gallery placeholders. Keep one as
@@ -630,6 +637,7 @@ namespace ElectricalSim.UI
 
         private void OpenPreview(int index)
         {
+            // 预览只读取目录项并展示缩略图与说明；它不加载模板、不清空 Workspace，也不建立练习会话。
             // 预览只消费当前 Catalog 项的展示资源，不加载模板、不改写 Workspace，也不改变练习评分状态。
             selectedIndex = index;
             if (previewModal != null)
@@ -642,6 +650,7 @@ namespace ElectricalSim.UI
 
         private void ClosePreview()
         {
+            // 关闭预览只撤销 modal 可见性和临时选中展示，不回滚用户对当前 Workspace 或 PracticeSession 的正式状态。
             if (previewModal != null)
             {
                 previewModal.SetActive(false);
@@ -650,6 +659,8 @@ namespace ElectricalSim.UI
 
         private void EnterConfiguration()
         {
+            // 进入配置的公开入口负责处理当前 UI 状态与确认路径；真正的模板加载或练习会话由内部正式流程委托，
+            // 不能通过按钮文本或卡片层级推断模板身份。
             // 此入口保留图纸集到练习/配置的既有调用顺序；不要在这里复制 TemplateLoadController 的生成算法。
             var templateItem = ResolveSelectedTemplateItem();
             if (templateItem != null)
@@ -811,6 +822,8 @@ namespace ElectricalSim.UI
 
         private void EnterConfigurationInternal()
         {
+            // 此处根据目录项类型选择“加载到工作区”或“进入练习”的正式入口。它只消费 guard/loader 的结果，
+            // 不维护第二套锁定状态，也不能先隐藏 UI 再假定模板加载必定成功。
             // 非 PracticeSessionController 的兼容回退路径；仍按当前 selectedIndex 调用既有页面加载逻辑。
             ClosePreview();
             navigation?.SelectTab(0);
@@ -834,6 +847,8 @@ namespace ElectricalSim.UI
 
         private void ApplyBlueprint(int index, Text title, Image image)
         {
+            // 卡片详情是 catalog 的展示投影。图片和标题缺失可安全 fallback，但 fallback 不能改写 catalog 条目、
+            // 资源路径或用户保存图纸的真实内容。
             if (title != null)
             {
                 title.text = index >= 0 && index < blueprintNames.Count ? blueprintNames[index] : string.Empty;
@@ -849,6 +864,7 @@ namespace ElectricalSim.UI
 
         private void ApplyRecommendation(int index)
         {
+            // 推荐说明用于解释当前目录项与练习变体的展示差异；它不参与模板匹配、评分或 Workspace 的实际接线恢复。
             if (referenceRecommendations == null)
             {
                 return;
@@ -904,6 +920,7 @@ namespace ElectricalSim.UI
 
         private void ApplyReferenceDetailLayout()
         {
+            // 参考图区域的尺寸约束只解决可读性和缩放边界。图像及说明是只读资料，不能被当作当前图纸的拓扑或元件参数来源。
             if (referenceRecommendations != null)
             {
                 referenceRecommendations.font = MainUiTheme.DenseUiFont;
@@ -934,6 +951,7 @@ namespace ElectricalSim.UI
 
         private void SetCategory(int category)
         {
+            // 分类/难度/搜索只决定本页的可见卡片集合；它们不能改变目录权威数据，也不应使已选模板在运行时失去 identity。
             activeCategory = category;
             activeDifficulty = -1;
             currentPage = 0;
@@ -949,6 +967,8 @@ namespace ElectricalSim.UI
 
         private void ApplyFilter()
         {
+            // 过滤后重新计算分页和按钮状态，必须以稳定的目录索引为基础。不要把过滤后的局部位置保存为模板 ID，
+            // 否则切换关键字或页码后会把操作施加到另一张图纸。
             var matchIndices = new List<int>();
             for (var i = 0; i < blueprintCards.Count; i++)
             {
@@ -1023,6 +1043,8 @@ namespace ElectricalSim.UI
 
         private void BuildPaginationUI(int totalPages)
         {
+            // 分页节点由本控制器拥有并可重复重建；旧节点及其 listener 必须随 paginationRoot 一起清理，
+            // 防止目录刷新后存在指向过期索引的翻页按钮。
             if (paginationRoot == null)
             {
                 paginationRoot = new GameObject("PaginationRoot", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -1111,6 +1133,7 @@ namespace ElectricalSim.UI
 
         private void RefreshButtonStates()
         {
+            // 按钮高亮仅投影当前筛选/页码/选择状态，不是模板加载、练习进入或保存完成的业务证据。
             RefreshDifficultyLabels();
 
             for (var i = 0; i < categoryButtons.Count; i++)
@@ -1126,6 +1149,7 @@ namespace ElectricalSim.UI
 
         private void RefreshDifficultyLabels()
         {
+            // 难度标签从已筛选的目录状态重新投影，避免卡片刷新后把上一页的展示值遗留到另一张图纸。
             if (difficultyButtons.Count < 4)
             {
                 return;

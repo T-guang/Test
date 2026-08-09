@@ -15,6 +15,10 @@ namespace ElectricalSim.UI
     /// </summary>
     public sealed class PaletteController : MonoBehaviour
     {
+        // Palette 是创建入口而不是元件数据权威：卡片展示可创建的 ComponentDefinition，并把用户的点击/拖拽意图
+        // 交给 Workspace。卡片、筛选、图标和布局坐标都不等于 CircuitComponent 实例、terminal identity 或电气连接。
+        // 静态 Definition、runtime visual catalog 与 prefab registry 各有职责；本类只选择展示资源和创建入口，不能在
+        // 图标 fallback、搜索或卡片补建路径中篡改元件规格、保存数据或仿真状态。
         [SerializeField] private InputField searchInput;
         [SerializeField] private SaveLoadService saveLoadService;
         [SerializeField] private WorkspaceController workspace;
@@ -76,6 +80,8 @@ namespace ElectricalSim.UI
 
         private void Awake()
         {
+            // 初始化先建立 Palette 壳和筛选监听，再补齐 catalog 卡片，使运行时新卡片立即服从同一搜索/分类状态。
+            // listener 只绑定一次；重复补建不得使同一筛选按钮触发多次 ApplyFilter。
             // 过滤监听器在补齐卡片前建立，保证运行时新增卡片进入同一搜索与分类状态。
             EnsureCardPaletteShell();
             searchInput?.onValueChanged.AddListener(_ => ApplyFilter());
@@ -89,6 +95,8 @@ namespace ElectricalSim.UI
 
         private void Start()
         {
+            // ActionLog 和 Workspace 可能由其他场景控制器稍后准备，因此首帧后只做几何对齐。对齐不会移动元件、
+            // 改变 Workspace view transform 或重置用户已选中的 Palette item。
             // Workspace 与 ActionLog 可能由其他场景控制器稍后准备，因此布局对齐放在 Start。
             if (workspace == null)
             {
@@ -103,6 +111,8 @@ namespace ElectricalSim.UI
 
         private void EnsureCardPaletteShell()
         {
+            // Shell 建立固定标题、Viewport、Content 和折叠手柄层级。标题与手柄留在外层，只有 cards/content 可滚动；
+            // 不要把整个 PaletteRoot 放进 ScrollRect，否则折叠和筛选控件会随内容移动或重复创建。
             var root = transform as RectTransform;
             if (root == null)
             {
@@ -177,6 +187,7 @@ namespace ElectricalSim.UI
 
         private void EnsureCollapseHandle(RectTransform root)
         {
+            // 手柄在外层按名称复用，防止 UI 重建后存在多个点击目标。折叠仅改变可视宽度，不清空 catalog 或 Workspace。
             var parent = root.parent as RectTransform;
             if (parent == null)
             {
@@ -283,6 +294,8 @@ namespace ElectricalSim.UI
 
         private void ApplyLeftPanelLayout(float width)
         {
+            // 左侧面板宽度与 Workspace/ActionLog 可用区域同步，但仅是表现层预留。不能把 width 或 collapsed 状态作为
+            // 元件可放置、接线合法或仿真可运行的业务条件。
             var root = transform as RectTransform;
             if (root != null)
             {
@@ -325,6 +338,7 @@ namespace ElectricalSim.UI
 
         private void AlignWorkspaceToPalette(float width)
         {
+            // 元件池折叠只改变 Workspace 的可视边界；组件实例位置、端子坐标和 Wire endpoint 都保持在各自的画布坐标系中。
             var parent = transform.parent;
             if (parent == null)
             {
@@ -342,6 +356,7 @@ namespace ElectricalSim.UI
 
         private void AlignActionLogToPalette()
         {
+            // 操作记录跟随元件池宽度是界面布局约束，不能据此推断 Workspace 当前是否锁定、是否运行或是否存在选中对象。
             var parent = transform.parent;
             var logPanel = parent != null ? parent.Find("ActionLogPanel") as RectTransform : null;
             if (logPanel == null)
@@ -381,6 +396,8 @@ namespace ElectricalSim.UI
 
         private void EnsureFilterButtons(RectTransform root)
         {
+            // 筛选按钮是 presentation 控件，按固定名称复用。按钮是否高亮不能替代 currentFilter，也不能成为 catalog
+            // 是否包含某个 Definition 的判断依据。
             var row = transform.Find("PaletteFilterRow") as RectTransform;
             if (row == null)
             {
@@ -501,6 +518,7 @@ namespace ElectricalSim.UI
 
         private void HideLegacySearchBox()
         {
+            // 历史搜索控件仅为兼容场景层级而隐藏；新的筛选路径必须集中使用当前输入框，避免两个输入同时修改可见性。
             if (searchInput == null)
             {
                 searchInput = GetComponentInChildren<InputField>(true);
@@ -517,6 +535,8 @@ namespace ElectricalSim.UI
 
         private void EnsureViewportPosition()
         {
+            // Viewport 几何负责可达性和裁剪。卡片的 anchoredPosition 只描述 UI 布局，绝不能参与元件 definition、
+            // terminal anchor 或 Wire topology 的计算。
             var viewport = transform.Find("PaletteViewport") as RectTransform;
             if (viewport == null)
             {
@@ -791,6 +811,8 @@ namespace ElectricalSim.UI
 
         private void EnsureSectionTitleObjects()
         {
+            // 分区标题与 itemRects 是同一内容树的展示索引。补建时保持 categoryOrder 的稳定顺序，不能根据当前搜索
+            // 结果重新定义分类或改变 catalog 本身的排列。
             if (content == null)
             {
                 return;
@@ -817,6 +839,8 @@ namespace ElectricalSim.UI
 
         private void AddMissingCatalogItems()
         {
+            // catalog 补齐只创建缺失卡片，不删除运行时已有的合法卡片。Definition 仍来自 SaveLoadService 的目录，
+            // 因此不能通过卡片名称猜测 kind 或手写一份平行 catalog。
             // 仅为当前 Catalog 中可见且场景未预置的定义创建展示卡，不修改 ComponentDefinition 或 Workspace。
             if (content == null)
             {
@@ -872,6 +896,8 @@ namespace ElectricalSim.UI
 
         private void CreateRuntimePaletteItem(ComponentDefinition definition)
         {
+            // 创建的 item 是 Definition 的一次展示投影；点击/拖放应由 item 的正式 Workspace 入口创建新实例，
+            // 不得复用卡片对象作为 Canvas 上的 CircuitComponent。
             // 动态卡片只承载展示和交互入口；元件定义由 SaveLoadService.Catalog 提供，
             // 实际拖入画布和元件生成继续由 PaletteItem 与 Workspace 的既有流程负责。
             var itemObject = new GameObject("Palette_" + definition.name, typeof(RectTransform), typeof(Image), typeof(PaletteItem));
@@ -894,6 +920,7 @@ namespace ElectricalSim.UI
 
         private void UpgradeExistingItems()
         {
+            // 兼容升级只补齐旧场景卡片的视觉/交互外壳，保留其已有引用和排序。不要在此处重写定义、Wire 或选择状态。
             for (var i = 0; i < itemRects.Count; i++)
             {
                 var rect = itemRects[i];
@@ -913,6 +940,8 @@ namespace ElectricalSim.UI
 
         private void ConfigureCard(RectTransform rect, ComponentDefinition definition)
         {
+            // Card 配置可更新标题、图标、尺寸和拖拽入口；definition 的 stable asset name、terminalId 与参数不因显示名
+            // 或图标 fallback 而变化。资源缺失时只降级视觉，不应阻断已支持元件的创建。
             if (rect == null || definition == null)
             {
                 return;
@@ -1041,6 +1070,8 @@ namespace ElectricalSim.UI
 
         private static Sprite ResolvePaletteIcon(ComponentDefinition definition)
         {
+            // 图标解析优先走 runtime catalog，使 Editor/Player 使用一致资源；Editor 专用的 AssetDatabase 回退不得泄漏
+            // 为 Player 依赖。任何 fallback 都是视觉占位，不声明该组件存在 prefab 或仿真支持。
             // Player 必须先走 Runtime Catalog 的序列化 Sprite 引用，不能依赖 Assets 路径或 AssetDatabase。
             if (definition == null)
             {
@@ -1228,6 +1259,8 @@ namespace ElectricalSim.UI
 
         private void ApplyFilter()
         {
+            // 搜索与类别筛选只切换卡片/标题可见性，保留完整 catalog 和 item 索引。过滤后不能重排或删除 Definition，
+            // 也不能让隐藏卡片失去被模板、保存图纸或已放置实例引用的可能性。
             // 搜索和分类只改变卡片可见性，不重建 Catalog、不改变定义排序，也不影响已在画布上的元件。
             var query = searchInput != null ? searchInput.text.Trim() : string.Empty;
             var y = -14f;
@@ -1352,6 +1385,7 @@ namespace ElectricalSim.UI
 
         private void SetFilter(PaletteFilter filter)
         {
+            // currentFilter 是唯一筛选状态来源；按钮视觉在 ApplyFilter 后同步，避免通过 UI active 状态反推筛选语义。
             currentFilter = filter;
             ApplyFilter();
         }

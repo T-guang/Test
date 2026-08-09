@@ -29,6 +29,10 @@ namespace ElectricalSim.EditorTools
     /// </summary>
     public static class DemoSceneBuilder
     {
+        // 这是 Editor 侧的“组装者”：负责创建 Demo.unity、Definition 资产和运行时组件之间的场景引用，
+        // 但不拥有仿真、拓扑、规则或模板业务逻辑。任何业务行为必须继续由挂载到场景中的正式 runtime 组件实现。
+        // 对象名、层级、SerializedField 连接、Canvas/EventSystem/Raycaster 组合都是既有 runtime 查找路径的契约；
+        // 改动生成顺序或名称前必须复核 Player 启动、动态 UI 补建和场景引用，不能仅凭 Editor 中场景可保存判断安全。
         private const string DataFolder = "Assets/Data";
         private const string ArtFolder = "Assets/Art";
         private const string ComponentArtFolder = "Assets/Art/Components";
@@ -51,6 +55,9 @@ namespace ElectricalSim.EditorTools
         [MenuItem("Tools/Electrical Demo/Build Demo Scene")]
         public static void BuildDemoScene()
         {
+            // 生成顺序不可任意交换：先确保资产目录和 Definition，再创建空场景的 EventSystem、Camera 与 Canvas，
+            // 最后由 Canvas 组装依赖这些对象的 Workspace、Palette、Inspector、导航和页面控制器。此入口会覆盖
+            // Demo 场景，因而是维护工具而非运行时初始化或无副作用的预览命令。
             // 此菜单会创建并保存实际资产与 Demo.unity，不是可安全重复运行的只读预览。
             EnsureFolders();
             var definitions = BuildDefinitions();
@@ -69,6 +76,8 @@ namespace ElectricalSim.EditorTools
 
         private static void EnsureFolders()
         {
+            // 目录创建只确保正式资产路径存在，不迁移或重命名已有资源；路径常量同时被 Builder、Resources 加载和
+            // 模板/视觉引用消费，不能把“目录整理”混入场景重建。
             if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
             if (!AssetDatabase.IsValidFolder(DataFolder)) AssetDatabase.CreateFolder("Assets", "Data");
             if (!AssetDatabase.IsValidFolder(ArtFolder)) AssetDatabase.CreateFolder("Assets", "Art");
@@ -79,6 +88,8 @@ namespace ElectricalSim.EditorTools
 
         private static List<ComponentDefinition> BuildDefinitions()
         {
+            // Definition 是静态规格资产。Builder 在此集中创建/更新它们，后续 Palette、百科、模板 Spawn 和
+            // Workspace 实例化共享同一份规格；不要在各个 UI 组装方法内复制 terminals 或参数列表。
             DeleteObsoleteDefinitions();
             var threePhasePowerSprite = EnsureThreePhasePowerSprite();
 
@@ -121,6 +132,8 @@ namespace ElectricalSim.EditorTools
 
         private static void DeleteObsoleteDefinitions()
         {
+            // 该删除列表是资产迁移契约的一部分，只能移除已确认不再被模板、Catalog 或场景引用的旧 Definition。
+            // 不要把按名称删除扩展为“清理所有未使用资产”，否则 Builder 会在一次场景重建中产生不可逆的数据损失。
             // 固定旧资产清单属于生成契约；变更前须确认不会误删仍被现有模板或场景引用的 Definition。
             var obsoleteAssets = new[] { "Single_Switch", "Fuse", "Push_Button", "Contactor_Coil", "Motor_220V" };
             foreach (var assetName in obsoleteAssets)
@@ -146,6 +159,7 @@ namespace ElectricalSim.EditorTools
 
         private static Sprite EnsureThreePhasePowerSprite()
         {
+            // 三相电源图仅是 Definition 的展示资源；这里保证导入设置可复现，不能把生成位图当作端子、相别或仿真行为的来源。
             if (!File.Exists(ThreePhasePowerSpritePath))
             {
                 GenerateThreePhasePowerPng(ThreePhasePowerSpritePath);
@@ -168,6 +182,7 @@ namespace ElectricalSim.EditorTools
 
         private static void GenerateThreePhasePowerPng(string path)
         {
+            // 资源缺失时生成最小后备图，避免场景构建依赖手工预置文件；生成结果仍需经过 Unity 的正式导入流程才可被运行时引用。
             const int width = 568;
             const int height = 112;
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
@@ -247,6 +262,8 @@ namespace ElectricalSim.EditorTools
 
         private static List<BlueprintEntry> EnsureBlueprintCatalog()
         {
+            // 图纸目录是展示层的索引：负责标题、难度、缩略图等元数据，不替代模板 JSON。目录重建必须保持条目的
+            // 稳定 identity 与资源路径，使 Blueprint、Gallery 和练习入口能够指向同一份正式模板。
             EnsureBlueprintCatalogFile();
             var entries = LoadBlueprintCatalogFromCsv();
 
@@ -459,6 +476,8 @@ namespace ElectricalSim.EditorTools
 
         private static void AddIndustrialDefinitions(List<ComponentDefinition> definitions)
         {
+            // 工业元件规格集中追加，避免家庭/工业 UI 各自维护一份端子定义。Definition 的显示名称可用于展示，
+            // 但资产名、terminalId 和 kind 是模板、保存和拓扑真正依赖的稳定字段。
             definitions.Add(CreateIndustrial("Fuse_1P", "\u7194\u65ad\u56681P(FU)", ComponentKind.Fuse, new Color(0.92f, 0.94f, 0.96f), new Color(0.92f, 0.2f, 0.16f), true, true,
                 T("IN", "\u8fdb", TerminalRole.Input, 0.5f, 1f, Red()),
                 T("OUT", "\u51fa", TerminalRole.Output, 0.5f, 0f, Red())));
@@ -741,6 +760,8 @@ namespace ElectricalSim.EditorTools
 
         private static void ConfigureSupportProfile(ComponentDefinition definition, string assetName, ComponentKind kind)
         {
+            // 支持档案只声明产品能力边界，不能以“在 Palette 可见”推断运行时一定可仿真。所有参与开关需与实际
+            // Simulation/Validation 支持集保持一致，避免 Builder 生成一个 UI 可选但没有安全反馈的组件。
             definition.supportLevel = ComponentSupportLevel.RuntimeSupported;
             definition.showInPalette = true;
             definition.unsupportedReason = string.Empty;
@@ -834,6 +855,7 @@ namespace ElectricalSim.EditorTools
 
         private static void ConfigureEditableParameters(ComponentDefinition definition, string assetName)
         {
+            // 可编辑参数属于规格的教学输入契约；不要把当前实例运行态、分析结果或 UI 临时文本写入 Definition 资产。
             var parameters = new List<ComponentParameter>();
 
             if (assetName == "AC_220V_Power")
@@ -934,6 +956,8 @@ namespace ElectricalSim.EditorTools
 
         private static void ConfigureElectricalProfile(ComponentDefinition definition, string assetName, ComponentKind kind)
         {
+            // 电气档案只填充静态额定值和能力标记。它不创建内部导通、不会替代 RuntimeStateManager，也不应因视觉
+            // prefab 的存在而改变元件拓扑语义。
             ResetElectricalProfile(definition);
 
             switch (kind)
@@ -1087,11 +1111,14 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildEventSystem()
         {
+            // EventSystem 必须在交互 UI 之前建立，且只保留一个正式输入模块；重复 EventSystem 会导致点击、拖拽
+            // 和 ScrollRect 事件被重复派发，表现为非确定性的 Palette/Workspace 交互。
             new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         }
 
         private static void BuildCamera()
         {
+            // Demo 使用确定的正交相机作为 UI/Workspace 的共同视图基线。这里仅配置场景承载环境，不参与画布缩放或电路坐标换算。
             var cameraObject = new GameObject("Main Camera", typeof(Camera));
             cameraObject.tag = "MainCamera";
             cameraObject.GetComponent<Camera>().clearFlags = CameraClearFlags.SolidColor;
@@ -1100,6 +1127,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildCanvas(List<ComponentDefinition> definitions)
         {
+            // Canvas 组装 runtime controller 并写入它们的 SerializedField 引用。Builder 只完成依赖连接：不要在此处
+            // 复制 Workspace、规则、保存或导航的实现。子层级名称和父子关系会被运行时 Find/兼容补建路径使用。
             var canvasObject = new GameObject("AppCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(TopNavigationController), typeof(DemoUIController), typeof(BlueprintController), typeof(SaveLoadService), typeof(DemoRuntimeBootstrap), typeof(LoginController));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -1211,6 +1240,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildNavigation(RectTransform parent, TopNavigationController controller, GameObject simulationRoot, GameObject blueprintRoot, GameObject encyclopediaRoot, GameObject toolsRoot, GameObject emptyRoot, Text emptyTitle)
         {
+            // 导航只接收各页面根节点和 controller 引用；页面内容由各自 controller 或 Builder 专用方法创建。
+            // 不能用导航的 active 状态替代 Practice/Simulation 的正式退出守卫。
             var names = new[] { "模拟电路", "图纸集", "仿真广场", "元器件百科", "常用工具", "个人中心" };
             var widths = new[] { 124f, 104f, 124f, 152f, 124f, 124f };
             var buttons = new List<Button>();
@@ -1240,6 +1271,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildToolbar(RectTransform parent, DemoUIController controller, WorkspaceController workspace, SaveLoadService saveLoad)
         {
+            // Toolbar 只绑定正式命令入口。按钮文本、图标和位置是表现层；点击后的选择、撤销、运行和保存生命周期
+            // 仍由 DemoUIController、WorkspaceController 和 SaveLoadService 负责，不能在 Builder 中复制处理逻辑。
             var buttons = new List<Button>();
             buttons.Add(CreateButton("StartSimulation", parent, "开始仿真", new Vector2(118f, 0f), new Color(0.12f, 0.45f, 1f), Color.white, new Vector2(136f, 48f), 18));
             buttons.Add(CreateButton("ClearWires", parent, "删除所有线", new Vector2(278f, 0f), Color.white, new Color(0.95f, 0.12f, 0.12f), new Vector2(148f, 48f), 18));
@@ -1369,6 +1402,7 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildToolsPage(RectTransform parent)
         {
+            // 常用工具页只装配入口容器与其序列化引用；具体计算、公式和资料内容由对应页面控制器维护，不能在 Builder 中复制计算规则。
             if (parent.GetComponent<CommonToolsPageController>() == null)
             {
                 parent.gameObject.AddComponent<CommonToolsPageController>();
@@ -1395,6 +1429,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildEncyclopediaPage(RectTransform parent, List<ComponentDefinition> definitions)
         {
+            // 百科页面的初始容器与 Definition 列表引用在此连接；百科 controller 负责动态筛选和详情渲染，
+            // 不能让 Builder 生成的展示文本成为运行时 Definition 或当前 Workspace 状态的权威来源。
             var controller = parent.gameObject.AddComponent<EncyclopediaController>();
             var title = CreateText("EncyclopediaTitle", parent, "元器件百科", 32, TextAnchor.MiddleLeft);
             SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(34f, -30f), new Vector2(320f, 54f));
@@ -1702,6 +1738,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildBlueprintPage(RectTransform parent, BlueprintController controller, TopNavigationController navigation, List<BlueprintEntry> catalog)
         {
+            // 图纸集卡片、预览和练习入口共享 catalog 元数据，但“查看、加载、进入练习”具有不同副作用；实际模板
+            // 读取、画布重建和会话建立必须继续委托对应的 production controller/service。
             var industrialCount = catalog.FindAll(item => item.Category == 0).Count;
             var homeCount = catalog.FindAll(item => item.Category == 1).Count;
             var primaryCount = catalog.FindAll(item => item.Category == 0 && item.Difficulty == 0).Count;
@@ -1831,6 +1869,7 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildReferencePanel(RectTransform simulationRoot, BlueprintController controller)
         {
+            // 参考图面板是 Blueprint 的只读展示入口。它引用控制器公开的选择结果，却不能反向修改模板、Workspace 实例或练习状态。
             var panel = CreatePanel("BlueprintReferencePanel", simulationRoot, Color.white, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-22f, -40f), new Vector2(560f, 560f));
             panel.gameObject.SetActive(false);
             var dragZoom = panel.gameObject.AddComponent<BlueprintReferencePanel>();
@@ -1871,6 +1910,8 @@ namespace ElectricalSim.EditorTools
 
         private static void BuildPalette(RectTransform palette, WorkspaceController workspace, List<ComponentDefinition> definitions)
         {
+            // Palette 只展示可创建的 Definition 并向 Workspace 发出放置意图。卡片坐标和滚动几何不能参与端子身份、
+            // 电气连接或保存；Workspace 才拥有实际 CircuitComponent 实例和 Wire。
             var controller = palette.gameObject.AddComponent<PaletteController>();
             var title = CreateText("PaletteTitle", palette, "家庭电路组件", 24, TextAnchor.MiddleLeft);
             SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -24f), new Vector2(260f, 44f));
@@ -1912,6 +1953,7 @@ namespace ElectricalSim.EditorTools
 
         private static float BuildPaletteSection(RectTransform content, WorkspaceController workspace, List<ComponentDefinition> definitions, ComponentCategory category, string title, float y, List<RectTransform> sectionTitles, List<RectTransform> itemRects, List<string> itemNames, List<int> itemCategories)
         {
+            // 此处只把静态 Definition 投影为 Palette 卡片。返回值是下一段展示布局的纵向游标，不能被解释为元件位置或任何电气坐标。
             var sectionTitle = CreateText("Section_" + category, content, title, 22, TextAnchor.MiddleLeft);
             SetRect(sectionTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, y), new Vector2(320f, 40f));
             sectionTitles.Add(sectionTitle.rectTransform);
@@ -1940,6 +1982,7 @@ namespace ElectricalSim.EditorTools
 
         private static RectTransform CreatePaletteItem(RectTransform content, WorkspaceController workspace, ComponentDefinition definition, Vector2 position)
         {
+            // 卡片保存的是“创建该规格”的用户意图；PaletteItem 在交互后委托 Workspace 创建实例，卡片自身不拥有 CircuitComponent 或 Wire。
             var item = CreatePanel("Palette_" + definition.name, content, new Color(0.94f, 0.96f, 0.98f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), position, new Vector2(122f, 92f));
             item.gameObject.AddComponent<Button>();
             var label = CreateText("Label", item, definition.displayName, 14, TextAnchor.MiddleCenter);
