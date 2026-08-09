@@ -17,7 +17,7 @@ namespace ElectricalSim.Spice.Workspace
     public enum SpiceWorkspaceResultState { NeverRun, Running, Current, Stale, Failed }
 
     /// <summary>
-    /// 独立 DC 原型的 UGUI 宿主。SpiceWorkspaceModel 是本原型唯一的电路事实来源；
+    /// 独立 SPICE Workspace 的 UGUI 编排 Controller。SpiceWorkspaceModel 是可编辑电路事实来源；
     /// 本类不读取或写入正式 WorkspaceController、WireManager、模板或检查助手。
     /// 参数和拓扑变更会使计算结果过期，纯画布移动仅刷新视图位置。
     /// </summary>

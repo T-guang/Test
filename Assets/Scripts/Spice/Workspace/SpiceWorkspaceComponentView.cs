@@ -10,9 +10,9 @@ using UnityEngine.UI;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// SPICE 原型元件的 UGUI 表现层。SymbolRoot 承载可旋转的符号、端子和参考标记；
+    /// SPICE Workspace 元件的 UGUI 表现层。SymbolRoot 承载可旋转的符号、端子和参考标记；
     /// AnnotationRoot 保持水平显示设计编号和工程单位参数。旋转只改变视觉位置，
-    /// 不写入 SpiceCircuitModel，也不会使 DC 结果过期。
+    /// 不写入 SpiceCircuitModel；纯视觉旋转不改变电气模型，因而不使当前仿真结果过期。
     /// </summary>
     public sealed class SpiceWorkspaceComponentView : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
     {

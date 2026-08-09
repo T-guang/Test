@@ -10,6 +10,8 @@ using ElectricalSim.Spice.Topology;
 
 namespace ElectricalSim.Spice.Core
 {
+    // AC 服务负责从本次求解传入的 SpiceCircuitModel 输入走完“拓扑校验 → AC 网表 → ngspice 进程 → 输出解析 → 结果投影”的求解链。
+    // 它不拥有 Workspace UI 或旧结果状态；调用方必须依据返回的 Success/Diagnostics 决定如何呈现或将结果标记为 stale。
     public sealed class SpiceAcSimulationService
     {
         private readonly Func<string, TimeSpan, string, CancellationToken, Task<NgspiceRunResult>> runRawNetlistAsync;
@@ -28,6 +30,7 @@ namespace ElectricalSim.Spice.Core
 
         public async Task<SpiceSimulationResult> SimulateAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken = default(CancellationToken))
         {
+            // 每次请求独立创建结果容器，使失败路径仍保留分析设置、已生成网表和诊断；不要以异常或空结果替代可展示的失败事实。
             var result = CreateResult(circuit);
             if (circuit == null || circuit.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency)
             {

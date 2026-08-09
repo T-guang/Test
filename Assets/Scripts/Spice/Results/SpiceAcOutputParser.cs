@@ -7,6 +7,8 @@ using ElectricalSim.Spice.Netlist;
 
 namespace ElectricalSim.Spice.Results
 {
+    // 解析器只接受由 SpiceAcNetlistBuilder 明确请求并以 marker 包围的 ngspice 复数输出。
+    // 它不推断缺失量、不格式化教学文本；marker、expression 与 result key 的唯一性是防止普通日志被误当测量值的关键契约。
     public enum SpiceAcParseFailure
     {
         None,

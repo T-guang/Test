@@ -64,6 +64,8 @@ namespace ElectricalSim.Spice.Infrastructure
             bool parseT1Output,
             CancellationToken cancellationToken)
         {
+            // 每次运行使用独立临时目录。runGate 只在同一 Runner 实例内串行化 ngspice 启动与“last_run”诊断写入；
+            // 不同 Runner 实例不受同一 gate 保护，不能假定持久诊断目录的副作用具备全局并发隔离。
             var workingDirectory = Path.Combine(
                 temporaryCachePath,
                 diagnosticScope,

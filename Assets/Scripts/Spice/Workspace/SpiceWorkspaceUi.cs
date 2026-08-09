@@ -14,7 +14,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
 {
-    // 工作区 UI 的既有轻量支持类型；保持完整类型名，避免引入新的运行时架构。
+    // 工作区 UI 的轻量支持类型只保存已构建控件的引用，供 Controller/Presentation 层投影状态。
+    // 它们不拥有 SpiceWorkspaceModel、不会重新计算电气事实；保持类型边界可避免 UI 缓存被误作运行时数据源。
     internal sealed class SpiceScrollableTextView
     {
         public SpiceScrollableTextView(ScrollRect scrollRect, RectTransform viewport, RectTransform content, Text text)

@@ -11,6 +11,7 @@ namespace ElectricalSim.Spice.Results
     /// </summary>
     public static class SpiceDcOutputParser
     {
+        // BJT 仅把 ngspice 的 @q[ic] 作为集电极电流读入；大小写按 ngspice 回显兼容，不能把 ib/ie 或 AC 小信号输出混入该 DC 契约。
         private static readonly Regex ValuePattern = new Regex(@"^\s*(?<kind>[vi])\s*\(\s*(?<id>[^)]+)\s*\)\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly Regex DiodeCurrentPattern = new Regex(@"^\s*@(?<id>[^\[]+)\[id\]\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly Regex BjtCollectorCurrentPattern = new Regex(@"^\s*@(?<id>[^\[]+)\[ic\]\s*=\s*(?<value>[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eEdD][+-]?\d+)?)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);

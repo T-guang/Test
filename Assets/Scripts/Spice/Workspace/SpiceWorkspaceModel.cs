@@ -8,8 +8,9 @@ using UnityEngine;
 namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
-    /// T3 原型的唯一电路事实来源。它与正式 WorkspaceController 完全隔离，
-    /// 只保存可映射为 SpiceCircuitModel 的元件、导线和画布位置。
+    /// SPICE Workspace 的唯一可编辑电路事实来源。它与电工模式的 WorkspaceController 完全隔离，
+    /// 保存 components、wires、位置/旋转/导线视觉状态和 analysis settings，并可构建求解用 SpiceCircuitModel。
+    /// Unity View 只是这些数据的表现层，不能替代元件、端子或导线的电气身份。
     /// </summary>
     public sealed class SpiceWorkspaceModel
     {

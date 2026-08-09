@@ -14,7 +14,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
 {
-    // 仿真请求、revision/cancellation 防线与结果、网表、诊断展示资格；不处理画布交互或文件对话框。
+    // Simulation partial 负责把当前 model 快照提交给 SpiceSimulationService，并管理 Running/Current/Stale/Failed 的结果生命周期。
+    // 它不处理拖拽、文件 schema 或 UI 布局；异步结果返回时必须遵守既有 revision/失效检查，不能覆盖编辑后的新电路状态。
     public sealed partial class SpiceWorkspaceController
     {
         public async Task<SpiceSimulationResult> RunCalculationAsync()

@@ -9,7 +9,9 @@ namespace ElectricalSim.Spice.Workspace
 {
     /// <summary>
     /// 编辑单个 SPICE 元件数值的可复用展示层。
-    /// 解析、SI 换算、校验和模型写入均委托给工作区。
+    /// 对话框负责输入收集、单位/显示转换，以及 AC source 专用字段的前置解析与校验；普通参数仍通过既有 Workspace API 解析并写入模型。
+    /// Workspace Controller / Model 负责正式写入、revision 递增与 stale-result 生命周期。
+    /// 因此这里的输入框缓存不能替代 SpiceWorkspaceModel 中的稳定参数值，也不能成为仿真读取的第二个来源。
     /// </summary>
     public sealed class SpiceComponentParameterDialog : MonoBehaviour
     {

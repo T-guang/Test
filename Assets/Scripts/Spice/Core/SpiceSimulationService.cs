@@ -6,6 +6,8 @@ using ElectricalSim.Spice.Topology;
 
 namespace ElectricalSim.Spice.Core
 {
+    // 统一求解入口只按 AnalysisSettings 分派 DC/AC 服务，并保留可注入委托供受控测试使用。
+    // 它不构建 Unity 视图、不管理 Workspace 结果生命周期，也不应把 UI 模式文本当作分析模式的权威来源。
     public sealed class SpiceSimulationService
     {
         private readonly SpiceDcSimulationService dcService;
@@ -32,6 +34,7 @@ namespace ElectricalSim.Spice.Core
 
         public Task<SpiceSimulationResult> SimulateAsync(SpiceCircuitModel circuit, CancellationToken cancellationToken = default(CancellationToken))
         {
+            // 分派依据是模型中的稳定 AnalysisSettings；新增分析模式时必须同时提供明确服务和失败语义，不能悄悄落入 DC 默认分支。
             if (circuit == null) throw new ArgumentNullException(nameof(circuit));
             switch (circuit.AnalysisSettings.Mode)
             {

@@ -9,7 +9,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
 {
-    // DemoHost 的既有画布展示适配器；只移动类型定义，不承担 Host 生命周期或电气状态。
+    // 对既有 SpiceWorkspaceViewBindings 应用正式 UI 布局、主题和展示适配；可构建或调整纯视觉 symbol、palette 与 assistant UI。
+    // 它不拥有 Host 生命周期，也不修改 SpiceWorkspaceModel 的电气事实。
     internal static class SpiceWorkspacePresentationAdapter
     {
         private const float ToolbarButtonTop = -20f;

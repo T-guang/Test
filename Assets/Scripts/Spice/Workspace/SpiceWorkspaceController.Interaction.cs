@@ -14,7 +14,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
 {
-    // 元件、选择、拖放、接线与画布交互；不承担求解、持久化或 UI 构建。
+    // Interaction partial 只处理用户编辑输入：选择、放置、拖动、接线与删除意图，并委托共享 controller/model 更新电路事实。
+    // 它不保存图纸、不格式化仿真结果、不运行求解；任何编辑完成后必须经统一变更通知使旧结果进入 stale 语义。
     public sealed partial class SpiceWorkspaceController
     {
         /// <summary>保留给验证 Harness 的固定位置创建入口；元件池交互改由拖放入口使用。</summary>

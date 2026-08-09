@@ -9,7 +9,8 @@ using UnityEngine.UI;
 
 namespace ElectricalSim.Spice.Workspace
 {
-    // 助手参数区的既有展示适配器；不提交参数或推进 revision。
+    // 助手参数区只重新投影当前元件选择已有的可读信息；参数编辑和模型校验仍走正式 Workspace 参数写入/模型入口。
+    // 这里的标签、单位和说明文本不是 SpiceComponent 的 stable id、terminal id 或 netlist token，不能被回写为电气事实。
     internal sealed class SpiceAssistantParameterPresentation : MonoBehaviour
     {
         private Text title;
