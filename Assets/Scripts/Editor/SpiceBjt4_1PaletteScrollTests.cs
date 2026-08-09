@@ -47,7 +47,7 @@ namespace ElectricalSim.Editor
             passed = 0;
             failed = 0;
             Summary.Clear();
-            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S10)");
+            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S11)");
 
             Run("S01_HierarchyAndScrollSettings", S01_HierarchyAndScrollSettings);
             Run("S02_TitleRemainsFixed", S02_TitleRemainsFixed);
@@ -59,6 +59,7 @@ namespace ElectricalSim.Editor
             Run("S08_PaletteCardsRetainDragAndClickComponents", S08_PaletteCardsRetainDragAndClickComponents);
             Run("S09_FinalScrollBoundsKeepBottomRowInsideSafeArea", S09_FinalScrollBoundsKeepBottomRowInsideSafeArea);
             Run("S10_OverflowShowsDedicatedScrollbar", S10_OverflowShowsDedicatedScrollbar);
+            Run("S11_TopOfPaletteDoesNotShowPartialCards", S11_TopOfPaletteDoesNotShowPartialCards);
 
             var total = passed + failed;
             Summary.AppendLine();
@@ -110,6 +111,36 @@ namespace ElectricalSim.Editor
                     "滚动条必须包含可拖动 Handle。");
                 CheckTrue(scrollbar != null && scrollbar.gameObject.activeInHierarchy,
                     "内容溢出时滚动条必须可见，向用户提示仍可向下浏览。");
+            });
+        }
+
+        private static void S11_TopOfPaletteDoesNotShowPartialCards()
+        {
+            WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
+            {
+                var scroll = GetPaletteScroll(bindings);
+                scroll.verticalNormalizedPosition = 1f;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+                Canvas.ForceUpdateCanvases();
+
+                var viewportBounds = BoundsInViewport(scroll.viewport, scroll.viewport);
+                foreach (var kind in PaletteOrder)
+                {
+                    var card = scroll.content.Find(kind + "Card") as RectTransform;
+                    var cardBounds = BoundsInViewport(card, scroll.viewport);
+                    var visibleHeight = Mathf.Max(0f, Mathf.Min(cardBounds.top, viewportBounds.top) - Mathf.Max(cardBounds.bottom, viewportBounds.bottom));
+                    CheckTrue(visibleHeight <= 0.1f || visibleHeight >= card.rect.height - 0.1f,
+                        kind + " 在元件池顶部不能只显示半张卡片。");
+                }
+
+                var hint = bindings.PaletteRoot.Find("PaletteScrollHint");
+                var bottomGuard = (scroll.transform as RectTransform).offsetMin.y;
+                if (bottomGuard >= 28f)
+                {
+                    CheckTrue(hint != null && hint.gameObject.activeSelf,
+                        "预留出底部提示区时必须显示“向下滚动查看全部元件”提示。");
+                }
             });
         }
 

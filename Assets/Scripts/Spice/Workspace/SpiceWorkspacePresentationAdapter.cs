@@ -67,6 +67,7 @@ namespace ElectricalSim.Spice.Workspace
             StylePaletteCard(paletteContent, SpiceComponentKind.GenericNpnBjt, "通用 NPN 三极管", "NPN_GENERIC", 0, 6);
             StylePaletteCard(paletteContent, SpiceComponentKind.GenericPnpBjt, "通用 PNP 三极管", "PNP_GENERIC", 1, 6);
             RefreshPaletteContentHeight(paletteContent);
+            AlignPaletteViewportToCompleteRows(bindings.PaletteRoot, paletteContent);
             RequestPaletteScrollBoundsRefresh(paletteContent);
 
             StyleAssistant(bindings);
@@ -185,6 +186,45 @@ namespace ElectricalSim.Spice.Workspace
         }
 
         /// <summary>
+        /// 元件池顶部状态只展示完整卡片行。若最后一行只能露出一部分，会让用户误以为卡片被窗口裁掉；
+        /// 此处把 Viewport 收至上一完整行的底部，并把整行留给 ScrollRect 滚动访问。
+        /// </summary>
+        private static void AlignPaletteViewportToCompleteRows(RectTransform paletteRoot, RectTransform content)
+        {
+            var viewport = content != null ? content.parent as RectTransform : null;
+            var scrollRoot = viewport != null ? viewport.parent as RectTransform : null;
+            if (paletteRoot == null || viewport == null || scrollRoot == null || content == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            var availableHeight = scrollRoot.rect.height;
+            var rowsThatFit = Mathf.FloorToInt((availableHeight - PaletteCardTopPadding + PaletteCardGap) / (PaletteCardHeight + PaletteCardGap));
+            var fullRowsHeight = rowsThatFit > 0
+                ? PaletteCardTopPadding + rowsThatFit * PaletteCardHeight + (rowsThatFit - 1) * PaletteCardGap
+                : availableHeight;
+            var needsScroll = content.rect.height > fullRowsHeight + 0.1f;
+            var bottomInset = needsScroll ? Mathf.Max(0f, availableHeight - fullRowsHeight) : 0f;
+
+            var offsets = scrollRoot.offsetMin;
+            if (!Mathf.Approximately(offsets.y, bottomInset))
+            {
+                offsets.y = bottomInset;
+                scrollRoot.offsetMin = offsets;
+                Canvas.ForceUpdateCanvases();
+            }
+
+            var hint = paletteRoot.Find("PaletteScrollHint") as RectTransform;
+            if (hint == null)
+            {
+                var hintText = SpiceWorkspaceUi.CreateText(paletteRoot, "PaletteScrollHint", "向下滚动查看全部元件 ↓", 12, FontStyle.Normal, TextAnchor.MiddleCenter, MainUiTheme.MutedText);
+                hint = hintText.rectTransform;
+                hintText.raycastTarget = false;
+            }
+
+            Anchor(hint, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(14f, 8f), new Vector2(-14f, 34f));
+            hint.gameObject.SetActive(needsScroll && bottomInset >= 28f);
+        }
+
+        /// <summary>
         /// 卡片由 Controller 创建、再由 Adapter 调整位置和 Content 高度。ScrollRect 的 bounds
         /// 可能早于这次最终布局缓存，尤其在页面激活或分辨率变化的同一帧。这里复用一次性刷新器，
         /// 在最终 Canvas 布局后重建 bounds；不改变卡片尺寸、间距或用户已有的滚动位置。
@@ -231,6 +271,7 @@ namespace ElectricalSim.Spice.Workspace
 
                 refreshPending = false;
                 Canvas.ForceUpdateCanvases();
+                AlignPaletteViewportToCompleteRows(scroll.transform.parent as RectTransform, scroll.content);
                 LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
                 LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
                 scroll.Rebuild(CanvasUpdate.PostLayout);

@@ -34,7 +34,7 @@ namespace ElectricalSim.Editor
             _passed = 0;
             _failed = 0;
             Summary.Clear();
-            Summary.AppendLine("# BJT3 Workspace/UI/Persistence Tests (G1-G12)");
+            Summary.AppendLine("# BJT3 Workspace/UI/Persistence Tests (G1-G13)");
 
             Run("G1_RecommendedInstanceId", G1_RecommendedInstanceId);
             Run("G2_ToSpiceComponentModel_Mapping", G2_ToSpiceComponentModel_Mapping);
@@ -48,6 +48,7 @@ namespace ElectricalSim.Editor
             Run("G10_OldFiles_StillReadable", G10_OldFiles_StillReadable);
             Run("G11_StaleRegression", G11_StaleRegression);
             Run("G12_SameComponentWiring_ImportConsistency", G12_SameComponentWiring_ImportConsistency);
+            Run("G13_FixedModelParameterPanelDoesNotOverlap", G13_FixedModelParameterPanelDoesNotOverlap);
 
             var total = _passed + _failed;
             Summary.AppendLine();
@@ -572,6 +573,54 @@ namespace ElectricalSim.Editor
             CheckEqual(0, expectedPairs.Count, "重导入后缺少原始同元件导线语义。");
             CheckEqual(json, SpiceDrawingSerializer.ToJson(reimported), "同元件导线图纸必须满足确定性往返（方向规范化稳定）。");
             Note("G12: C/B/E 同元件导线序列化按端子字典序规范化（base<collector<emitter），重导入通过连接规则复验且 JSON 确定性稳定。");
+        }
+
+        // ---------- G13：固定模型说明不与通用参数提示或输入控件重叠 ----------
+        private static void G13_FixedModelParameterPanelDoesNotOverlap()
+        {
+            var canvasRoot = new GameObject("SpiceBjtG13Validation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspace(canvasRoot.transform, out var bindings);
+                foreach (var kind in new[]
+                {
+                    SpiceComponentKind.GenericNpnBjt,
+                    SpiceComponentKind.GenericPnpBjt,
+                    SpiceComponentKind.IdealOperationalAmplifier
+                })
+                {
+                    var component = workspace.CreateComponent(kind, Vector2.zero);
+                    workspace.SelectComponent(workspace.GetComponentViewForTesting(component.InstanceId));
+                    Canvas.ForceUpdateCanvases();
+
+                    var root = bindings.ParameterRoot;
+                    var header = root.Find("ParameterHeader") as RectTransform;
+                    var info = root.Find("OpAmpInfo") as RectTransform;
+                    var subtitle = root.Find("ParameterSubtitle");
+                    var input = root.Find("ParameterInput");
+                    var unit = root.Find("Unit");
+                    var apply = root.Find("Apply");
+
+                    CheckTrue(header != null && info != null, kind + " 缺少固定模型参数区结构。");
+                    CheckTrue(info.gameObject.activeSelf, kind + " 必须显示固定模型说明。");
+                    CheckFalse(subtitle.gameObject.activeSelf, kind + " 不得同时显示通用编辑提示。");
+                    CheckFalse(input.gameObject.activeSelf, kind + " 不得显示普通参数输入框。");
+                    CheckFalse(unit.gameObject.activeSelf, kind + " 不得显示单位按钮。");
+                    CheckFalse(apply.gameObject.activeSelf, kind + " 不得显示应用按钮。");
+                    CheckTrue(info.rect.height >= 80f, kind + " 固定模型说明区域必须容纳完整多行文本。");
+                    var headerCorners = new Vector3[4];
+                    var infoCorners = new Vector3[4];
+                    header.GetWorldCorners(headerCorners);
+                    info.GetWorldCorners(infoCorners);
+                    CheckTrue(infoCorners[1].y <= headerCorners[0].y - 8f,
+                        kind + " 固定模型说明必须与参数 Header 保留清晰间隔。");
+                }
+                Note("G13: NPN/PNP/运放均只显示固定模型说明；通用提示和普通编辑控件已隐藏，说明区与 Header 保持独立。");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasRoot);
+            }
         }
 
         // ---------- 无头工作区构造（参照 SpiceT3WorkspaceValidation.Presentation.CreateInitializedWorkspaceForCopy） ----------

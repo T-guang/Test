@@ -129,8 +129,8 @@ namespace ElectricalSim.Spice.Workspace
             SpiceWorkspaceUi.Anchor(apply.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1f, 0f), new Vector2(14f, 10f), new Vector2(-14f, 42f));
             parameterApplyButton = apply;
             opAmpInfoText = SpiceWorkspaceUi.CreateText(parameterRoot, "OpAmpInfo", string.Empty, 13, FontStyle.Normal, TextAnchor.UpperLeft, MainUiTheme.SecondaryText);
-            // 固定模型说明仅使用参数标题下方的专属区域，不能覆盖标题或普通输入控件的位置。
-            SpiceWorkspaceUi.Anchor(opAmpInfoText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 12f), new Vector2(-14f, -164f));
+            // 固定模型说明使用 Header 下方的完整正文区；不与 Header、通用提示或普通输入控件共用位置。
+            SpiceWorkspaceUi.Anchor(opAmpInfoText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(14f, 12f), new Vector2(-14f, -70f));
             opAmpInfoText.gameObject.SetActive(false);
 
             CreatePanelHeader(resultRoot, "ResultHeader", "计算结果", 34f);
@@ -671,6 +671,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             SetOpAmpInfoVisible(false);
             SetNormalParameterControlsVisible(true);
+            SetParameterSubtitleVisible(true);
             if (parameterApplyButton != null) parameterApplyButton.interactable = false;
             if (selectedComponent == null || selectedComponent.Kind == SpiceComponentKind.Ground)
             {
@@ -684,6 +685,7 @@ namespace ElectricalSim.Spice.Workspace
                 var isNpn = selectedComponent.Kind == SpiceComponentKind.GenericNpnBjt;
                 parameterTitle.text = selectedComponent.InstanceId + (isNpn ? " 通用 NPN 三极管" : " 通用 PNP 三极管");
                 SetNormalParameterControlsVisible(false);
+                SetParameterSubtitleVisible(false);
                 opAmpInfoText.text = "教学级模型：" + (isNpn ? SpiceComponentDefaults.NpnGenericModelName : SpiceComponentDefaults.PnpGenericModelName) + "\n端子：collector、base、emitter\n模型参数（IS、BF）固定\n无可编辑参数";
                 SetOpAmpInfoVisible(true);
                 return;
@@ -693,6 +695,7 @@ namespace ElectricalSim.Spice.Workspace
                 // 这个固定 VCVS 没有可编辑参数；视图只呈现 Core 模型边界，任何电气改动仍须由 Controller 编排 Model API。
                 parameterTitle.text = selectedComponent.InstanceId + " 理想运算放大器（线性）";
                 SetNormalParameterControlsVisible(false);
+                SetParameterSubtitleVisible(false);
                 opAmpInfoText.text = "固定开环增益：1e6\n端子：IN+、IN-、OUT\n线性理想模型，无电源引脚和饱和限制\n无可编辑参数";
                 SetOpAmpInfoVisible(true);
                 return;
@@ -745,6 +748,7 @@ namespace ElectricalSim.Spice.Workspace
         {
             SetNormalParameterControlsVisible(true);
             SetOpAmpInfoVisible(false);
+            SetParameterSubtitleVisible(true);
             parameterTitle.text = "参数设置";
             parameterInput.text = string.Empty;
             parameterInput.interactable = false;
@@ -763,6 +767,14 @@ namespace ElectricalSim.Spice.Workspace
             if (parameterInput != null) parameterInput.gameObject.SetActive(visible);
             if (unitButton != null) unitButton.gameObject.SetActive(visible);
             if (parameterApplyButton != null) parameterApplyButton.gameObject.SetActive(visible);
+        }
+
+        private void SetParameterSubtitleVisible(bool visible)
+        {
+            var subtitle = bindings != null && bindings.ParameterRoot != null
+                ? bindings.ParameterRoot.Find("ParameterSubtitle")
+                : null;
+            if (subtitle != null) subtitle.gameObject.SetActive(visible);
         }
 
         private void CycleUnit()
