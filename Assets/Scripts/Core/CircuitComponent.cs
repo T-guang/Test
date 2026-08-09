@@ -14,6 +14,9 @@ namespace ElectricalSim.Core
     [RequireComponent(typeof(RectTransform))]
     public sealed class CircuitComponent : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerDownHandler, IPointerUpHandler
     {
+        // Definition 是可复用规格，InstanceId 是图纸内稳定的实例身份；运行时得电、测量和外观刷新
+        // 都属于该实例当前状态，不能反向写回 Definition 或替代保存拓扑。视觉 Prefab 只提供显示与锚点，
+        // 端子电气身份仍由 Definition 的 terminalId 决定；保留该 MonoBehaviour 与其 GUID 可避免 Scene/Prefab 引用失效。
         // KM 视觉试点。关闭后恢复默认矩形外观。
         private const bool useExperimentalKmVisualPrefab = false;
         private const bool showExperimentalKmTerminalDebugMarkers = false;
@@ -120,6 +123,9 @@ namespace ElectricalSim.Core
         private VisualPrefabInstance configuredVisualPrefab;
         private KTTimerVisualController ktTimerVisualController;
 
+        // 初始化把静态规格、图纸实例、表现对象和端子对象按固定顺序绑定在一起。
+        // Definition 提供规格和默认值，InstanceId 标识当前图纸中的实例，TerminalView 则是此实例的
+        // 可接线端子；运行态只在仿真期间派生，视觉 Prefab 只负责显示。任一层都不能替代另一层。
         public void Initialize(ComponentDefinition definition, WorkspaceController owner, string instanceId = null)
         {
             // 初始化顺序不可随意调整：先复制定义参数，再挂接视觉与端子，
@@ -175,6 +181,8 @@ namespace ElectricalSim.Core
 
         public void SetParameters(IEnumerable<ComponentParameter> parameters)
         {
+            // 实例参数是图纸级可保存数据；Definition 参数只是新实例的默认来源。
+            // 运行态测量值与开合状态不经由该入口持久化，避免一次仿真结果污染元件规格。
             if (!HasAnyParameter(parameters) &&
                 parameterSet.parameters != null &&
                 parameterSet.parameters.Count > 0)
@@ -274,6 +282,7 @@ namespace ElectricalSim.Core
 
         public void SetEnergized(bool energized)
         {
+            // 得电是仿真派生状态：这里只缓存并刷新本实例的显示，不把视觉颜色作为任何电气判断输入。
             IsEnergized = energized;
             RefreshVisual();
         }
@@ -292,6 +301,7 @@ namespace ElectricalSim.Core
 
         public void SetClosed(bool closed)
         {
+            // 开合是当前可导通状态，不等同于 Definition 的默认 startsClosed；保存/重建时由各自生命周期入口恢复。
             IsClosed = closed;
             RefreshVisual();
         }
@@ -338,6 +348,8 @@ namespace ElectricalSim.Core
             return true;
         }
 
+        // 单击负责选中，双击只在可操作区域内切换可切换元件。瞬时按钮不在 click 阶段改变状态，
+        // 以免 click 的离散事件与按住期间的实际导通生命周期混为一谈。
         public void OnPointerClick(PointerEventData eventData)
         {
             if (workspace != null && workspace.IsInteractionLocked)
@@ -356,6 +368,8 @@ namespace ElectricalSim.Core
             }
         }
 
+        // PointerDown/PointerUp 成对表达瞬时按钮的按住状态：按下立即形成当前导通状态，松开立即
+        // 恢复 Definition 的默认状态；这与自锁按钮由 Toggle 保持状态的语义不同。
         public void OnPointerDown(PointerEventData eventData)
         {
             if (workspace != null && workspace.IsInteractionLocked) return;
@@ -392,6 +406,8 @@ namespace ElectricalSim.Core
             workspace?.MarkSimulationDirty(pressed ? "瞬时按钮已按下，点击开始仿真刷新结果。" : "瞬时按钮已释放，点击开始仿真刷新结果。");
         }
 
+        // UI 被禁用、切换页面或销毁前必须释放瞬时按钮，避免没有收到 PointerUp 时把一次输入遗留成
+        // 持续导通的运行态。这里不记录新的接线事实，只恢复本实例的临时交互状态。
         private void OnDisable()
         {
             if (Definition == null || !IsMomentaryPushButton() || IsClosed == Definition.startsClosed)
@@ -433,6 +449,8 @@ namespace ElectricalSim.Core
             return IsStartPushButton() || IsStopPushButton() || IsCompoundPushButton();
         }
 
+        // 拖拽只改变画布中的几何位置。端子对象、terminalId 与已有 Wire 的端点引用保持不变；
+        // Workspace 在移动过程中刷新 WireView，使显示锚点跟随，而不是重建任何电气连接。
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (workspace != null && workspace.IsInteractionLocked)
@@ -472,6 +490,8 @@ namespace ElectricalSim.Core
 
         private void BuildTerminals()
         {
+            // 端子对象在实例初始化时由 Definition 一次性建立并归属于本组件。Wire 直接持有这些对象，
+            // 所以视觉锚点变更应更新位置而非替换 TerminalView 实例，以免已有端点引用失效。
             // 端子定义变化或初始化时才调用。此方法会销毁旧端子，因此在已有 WireView 引用时重建
             // 会使活动接线失效；正常运行期间应只刷新视觉，不应调用这里。
             foreach (var terminal in terminals)
@@ -575,6 +595,9 @@ namespace ElectricalSim.Core
             return new Vector2(0f, 28f);
         }
 
+        // 以下 experimental* 命名保留自早期视觉兼容路径，并不表示可以随意删除：它们为未完全
+        // 配置化的元件提供视觉资源、端子锚点和坐标表回退。无论走哪条路径，Definition 仍是端子
+        // 身份与电气规则的唯一权威，视觉资源缺失时必须安全回退到普通矩形表示。
         private void TryApplyExperimentalKmVisualPrefab()
         {
             experimentalKmVisualRoot = null;
@@ -745,6 +768,8 @@ namespace ElectricalSim.Core
                    config.TryGetTerminalPositionOverride(terminalId, out localPosition);
         }
 
+        // 按钮、复合按钮与自锁按钮使用各自的视觉资源和端子布局，但共享相同边界：视觉路径只能
+        // 投影 Definition/运行态，不能借由不同图标或 Anchor 改写开关电气身份。
         private void TryApplyExperimentalButtonVisualPrefab()
         {
             experimentalButtonVisualRoot = null;
@@ -879,6 +904,9 @@ namespace ElectricalSim.Core
             }
         }
 
+        // 视觉 Prefab 的真实 Anchor 优先于历史坐标表；坐标表仅在旧资源没有可用 Anchor 时维持
+        // 已保存图纸的可点击位置。两者只决定 TerminalView 的屏幕锚点，绝不能改变 terminalId、
+        // 保存端点或拓扑节点。
         private bool TryGetExperimentalVisualTerminalPosition(
             string terminalId,
             out Vector2 localPosition,
@@ -1309,6 +1337,8 @@ namespace ElectricalSim.Core
             return true;
         }
 
+        // 三相电源的资源尺寸曾独立演进，因此保留专用 Anchor/坐标回退。此处校正的是命中与显示
+        // 位置；L1/L2/L3/N/PE 的电气含义仍来自 Definition，不能从像素坐标或 Prefab 名称推断。
         private void TryApplyExperimentalThreePhasePowerVisualPrefab()
         {
             experimentalThreePhasePowerVisualRoot = null;
@@ -1503,6 +1533,8 @@ namespace ElectricalSim.Core
                    string.Equals(terminalId, "22", System.StringComparison.OrdinalIgnoreCase);
         }
 
+        // 配置化视觉是通用资源路径；历史专用视觉仍可能先建立兼容 Anchor。两条路径共同的约束是：
+        // 活动图、精灵和命中区域只消费当前实例状态，绝不能作为推进仿真、创建 Wire 或保存状态的来源。
         private void TryApplyConfiguredVisualPrefab()
         {
             // Visual Prefab 只替换外观和锚点；电气端子身份仍来自 Definition，
@@ -1526,6 +1558,8 @@ namespace ElectricalSim.Core
             ConfigureKtTimerVisualController();
         }
 
+        // KT 控制器只把既有计时运行态转换为视觉帧，不拥有计时或触点判定。计时来源必须继续由
+        // RuntimeStateManager/仿真流程管理，防止刷新界面时意外推进时间。
         private void ConfigureKtTimerVisualController()
         {
             ktTimerVisualController = null;
@@ -1602,6 +1636,7 @@ namespace ElectricalSim.Core
 
         private void RefreshVisual()
         {
+            // 视觉刷新只把当前实例参数与运行态投影到 Image/Text/Prefab；不得在这里创建电气边、修改端子身份或推进 runtime state。
             if (body != null && Definition != null)
             {
                 if (IsExperimentalVisualActive())
@@ -1907,6 +1942,8 @@ namespace ElectricalSim.Core
         }
 
 
+        // 熔断器仍保留专用视觉兼容路径，原因与其他历史视觉一致：Anchor 可以随资源变化而更新，
+        // 但熔断状态、端子身份和保护规则不应由 Sprite 或子节点名称驱动。
         private void TryApplyExperimentalFuse1PVisualPrefab()
         {
             experimentalFuse1PVisualRoot = null;
@@ -2089,6 +2126,8 @@ namespace ElectricalSim.Core
             return false;
         }
 
+        // 运行文本是已稳定运行态的展示投影，例如电机方向；它不参与拓扑求解、规则判断或持久化，
+        // 因此修改文案不能被当作改变电气状态的入口。
         private string GetRunStateText()
         {
             if (Definition != null && Definition.kind == ComponentKind.Motor && GetTerminal("U") != null && GetTerminal("V") != null && GetTerminal("W") != null)

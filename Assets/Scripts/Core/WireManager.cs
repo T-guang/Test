@@ -10,6 +10,8 @@ namespace ElectricalSim.Core
     /// </summary>
     public sealed class WireManager : MonoBehaviour
     {
+        // 每条 Wire 的端点对象与端子身份定义外部接线事实；元件内部触点的当前导通由仿真/分析单独建图，
+        // 绝不能伪造为 Wire 加入此集合。创建、删除和清空必须先保持该集合一致，供撤销重做与工作区生命周期读取。
         [SerializeField] private RectTransform wireLayer;
 
         public IReadOnlyList<WireView> Wires => wires;
@@ -61,12 +63,13 @@ namespace ElectricalSim.Core
 
         public WireView CreateWire(TerminalView start, TerminalView end, Color color, WireStyle style)
         {
+            // 创建先验证端点与同元件策略，再查询并维护权威集合的无向端点去重；返回既有线保证一个端点对
+            // 只对应一条外部 Wire，避免拓扑、保存快照和撤销记录出现重复边。
             if (!CanCreateWire(start, end, out _))
             {
                 return null;
             }
 
-            // 同一对端子只保留一条活动导线；重复点击返回原对象，避免拓扑、保存快照和撤销记录出现双份边。
             var existing = wires.Find(w => (w.StartTerminal == start && w.EndTerminal == end) || (w.StartTerminal == end && w.EndTerminal == start));
             if (existing != null)
             {
@@ -90,12 +93,12 @@ namespace ElectricalSim.Core
 
         public void DeleteWire(WireView wire)
         {
+            // 先从权威集合撤销电气事实，再延迟销毁显示对象；同一帧的分析、保存和撤销只能读取移除后的集合。
             if (wire == null)
             {
                 return;
             }
 
-            // 先从权威集合移除，再延迟销毁视图；分析和保存加载只应读取移除后的集合。
             wires.Remove(wire);
             Destroy(wire.gameObject);
             ReflowOffsets();
@@ -114,6 +117,7 @@ namespace ElectricalSim.Core
 
         public void Clear()
         {
+            // 清空只移除用户外部导线及其视图；不会重置元件运行态，生命周期调用方需分别处理 RuntimeStateManager。
             foreach (var wire in wires)
             {
                 if (wire != null)

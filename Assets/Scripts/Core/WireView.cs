@@ -13,6 +13,9 @@ namespace ElectricalSim.Core
     /// </summary>
     public sealed class WireView : MonoBehaviour, IPointerClickHandler
     {
+        // manualPoints、折点手柄和 RectTransform/segment 仅构成可编辑显示路径：多折线无论如何拖动，
+        // 都不得改变两端 terminalId 或让 Analyzer 把路径中间点当成电气节点。WireManager 管理其生命周期，
+        // 本类只在端点移动、选中或路由编辑时重绘可视段。
         [SerializeField] private Image segmentPrefab;
 
         private const float ExitDistance = 28f;
@@ -69,6 +72,7 @@ namespace ElectricalSim.Core
 
         public void Initialize(TerminalView start, TerminalView end, Color color, WireStyle style, WorkspaceController owner)
         {
+            // 初始化仅绑定不可变端点身份与显示样式；后续 Refresh 可以重算路径，但不能借视觉编辑替换端点。
             // WireId 仅用于该导线实例和保存恢复；端点引用才是 Analyzer 与 Validation 使用的连接事实。
             WireId = System.Guid.NewGuid().ToString("N");
             StartTerminal = start;
@@ -129,6 +133,8 @@ namespace ElectricalSim.Core
 
         public void SetManualRoutePoints(IReadOnlyList<Vector2> points)
         {
+            // 手工点使用 WireView 本地坐标保存，服务于视觉路径恢复；端点仍固定为 StartTerminal/EndTerminal，
+            // 因此折点编辑不需要也不允许触发拓扑、仿真或规则重算的端点替换。
             manualPoints.Clear();
             if (points != null)
             {
@@ -157,6 +163,8 @@ namespace ElectricalSim.Core
             Refresh();
         }
 
+        // 完整路径来自较新的保存格式，保留每一个历史折点以复现用户编辑后的外观；六点旧路径
+        // 则继续采用轴线模型，兼容旧文件的单段拖拽语义。二者都只是渲染资料，端点身份不变。
         public void SetManualRoutePointsAsFullPath(IReadOnlyList<Vector2> points)
         {
             manualPoints.Clear();
@@ -188,6 +196,8 @@ namespace ElectricalSim.Core
             SelectFromBendHandle();
         }
 
+        // 段拖拽把选中的中间线段规范化为可编辑的六点路线，再移动其单一轴线。端点附近的段被
+        // 明确排除，避免拖拽破坏端子出线段；操作始终只改几何，不会替换 Start/EndTerminal。
         public void BeginBendDrag(int segmentIndex, PointerEventData eventData)
         {
             bendDragging = false;
@@ -242,6 +252,8 @@ namespace ElectricalSim.Core
             Refresh();
         }
 
+        // 结束时再次依据当前端子位置重建六点模型，确保保存的手工路线仍从真实端子 Anchor 出发。
+        // 标脏仅用于要求重新检查电路，不能把视觉折点解释为新增电气节点。
         public void EndBendDrag(PointerEventData eventData)
         {
             if (!bendDragging)
@@ -259,6 +271,8 @@ namespace ElectricalSim.Core
 
         public void Refresh()
         {
+            // 刷新从端子当前锚点重新投影线段与折点手柄。它只维护 RectTransform/Image，
+            // 不改变 WireManager.Wires、端点关系或任何 Analyzer/SimulationEngine 拓扑事实。
             if (StartTerminal == null || EndTerminal == null)
             {
                 return;
@@ -294,6 +308,9 @@ namespace ElectricalSim.Core
             eventData.Use();
         }
 
+        // 路由优先级固定为：已保存的完整手工路径、旧式六点手工路径、同元件跳线绕行、自动候选。
+        // 该顺序优先保护用户已编辑的外观；生成的 currentPoints 仅供绘制，不能参与 WireManager 的
+        // 端点判定，也不能被 Analyzer 当作额外电气节点。
         private void BuildOrthogonalRoute(Vector2 start, Vector2 end)
         {
             currentPoints.Clear();
@@ -334,6 +351,8 @@ namespace ElectricalSim.Core
             NormalizeOrthogonalPoints(currentPoints, false);
         }
 
+        // 持久化路径包含保存时的端点坐标，直接重放会在元件移动后脱离端子。此处保留中间折点的
+        // 编辑意图，并以当前 start/end 重新补齐正交出线段；因此视觉恢复不会改变原始端点连接。
         private static List<Vector2> BuildAnchoredManualRoute(
             Vector2 start,
             Vector2 end,
@@ -392,6 +411,8 @@ namespace ElectricalSim.Core
             }
         }
 
+        // 同一元件不同端子的合法外部 Wire 需要绕出元件本体，避免视觉上像内部短接。这里增加的
+        // 中间点只是显示走线；元件内部导通仍由仿真模型决定，绝不能因为这条跳线而永久合并端子。
         private void AddSameComponentJumperMiddlePoints(TerminalExit startExit, TerminalExit endExit)
         {
             var lane = ResolveLaneDistance() + Mathf.Abs(routeOffset);
@@ -462,10 +483,10 @@ namespace ElectricalSim.Core
             }
         }
 
+        // 自动走线在有限的正交走廊候选中选择代价最低者，而不是执行任意路径搜索。评分只处理显示避让：
+        // 优先避免穿过两端元件本体，再兼顾折点数量和长度；结果不能用于判定电气连接或替代已保存手工路线。
         private List<Vector2> ResolveAutomaticRoute(TerminalExit startExit, TerminalExit endExit)
         {
-            // 从有限的正交走廊候选中选取代价最低路径。评分只处理显示避让，
-            // 不可将其结果用于判定电气连接或替代用户已保存的手工走线。
             var start = startExit.Point;
             var end = endExit.Point;
             var candidates = new List<List<Vector2>>();
@@ -573,6 +594,8 @@ namespace ElectricalSim.Core
             return segmentRect.Overlaps(rect);
         }
 
+        // terminal exit 是视觉出线方向：先离开元件 bounds 再转折，降低线段覆盖图符号的概率。
+        // 它不是端子方向、器件引脚属性或拓扑规则，修改此处不能改变电气连接的含义。
         private TerminalExit ResolveTerminalExit(Vector2 terminalPosition, TerminalView terminal)
         {
             var tightBounds = GetComponentBounds(terminal.Owner, 0f);
@@ -649,6 +672,8 @@ namespace ElectricalSim.Core
             NormalizeOrthogonalPoints(points, false);
         }
 
+        // 规范化只修复绘制所需的正交性与重复点。完整手工路径会保留受保护的端点邻近折点，
+        // 不能盲目删掉所有共线点，否则历史保存的拖拽结果会被悄悄改写。
         private static void NormalizeOrthogonalPoints(List<Vector2> points, bool keepCollinearMiddlePoints)
         {
             if (points == null || points.Count < 2)
@@ -769,6 +794,8 @@ namespace ElectricalSim.Core
             return Mathf.Abs(end.x - start.x) >= Mathf.Abs(end.y - start.y);
         }
 
+        // 六点路线是早期“单一可拖轴线”保存语义的稳定表示。继续识别它，才能让旧图纸导入后
+        // 仍显示相同路径，并允许原有的中段拖拽方式；它不是新的自动路由格式。
         private static bool IsLegacySixPointManualRoute(IReadOnlyList<Vector2> points)
         {
             return points != null && points.Count == LegacyManualRoutePointCount;
@@ -811,6 +838,8 @@ namespace ElectricalSim.Core
             return horizontal ? SnapAxis((start.y + end.y) * 0.5f) : SnapAxis((start.x + end.x) * 0.5f);
         }
 
+        // 折点手柄与线段 Image 按当前路径复用，不随每次 Refresh 无限制创建。手柄的更大命中宽度
+        // 仅服务编辑体验；它既不代表 Wire endpoint，也不能被任何分析逻辑当作电气连接。
         private void UpdateSegmentHandles()
         {
             var handleIndex = 0;
@@ -911,6 +940,8 @@ namespace ElectricalSim.Core
             return local;
         }
 
+        // 渲染层按需增减可见段并复用现有 GameObject，避免频繁刷新路线时产生 UI 对象抖动。
+        // segment 的数量和 RectTransform 不构成 Wire 的身份，真正身份始终是两个 TerminalView。
         private void EnsureSegments(int count)
         {
             while (segments.Count < count)
@@ -935,6 +966,7 @@ namespace ElectricalSim.Core
             return image;
         }
 
+        // 选中态只调整显示颜色、宽度和手柄可见性；不可将这些 UI 状态反向用作规则或仿真输入。
         private void RefreshSegmentStyle()
         {
             var color = selected ? Color.Lerp(WireColor, Color.white, 0.35f) : WireColor;

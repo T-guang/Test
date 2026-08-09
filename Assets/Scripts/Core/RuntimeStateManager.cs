@@ -176,6 +176,8 @@ namespace ElectricalSim.Core
     /// </summary>
     public sealed class RuntimeStateManager
     {
+        // 此管理器缓存四类运行期派生状态：KT 计时、往返运动、电机运行和保护过程；它不拥有导线或元件定义。
+        // 新图纸、清空、替换和重新开始必须隔离这些字典，不能把 runtime state 作为保存拓扑的一部分复用。
         private readonly Dictionary<string, TimerRuntimeState> timerStates = new Dictionary<string, TimerRuntimeState>();
         private readonly Dictionary<string, MotionRuntimeState> motionStates = new Dictionary<string, MotionRuntimeState>();
         private readonly Dictionary<string, MotorRuntimeState> motorStates = new Dictionary<string, MotorRuntimeState>();
@@ -192,14 +194,13 @@ namespace ElectricalSim.Core
 
         public TimerRuntimeState GetOrCreateTimerState(string componentId)
         {
+            // componentId 仅在当前活动图纸生命周期内作为隔离键；导入或替换图纸前必须先走 ResetAll，
+            // 不能依赖名称相同就安全复用旧 KT 计时。
             if (string.IsNullOrWhiteSpace(componentId))
             {
                 return null;
             }
 
-            // 运行态以当前活动电路的 componentId 作为字典键隔离；
-            // 该键的生命周期由 CircuitComponent 与 Workspace 管理，
-            // 本类不验证其全局唯一性或跨图纸持久化稳定性。
             if (!timerStates.TryGetValue(componentId, out var state))
             {
                 state = new TimerRuntimeState();
@@ -280,12 +281,12 @@ namespace ElectricalSim.Core
 
         public void RemoveComponentState(string componentId)
         {
+            // 删除实例时四类缓存必须同步移除，避免撤销、重建或导入后相同 ID 观察到幽灵运行态。
             if (string.IsNullOrWhiteSpace(componentId))
             {
                 return;
             }
 
-            // 删除元件时必须一并清理三类运行态，避免同一实例 ID 在撤销、导入后继承旧状态。
             timerStates.Remove(componentId);
             motionStates.Remove(componentId);
             motorStates.Remove(componentId);
@@ -294,8 +295,8 @@ namespace ElectricalSim.Core
 
         public void ResetAll(string reason)
         {
-            // 清空画布、加载模板、停止并重建等生命周期边界调用此处；
-            // 不将计时、往返位置或保护脱扣状态写入模板和保存定义。
+            // 这是图纸生命周期边界的整体隔离，不是某个器件的局部复位；清空、加载、停止并重建都必须
+            // 清理四类缓存，避免相同 InstanceId 继承旧过程，也不把计时、运动或保护状态写入模板和保存定义。
             LastResetReason = reason;
             timerStates.Clear();
             motionStates.Clear();

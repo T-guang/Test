@@ -11,6 +11,8 @@ namespace ElectricalSim.Core
     /// </summary>
     public sealed class TerminalView : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
+        // TerminalId 是保存、拓扑与 Wire 端点使用的稳定电气身份；Label 仅用于显示，坐标与缩放仅用于命中和绘制，
+        // 两者都不能参与端子等价判断。TerminalView 由所属 CircuitComponent 创建并拥有，导线保存其两端引用而非屏幕位置。
         public string TerminalId { get; private set; }
         public string Label { get; private set; }
         public TerminalRole Role { get; private set; }
@@ -40,6 +42,8 @@ namespace ElectricalSim.Core
         }
 
         public Vector3 WorldPosition => transform.position;
+
+        // WorldPosition 是当前画布锚点，供 WireView 绘制路线使用；移动视觉或调整 RectTransform 不会改变电气连接。
 
         public void SetSubtleVisualMode(bool enabled, bool debugMarker = false)
         {
