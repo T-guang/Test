@@ -465,8 +465,9 @@ namespace ElectricalSim.Editor
             const string scenario = "16";
             ResetWorkspace(workspace);
 
-            // 建立画布并保存
-            SpawnSimpleCircuit(workspace, lampDef);
+            // Save/reimport fixture 必须只使用 catalog-backed Definition：SaveLoadService 持久化 Definition.name，
+            // 未命名的 runtime-only Definition 不属于可恢复的用户图纸契约。
+            SpawnPersistableSimpleCircuit(workspace, lampDef, buttonDef);
             var testName = "F1A_Reimport_Test_" + Guid.NewGuid().ToString("N").Substring(0, 8);
             var saveOk = saveLoad.SaveAs(testName, true, out var savedInfo, out _, out var saveError);
             if (!saveOk || savedInfo == null)
@@ -713,6 +714,17 @@ namespace ElectricalSim.Editor
             if (lamp != null && btn != null)
             {
                 workspace.WireManager.CreateWire(lamp.GetTerminal("L"), btn.GetTerminal("23"), Color.red, WireStyle.Straight);
+            }
+        }
+
+        private static void SpawnPersistableSimpleCircuit(
+            WorkspaceController workspace, ComponentDefinition lampDef, ComponentDefinition buttonDef)
+        {
+            var lamp = workspace.SpawnComponent(lampDef, new Vector2(-50f, 0f), "old-lamp", false);
+            var button = workspace.SpawnComponent(buttonDef, new Vector2(50f, 0f), "old-btn", false);
+            if (lamp != null && button != null)
+            {
+                workspace.WireManager.CreateWire(lamp.GetTerminal("L"), button.GetTerminal("23"), Color.red, WireStyle.Straight);
             }
         }
 
