@@ -32,7 +32,7 @@ namespace ElectricalSim.Spice.Core
             if (circuit == null || circuit.AnalysisSettings.Mode != SpiceAnalysisMode.AcSingleFrequency)
             {
                 result.Diagnostics.Add(new SpiceDiagnostic("SPICE_AC_ANALYSIS_UNSUPPORTED", SpiceDiagnosticSeverity.Error,
-                    "Single-frequency AC analysis requires AC analysis settings."));
+                    "单频交流分析需要对应的交流分析设置。"));
                 return result;
             }
 
@@ -48,14 +48,14 @@ namespace ElectricalSim.Spice.Core
             if (!raw.Success)
             {
                 result.Diagnostics.Add(new SpiceDiagnostic("SPICE_NGSPICE_" + raw.FailureCode, SpiceDiagnosticSeverity.Error,
-                    raw.FailureMessage ?? "ngspice execution failed."));
+                    "ngspice 执行失败。" + (string.IsNullOrWhiteSpace(raw.FailureMessage) ? string.Empty : " 原始信息：" + raw.FailureMessage)));
                 return result;
             }
 
             if (SpiceNgspiceErrorClassifier.TryGetSevereErrorLine(raw.StandardError, out _))
             {
                 result.Diagnostics.Add(new SpiceDiagnostic("SPICE_AC_NGSPICE_ERROR", SpiceDiagnosticSeverity.Error,
-                    "ngspice reported an error while executing the AC analysis."));
+                    "ngspice 执行单频交流分析时报告错误。"));
                 return result;
             }
 
@@ -120,7 +120,7 @@ namespace ElectricalSim.Spice.Core
                         VoltageDirection = "C-to-E",
                         CurrentDirection = "collector small-signal current via internal 0V probe, positive flowing into collector",
                         ResultStatus = SpiceResultStatus.Available,
-                        Notes = "小信号 AC collector 电流（经内部 0V 探针源 i() 读取），非 DC 工作点电流；@q[ic] 在 .ac 下只输出 DC 标量，故采用探针 fallback。模型卡无动态参数，响应纯阻性、虚部≈0。"
+                        Notes = "小信号交流集电极电流（经内部 0 V 探针源 i() 读取），不是直流工作点电流；@q[ic] 在 .ac 下只输出直流标量，因此采用探针读数。模型卡无动态参数，响应为纯阻性，虚部约为 0。"
                     };
                     continue;
                 }
@@ -165,19 +165,19 @@ namespace ElectricalSim.Spice.Core
                         // DC 偏置源：AC 小信号激励为 0，仅提供工作点偏置；支路电流为小信号流经偏置源的电流。
                         componentResult.Current = branchValues[graph.SpiceNameByComponentId[component.InstanceId]];
                         componentResult.CurrentDirection = "positive-to-negative (ngspice branch convention)";
-                        componentResult.Notes = "DC bias source; AC small-signal excitation is 0; current is the small-signal current through the bias source";
+                        componentResult.Notes = "直流偏置源：交流小信号激励为 0；此处电流为流经偏置源的小信号电流。";
                         break;
                     case SpiceComponentKind.VoltageProbe:
                         componentResult.Current = SpicePhasor.Zero;
                         componentResult.VoltageDirection = "V-plus-to-V-minus";
                         componentResult.CurrentDirection = "V-plus-to-V-minus";
-                        componentResult.Notes = "differential voltage measurement";
+                        componentResult.Notes = "差分电压测量";
                         break;
                     case SpiceComponentKind.CurrentProbe:
                         componentResult.Current = branchValues[graph.SpiceNameByComponentId[component.InstanceId]];
                         componentResult.VoltageDirection = "IN-to-OUT";
                         componentResult.CurrentDirection = "IN-to-OUT";
-                        componentResult.Notes = "series current measurement";
+                        componentResult.Notes = "串联电流测量";
                         break;
                     default:
                         throw new InvalidOperationException("Unsupported component reached AC result mapping: " + component.Kind + ".");

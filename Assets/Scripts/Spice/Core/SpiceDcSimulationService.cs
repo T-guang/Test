@@ -34,7 +34,7 @@ namespace ElectricalSim.Spice.Core
             if (circuit == null || circuit.AnalysisSettings.Mode != SpiceAnalysisMode.DcOperatingPoint)
             {
                 result.Diagnostics.Add(new SpiceDiagnostic("SPICE_DC_ANALYSIS_UNSUPPORTED", SpiceDiagnosticSeverity.Error,
-                    "DC operating-point simulation requires DC analysis settings."));
+                    "直流工作点仿真需要对应的直流分析设置。"));
                 return result;
             }
             var graph = SpiceCircuitGraphBuilder.Build(circuit);
@@ -48,7 +48,10 @@ namespace ElectricalSim.Spice.Core
             result.Duration = raw.Duration;
             if (!raw.Success)
             {
-                result.Diagnostics.Add(new SpiceDiagnostic("SPICE_NGSPICE_" + raw.FailureCode, SpiceDiagnosticSeverity.Error, raw.FailureMessage ?? "ngspice execution failed."));
+                result.Diagnostics.Add(new SpiceDiagnostic(
+                    "SPICE_NGSPICE_" + raw.FailureCode,
+                    SpiceDiagnosticSeverity.Error,
+                    "ngspice 执行失败。" + (string.IsNullOrWhiteSpace(raw.FailureMessage) ? string.Empty : " 原始信息：" + raw.FailureMessage)));
                 return result;
             }
 
@@ -60,7 +63,7 @@ namespace ElectricalSim.Spice.Core
 
             if (!ContainsAll(voltages, document.PrintedNodes) || !ContainsAll(currents, document.PrintedBranchNames))
             {
-                result.Diagnostics.Add(new SpiceDiagnostic("SPICE_OUTPUT_INCOMPLETE", SpiceDiagnosticSeverity.Error, "ngspice did not return every vector requested by the generated netlist."));
+                result.Diagnostics.Add(new SpiceDiagnostic("SPICE_OUTPUT_INCOMPLETE", SpiceDiagnosticSeverity.Error, "ngspice 未返回生成网表请求的全部结果向量。"));
                 return result;
             }
 
@@ -113,7 +116,7 @@ namespace ElectricalSim.Spice.Core
                         VoltageDirection = "C-to-E",
                         CurrentDirection = "collector terminal (ngspice convention: into-terminal positive)",
                         ResultStatus = SpiceResultStatus.Available,
-                        Notes = "Voltage=V(C)-V(E); Current=IC; NPN active 区 IC>0、PNP active 区 IC<0（流入电极为正）"
+                        Notes = "电压 = V(C) - V(E)；电流 = IC。NPN 有源区 IC > 0，PNP 有源区 IC < 0（流入集电极为正）。"
                     };
                     result.ComponentResults[component.InstanceId] = bjtResult;
                     continue;
@@ -161,7 +164,7 @@ namespace ElectricalSim.Spice.Core
                 {
                     componentResult.Current = 0d;
                     componentResult.ResultStatus = SpiceResultStatus.DcSteadyStateOpenCircuit;
-                    componentResult.Notes = "DcSteadyStateOpenCircuit";
+                    componentResult.Notes = "直流稳态下等效开路";
                 }
                 else if (component.Kind == SpiceComponentKind.VoltageProbe)
                 {

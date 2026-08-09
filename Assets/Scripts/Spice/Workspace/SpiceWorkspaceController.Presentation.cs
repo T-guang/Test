@@ -686,7 +686,7 @@ namespace ElectricalSim.Spice.Workspace
                 parameterTitle.text = selectedComponent.InstanceId + (isNpn ? " 通用 NPN 三极管" : " 通用 PNP 三极管");
                 SetNormalParameterControlsVisible(false);
                 SetParameterSubtitleVisible(false);
-                opAmpInfoText.text = "教学级模型：" + (isNpn ? SpiceComponentDefaults.NpnGenericModelName : SpiceComponentDefaults.PnpGenericModelName) + "\n端子：collector、base、emitter\n模型参数（IS、BF）固定\n无可编辑参数";
+                opAmpInfoText.text = "教学级模型：" + (isNpn ? SpiceComponentDefaults.NpnGenericModelName : SpiceComponentDefaults.PnpGenericModelName) + "\n端子：集电极（C）、基极（B）、发射极（E）\n模型参数（IS、BF）固定\n无可编辑参数";
                 SetOpAmpInfoVisible(true);
                 return;
             }

@@ -341,7 +341,7 @@ namespace ElectricalSim.Spice.Workspace
             }
 
             return string.Join("\n\n", result.ComponentResults.Values.OrderBy(value => value.ComponentId, StringComparer.Ordinal).Select(value =>
-                value.ComponentId + "  " + value.ComponentKind + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n" + FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
+                value.ComponentId + "  " + SpiceAcResultFormatter.GetComponentDisplayName(value.ComponentKind) + "\n" + VoltageLabel(value) + "  " + value.Voltage.ToString("G6", CultureInfo.InvariantCulture) + " V\n" + FormatCurrentLine(value) + "参考方向：" + DirectionLabel(value.CurrentDirection) +
                 (string.IsNullOrEmpty(value.Notes) ? string.Empty : "\n" + value.Notes)));
         }
 
@@ -364,7 +364,8 @@ namespace ElectricalSim.Spice.Workspace
                 : direction == "P-to-N" ? "P → N"
                 : direction == "A-to-B" ? "A → B"
                 : direction == "V-plus-to-V-minus" ? "V+ → V-"
-                : direction == "IN-to-OUT" ? "IN → OUT"
+                : direction == "IN-to-OUT" ? "输入端 → 输出端"
+                : direction == "C-to-E" || (direction != null && direction.StartsWith("collector", StringComparison.OrdinalIgnoreCase)) ? "C → E（集电极电流流入 C 为正）"
                 : direction != null && direction.StartsWith("OUT-to-GND", StringComparison.Ordinal) ? "OUT → GND（ngspice 支路约定）"
                 : "正端 → 负端";
         }
@@ -384,7 +385,19 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "缺少直流电压源" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "电压源两端短接" :
                 diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED" ? "运放输出端短接" :
-                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "元件两端短接" : "SPICE 计算诊断";
+                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "元件两端短接" :
+                diagnostic.Code == "SPICE_EMPTY_CIRCUIT" ? "电路为空" :
+                diagnostic.Code == "SPICE_INVALID_COMPONENT" ? "元件信息无效" :
+                diagnostic.Code == "SPICE_DUPLICATE_INSTANCE" ? "元件标识重复" :
+                diagnostic.Code == "SPICE_INVALID_WIRE" ? "导线信息无效" :
+                diagnostic.Code == "SPICE_SELF_CONNECTION" ? "端子不能连接自身" :
+                diagnostic.Code == "SPICE_AC_SOURCE_MISSING" ? "缺少交流电压源" :
+                diagnostic.Code == "SPICE_AC_FREQUENCY_INVALID" ? "交流频率无效" :
+                diagnostic.Code == "SPICE_AC_SOURCE_PHASE_INVALID" ? "交流源相位无效" :
+                diagnostic.Code == "SPICE_ANALYSIS_MODE_INVALID" ? "分析模式无效" :
+                diagnostic.Code == "SPICE_WIRE_COMPONENT_MISSING" ? "导线引用了不存在的元件" :
+                diagnostic.Code == "SPICE_WIRE_TERMINAL_MISSING" ? "导线引用了不存在的端子" :
+                diagnostic.Code == "SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT" ? "电流探针连接冲突" : "SPICE 计算诊断";
             var detail = diagnostic.Code == "SPICE_GROUND_MISSING" ? "电路至少需要一个 GND 作为 0 V 参考。" :
                 diagnostic.Code == "SPICE_FLOATING_TERMINAL" ? "该端子尚未通过导线连接。" :
                 diagnostic.Code == "SPICE_FLOATING_SUBCIRCUIT" ? "该子电路无法通过元件与导线到达 GND。" :
@@ -393,9 +406,28 @@ namespace ElectricalSim.Spice.Workspace
                 diagnostic.Code == "SPICE_SOURCE_MISSING" ? "当前直流工作点计算需要一个直流电压源。" :
                 diagnostic.Code == "SPICE_SOURCE_SHORTED" ? "请断开电压源两端的直接短接。" :
                 diagnostic.Code == "SPICE_OPAMP_OUTPUT_SHORTED" ? "理想运放 OUT 不能直接连接 GND，因为 V1 输出本身是相对于 GND 的理想受控电压源。" :
-                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "请检查该元件两端是否被同一电气节点直接连接。" : diagnostic.Message;
-            var related = string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : "\n关联元件：" + diagnostic.ComponentId + (string.IsNullOrEmpty(diagnostic.TerminalId) ? string.Empty : " / 端子：" + diagnostic.TerminalId);
+                diagnostic.Code == "SPICE_COMPONENT_SHORTED" ? "请检查该元件两端是否被同一电气节点直接连接。" :
+                diagnostic.Code == "SPICE_EMPTY_CIRCUIT" ? "请至少放置一个元件并完成必要接线。" :
+                diagnostic.Code == "SPICE_INVALID_COMPONENT" ? "请删除后重新放置该元件。" :
+                diagnostic.Code == "SPICE_DUPLICATE_INSTANCE" ? "请重新导入或删除重复的元件。" :
+                diagnostic.Code == "SPICE_INVALID_WIRE" ? "请删除后重新绘制该导线。" :
+                diagnostic.Code == "SPICE_SELF_CONNECTION" ? "请连接两个不同端子。" :
+                diagnostic.Code == "SPICE_AC_SOURCE_MISSING" ? "单频交流分析至少需要一个交流电压源。" :
+                diagnostic.Code == "SPICE_AC_FREQUENCY_INVALID" ? "请设置处于支持范围内的有限频率。" :
+                diagnostic.Code == "SPICE_AC_SOURCE_PHASE_INVALID" ? "请将交流源相位设置为有限数值，并限制在 -180° 至 180° 范围内。" :
+                diagnostic.Code == "SPICE_ANALYSIS_MODE_INVALID" ? "请重新选择直流或单频交流分析模式。" :
+                diagnostic.Code == "SPICE_WIRE_COMPONENT_MISSING" ? "请检查导线两端引用的元件。" :
+                diagnostic.Code == "SPICE_WIRE_TERMINAL_MISSING" ? "请检查导线两端引用的端子。" :
+                diagnostic.Code == "SPICE_CURRENT_PROBE_CONSTRAINT_CONFLICT" ? "电流探针不能与理想电压约束并联。" : "求解器返回信息：" + diagnostic.Message;
+            var related = string.IsNullOrEmpty(diagnostic.ComponentId) ? string.Empty : "\n关联元件：" + diagnostic.ComponentId + (string.IsNullOrEmpty(diagnostic.TerminalId) ? string.Empty : " / 端子：" + TerminalDisplayName(diagnostic.TerminalId));
             return title + "\n" + detail + related + "\n错误码：" + diagnostic.Code;
+        }
+
+        private static string TerminalDisplayName(string terminalId)
+        {
+            return terminalId == "collector" ? "集电极（C）" : terminalId == "base" ? "基极（B）" : terminalId == "emitter" ? "发射极（E）" :
+                terminalId == "positive" ? "正端" : terminalId == "negative" ? "负端" : terminalId == "ground" ? "接地端" :
+                terminalId == "in" ? "输入端" : terminalId == "out" ? "输出端" : terminalId;
         }
     }
 }

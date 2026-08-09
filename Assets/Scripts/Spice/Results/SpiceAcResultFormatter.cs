@@ -18,7 +18,7 @@ namespace ElectricalSim.Spice.Results
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
             var text = new StringBuilder();
-            text.Append("分析：单频 AC\n频率：");
+            text.Append("分析：单频交流\n频率：");
             text.Append(FormatFrequency(result.AnalysisSettings.FrequencyHz));
 
             foreach (var value in result.AcComponentResults.Values
@@ -28,7 +28,7 @@ namespace ElectricalSim.Spice.Results
                 text.Append("\n\n");
                 text.Append(value.ComponentId);
                 text.Append("  ");
-                text.Append(value.ComponentKind);
+                text.Append(GetComponentDisplayName(value.ComponentKind));
                 text.Append("\n");
                 text.Append(string.Equals(value.ComponentKind, "VoltageProbe", StringComparison.Ordinal) ? "差分电压  " : "电压  ");
                 text.Append(FormatVoltage(value.Voltage));
@@ -52,6 +52,29 @@ namespace ElectricalSim.Spice.Results
 
         public static string FormatVoltage(SpicePhasor phasor) => FormatPhasor(phasor, true);
         public static string FormatCurrent(SpicePhasor phasor) => FormatPhasor(phasor, false);
+
+        /// <summary>将内部器件类型名转换为面向学习者的中文名称；实例 ID 仍保留原样便于定位元件。</summary>
+        public static string GetComponentDisplayName(string componentKind)
+        {
+            switch (componentKind)
+            {
+                case "DcVoltageSource": return "直流电压源";
+                case "AcVoltageSource": return "交流电压源";
+                case "DcCurrentSource": return "直流电流源";
+                case "IdealSwitch": return "理想开关";
+                case "SiliconDiode": return "通用硅二极管";
+                case "Resistor": return "电阻";
+                case "Capacitor": return "电容";
+                case "Inductor": return "电感";
+                case "VoltageProbe": return "电压探针";
+                case "CurrentProbe": return "电流探针";
+                case "IdealOperationalAmplifier": return "理想运算放大器";
+                case "GenericNpnBjt": return "通用 NPN 三极管";
+                case "GenericPnpBjt": return "通用 PNP 三极管";
+                case "Ground": return "接地";
+                default: return "未知元件";
+            }
+        }
 
         private static string FormatPhasor(SpicePhasor phasor, bool voltage)
         {
@@ -99,10 +122,12 @@ namespace ElectricalSim.Spice.Results
         {
             var componentKind = value.ComponentKind;
             var direction = string.IsNullOrEmpty(value.CurrentDirection) ? value.VoltageDirection : value.CurrentDirection;
-            var mapped = direction == "A-to-B" ? "A → B" : direction == "V-plus-to-V-minus" ? "V+ → V-" :
-                direction == "IN-to-OUT" ? "IN → OUT" : !string.IsNullOrEmpty(direction) && direction.StartsWith("OUT-to-GND", StringComparison.Ordinal) ? "OUT → GND" : "positive → negative";
+            var mapped = direction == "A-to-B" ? "A → B" : direction == "A-to-K" ? "A → K" :
+                direction == "P-to-N" ? "P → N" : direction == "V-plus-to-V-minus" ? "V+ → V-" :
+                direction == "IN-to-OUT" ? "输入端 → 输出端" : direction == "C-to-E" || (!string.IsNullOrEmpty(direction) && direction.StartsWith("collector", StringComparison.OrdinalIgnoreCase)) ? "C → E（集电极电流流入 C 为正）" :
+                !string.IsNullOrEmpty(direction) && direction.StartsWith("OUT-to-GND", StringComparison.Ordinal) ? "OUT → GND" : "正端 → 负端";
             if (string.Equals(componentKind, "VoltageProbe", StringComparison.Ordinal)) return "V+ → V-";
-            if (string.Equals(componentKind, "CurrentProbe", StringComparison.Ordinal)) return "IN → OUT";
+            if (string.Equals(componentKind, "CurrentProbe", StringComparison.Ordinal)) return "输入端 → 输出端";
             if (string.Equals(componentKind, "AcVoltageSource", StringComparison.Ordinal)) return mapped + "（ngspice 支路约定）";
             if (string.Equals(componentKind, "IdealOperationalAmplifier", StringComparison.Ordinal) && direction.Contains("ngspice branch convention"))
                 return mapped + "（ngspice 支路约定）";

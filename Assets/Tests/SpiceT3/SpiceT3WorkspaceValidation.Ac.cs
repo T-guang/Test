@@ -331,13 +331,16 @@ namespace ElectricalSim.Spice.T3
             result.AcComponentResults["R1"] = new SpiceAcComponentResult { ComponentId = "R1", ComponentKind = "Resistor", Voltage = new SpicePhasor(0d, 0d), Current = new SpicePhasor(707.107e-9d, 0d) };
             result.AcComponentResults["SW1"] = new SpiceAcComponentResult { ComponentId = "SW1", ComponentKind = "IdealSwitch", Voltage = new SpicePhasor(1d, 0d), Current = new SpicePhasor(1e-3d, 0d), CurrentDirection = "A-to-B" };
             var text = SpiceAcResultFormatter.Format(result);
-            if (!text.StartsWith("分析：单频 AC\n频率：1 kHz", StringComparison.Ordinal) ||
+            if (!text.StartsWith("分析：单频交流\n频率：1 kHz", StringComparison.Ordinal) ||
                 !text.Contains("707.107 mV ∠ -45.000°") || !text.Contains("707.107 nA ∠ 0.000°") ||
-                !text.Contains("0 V ∠ --") || !text.Contains("0 A ∠ --") || !text.Contains("参考方向：A → B") || text.Contains("VP1  VoltageProbe\n差分电压  707.107 mV ∠ -45.000°\n电流"))
+                !text.Contains("0 V ∠ --") || !text.Contains("0 A ∠ --") || !text.Contains("参考方向：A → B") || text.Contains("VP1  电压探针\n差分电压  707.107 mV ∠ -45.000°\n电流"))
                 throw new InvalidOperationException("AC-C1 formal phasor result formatting is incomplete.");
-            if (text.IndexOf("R1  Resistor", StringComparison.Ordinal) > text.IndexOf("V1  AcVoltageSource", StringComparison.Ordinal) ||
-                text.IndexOf("V1  AcVoltageSource", StringComparison.Ordinal) > text.IndexOf("VP1  VoltageProbe", StringComparison.Ordinal))
+            if (text.Contains("Resistor") || text.Contains("AcVoltageSource") || text.Contains("VoltageProbe") || text.Contains("positive → negative"))
+                throw new InvalidOperationException("AC-C1 learner-facing result text leaked an internal English component type or direction token.");
+            if (text.IndexOf("R1  电阻", StringComparison.Ordinal) > text.IndexOf("V1  交流电压源", StringComparison.Ordinal) ||
+                text.IndexOf("V1  交流电压源", StringComparison.Ordinal) > text.IndexOf("VP1  电压探针", StringComparison.Ordinal))
                 throw new InvalidOperationException("AC-C1 result ordering is not ordinal by component id.");
+            AssertLocalizedBjtAndPreflightPresentation();
         }
 
         private static void ValidateAcC1CopyResultConsistency()
@@ -371,9 +374,47 @@ namespace ElectricalSim.Spice.T3
                 var result = CreateControllerDcResult(workspace.Model.BuildCircuitModel());
                 workspace.SetSimulationOverrideForTesting((_, __) => System.Threading.Tasks.Task.FromResult(result));
                 workspace.RunCalculationAsync().GetAwaiter().GetResult();
-                const string expected = "resistor-001  Resistor\n电压  1 V\n电流  0.001 A\n参考方向：正端 → 负端\nDC_CONTROLLER_MARKER";
+                const string expected = "resistor-001  电阻\n电压  1 V\n电流  0.001 A\n参考方向：正端 → 负端\nDC_CONTROLLER_MARKER";
                 if (workspace.GetVisibleResultTextForTesting() != expected || !workspace.TryGetCopyableOutcomeText(out var copy) || copy != expected)
                     throw new InvalidOperationException("AC-C1 changed the exact DC presentation contract.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
+        private static void AssertLocalizedBjtAndPreflightPresentation()
+        {
+            var bjtResult = new SpiceSimulationResult
+            {
+                Success = true,
+                AnalysisSettings = new SpiceAnalysisSettings(SpiceAnalysisMode.DcOperatingPoint, SpiceAnalysisLimits.DefaultFrequencyHz)
+            };
+            bjtResult.ComponentResults["npn-001"] = new SpiceComponentResult
+            {
+                ComponentId = "npn-001",
+                ComponentKind = "GenericNpnBjt",
+                Voltage = 2.8d,
+                Current = .002d,
+                VoltageDirection = "C-to-E",
+                CurrentDirection = "collector terminal (ngspice convention: into-terminal positive)",
+                Notes = "电压 = V(C) - V(E)；电流 = IC。"
+            };
+            var root = new GameObject("SpiceLocalizedBjtPresentation", typeof(RectTransform), typeof(Canvas));
+            try
+            {
+                var workspace = CreateInitializedWorkspaceForCopy(root.transform, out _);
+                workspace.SetSimulationOverrideForTesting((_, __) => System.Threading.Tasks.Task.FromResult(bjtResult));
+                workspace.RunCalculationAsync().GetAwaiter().GetResult();
+                var text = workspace.GetVisibleResultTextForTesting();
+                if (!text.Contains("通用 NPN 三极管") || !text.Contains("C → E") || !text.Contains("集电极电流流入 C 为正") ||
+                    text.Contains("GenericNpnBjt") || text.Contains("collector → emitter"))
+                    throw new InvalidOperationException("FINAL-L10 BJT result presentation leaked an internal English identifier.");
+
+                var formatter = typeof(SpiceWorkspaceController).GetMethod("FormatDiagnostic", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                if (formatter == null) throw new InvalidOperationException("FINAL-L10 missing learner-facing diagnostic formatter.");
+                var diagnosticText = (string)formatter.Invoke(null, new object[] { new SpiceDiagnostic("SPICE_FLOATING_TERMINAL", SpiceDiagnosticSeverity.Error, "A component terminal has no wire connection.", "npn-001", "collector") });
+                if (!diagnosticText.Contains("端子：集电极（C）") || !diagnosticText.Contains("SPICE_FLOATING_TERMINAL") ||
+                    diagnosticText.Contains("端子：collector"))
+                    throw new InvalidOperationException("FINAL-L10 floating-terminal diagnostic was not localized.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
