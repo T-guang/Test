@@ -9,6 +9,7 @@ using ElectricalSim.Spice.Workspace;
 using ElectricalSim.UI;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ElectricalSim.Editor
@@ -47,7 +48,7 @@ namespace ElectricalSim.Editor
             passed = 0;
             failed = 0;
             Summary.Clear();
-            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S11)");
+            Summary.AppendLine("# SPICE-BJT-4.1 Palette Scroll Tests (S01-S12)");
 
             Run("S01_HierarchyAndScrollSettings", S01_HierarchyAndScrollSettings);
             Run("S02_TitleRemainsFixed", S02_TitleRemainsFixed);
@@ -59,7 +60,8 @@ namespace ElectricalSim.Editor
             Run("S08_PaletteCardsRetainDragAndClickComponents", S08_PaletteCardsRetainDragAndClickComponents);
             Run("S09_FinalScrollBoundsKeepBottomRowInsideSafeArea", S09_FinalScrollBoundsKeepBottomRowInsideSafeArea);
             Run("S10_OverflowShowsDedicatedScrollbar", S10_OverflowShowsDedicatedScrollbar);
-            Run("S11_TopOfPaletteDoesNotShowPartialCards", S11_TopOfPaletteDoesNotShowPartialCards);
+            Run("S11_ScrollGeometryDoesNotSelfFeedback", S11_ScrollGeometryDoesNotSelfFeedback);
+            Run("S12_ContinuousDownwardScrollIsMonotonic", S12_ContinuousDownwardScrollIsMonotonic);
 
             var total = passed + failed;
             Summary.AppendLine();
@@ -114,32 +116,60 @@ namespace ElectricalSim.Editor
             });
         }
 
-        private static void S11_TopOfPaletteDoesNotShowPartialCards()
+        private static void S11_ScrollGeometryDoesNotSelfFeedback()
+        {
+            WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
+            {
+                var scroll = GetPaletteScroll(bindings);
+                FinalizeBottomScrollLayout(scroll);
+                var scrollHeight = (scroll.transform as RectTransform).rect.height;
+                var contentY = scroll.content.anchoredPosition.y;
+                for (var index = 0; index < 30; index++)
+                {
+                    Canvas.ForceUpdateCanvases();
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+                    scroll.Rebuild(CanvasUpdate.PostLayout);
+                }
+
+                CheckNear(scrollHeight, (scroll.transform as RectTransform).rect.height, 0.01f,
+                    "连续布局帧不得改变 PaletteScroll 的固定 Viewport 高度。");
+                CheckNear(contentY, scroll.content.anchoredPosition.y, 0.01f,
+                    "连续布局帧不得将滚动位置自动反向推回顶部。");
+                CheckTrue(bindings.PaletteRoot.Find("PaletteScrollHint") == null,
+                    "简化后的 Palette 不应保留仅服务于整行策略的提示节点。");
+            });
+        }
+
+        private static void S12_ContinuousDownwardScrollIsMonotonic()
         {
             WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
             {
                 var scroll = GetPaletteScroll(bindings);
                 scroll.verticalNormalizedPosition = 1f;
-                Canvas.ForceUpdateCanvases();
-                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
-                Canvas.ForceUpdateCanvases();
-
-                var viewportBounds = BoundsInViewport(scroll.viewport, scroll.viewport);
-                foreach (var kind in PaletteOrder)
+                ForceLayout(scroll);
+                var eventSystemRoot = new GameObject("Bjt4_1ScrollEventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+                try
                 {
-                    var card = scroll.content.Find(kind + "Card") as RectTransform;
-                    var cardBounds = BoundsInViewport(card, scroll.viewport);
-                    var visibleHeight = Mathf.Max(0f, Mathf.Min(cardBounds.top, viewportBounds.top) - Mathf.Max(cardBounds.bottom, viewportBounds.bottom));
-                    CheckTrue(visibleHeight <= 0.1f || visibleHeight >= card.rect.height - 0.1f,
-                        kind + " 在元件池顶部不能只显示半张卡片。");
+                    var previousY = scroll.content.anchoredPosition.y;
+                    for (var index = 0; index < 10; index++)
+                    {
+                        var eventData = new PointerEventData(eventSystemRoot.GetComponent<EventSystem>()) { scrollDelta = new Vector2(0f, -1f) };
+                        scroll.OnScroll(eventData);
+                        ForceLayout(scroll);
+                        var currentY = scroll.content.anchoredPosition.y;
+                        CheckTrue(currentY + 0.01f >= previousY,
+                            $"第 {index + 1} 次向下滚动不得向上回弹：{previousY:F3} -> {currentY:F3}。");
+                        previousY = currentY;
+                    }
+
+                    var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
+                    CheckTrue(IsInsideBottomSafeArea(pnp, scroll.viewport, 16f),
+                        "连续向下滚动后 PNP 卡片必须以至少 16 UI-unit 底部安全边距完整可见。");
                 }
-
-                var hint = bindings.PaletteRoot.Find("PaletteScrollHint");
-                var bottomGuard = (scroll.transform as RectTransform).offsetMin.y;
-                if (bottomGuard >= 28f)
+                finally
                 {
-                    CheckTrue(hint != null && hint.gameObject.activeSelf,
-                        "预留出底部提示区时必须显示“向下滚动查看全部元件”提示。");
+                    UnityEngine.Object.DestroyImmediate(eventSystemRoot);
                 }
             });
         }
@@ -186,8 +216,8 @@ namespace ElectricalSim.Editor
 
                     var pnp = scroll.content.Find(SpiceComponentKind.GenericPnpBjt + "Card") as RectTransform;
                     var npn = scroll.content.Find(SpiceComponentKind.GenericNpnBjt + "Card") as RectTransform;
-                    CheckTrue(IsInsideBottomSafeArea(pnp, scroll.viewport, 8f), size + " PNP card must enter the viewport bottom safe area.");
-                    CheckTrue(IsInsideBottomSafeArea(npn, scroll.viewport, 8f), size + " NPN card must enter the viewport bottom safe area.");
+                    CheckTrue(IsInsideBottomSafeArea(pnp, scroll.viewport, 16f), size + " PNP card must enter the viewport bottom safe area.");
+                    CheckTrue(IsInsideBottomSafeArea(npn, scroll.viewport, 16f), size + " NPN card must enter the viewport bottom safe area.");
                     CheckNear(Mathf.Max(0f, scroll.content.rect.height - scroll.viewport.rect.height), scroll.content.anchoredPosition.y, 0.2f,
                         size + " content must reach the actual maximum scroll position.");
                     CheckTrue(IsFullyInside(pnp, scroll.viewport), size + " 下 PNP 卡片必须完整进入 Viewport。");
@@ -211,7 +241,7 @@ namespace ElectricalSim.Editor
                           $"MaxScroll={Mathf.Max(0f, scroll.content.rect.height - viewport.rect.height):F3}; BottomPosition={scroll.content.anchoredPosition.y:F3}; " +
                           $"PnpBottom={pnpBounds.bottom:F3}; PnpTop={pnpBounds.top:F3}; ViewportBottom={viewportBounds.bottom:F3}; ViewportTop={viewportBounds.top:F3}; Visible={visible:F3}");
                 CheckTrue(visible >= pnp.rect.height - 0.1f, "PNP card must be fully visible after scrolling to the bottom.");
-                CheckTrue(pnpBounds.bottom >= viewportBounds.bottom + 8f, "PNP card must retain an 8 UI-unit bottom safety margin.");
+                CheckTrue(pnpBounds.bottom >= viewportBounds.bottom + 16f, "PNP card must retain a 16 UI-unit bottom safety margin.");
             });
         }
 
@@ -220,7 +250,7 @@ namespace ElectricalSim.Editor
             WithWorkspace(new Vector2(1366f, 768f), (bindings, _) =>
             {
                 var scroll = GetPaletteScroll(bindings);
-                var expected = 10f + 7f * 116f + 6f * 12f + 16f;
+                var expected = 10f + 7f * 116f + 6f * 12f + 32f;
                 CheckNear(expected, scroll.content.rect.height, 0.1f, "Content 高度必须按当前实际七行卡片动态计算。");
                 CheckTrue(scroll.content.rect.height > scroll.viewport.rect.height, "1366×768 下 Content 必须高于 Viewport，滚动才有意义。");
             });
@@ -355,6 +385,15 @@ namespace ElectricalSim.Editor
             scroll.verticalNormalizedPosition = 0f;
             Canvas.ForceUpdateCanvases();
             scroll.Rebuild(CanvasUpdate.PostLayout);
+        }
+
+        private static void ForceLayout(ScrollRect scroll)
+        {
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.viewport);
+            scroll.Rebuild(CanvasUpdate.PostLayout);
+            Canvas.ForceUpdateCanvases();
         }
 
         private static bool IsInsideBottomSafeArea(RectTransform card, RectTransform viewport, float safeMargin)
